@@ -1,6 +1,6 @@
 services:
   db:
-    image: mariadb:latest
+    image: mariadb:11.4
     container_name: smartstock-db
     restart: always
     environment:
@@ -26,6 +26,20 @@ services:
       - DB_PASSWORD=inventory_password
       - DB_NAME=smartstock
       - API_KEY=${API_KEY}
+      - NODE_ENV=production
+    depends_on:
+      - db
+
+  phpmyadmin:
+    image: phpmyadmin:latest
+    container_name: smartstock-phpmyadmin
+    restart: always
+    ports:
+      - "8080:80"
+    environment:
+      - PMA_HOST=db
+      - PMA_USER=root
+      - PMA_PASSWORD=root_password
     depends_on:
       - db
 

@@ -8,7 +8,13 @@ const port = process.env.PORT || 3000;
 
 app.use(cors());
 app.use(express.json());
-app.use(express.static(path.join(__dirname, '.')));
+
+// In production, serve the compiled 'dist' folder created by Vite
+const staticPath = process.env.NODE_ENV === 'production' 
+  ? path.join(__dirname, 'dist') 
+  : path.join(__dirname, '.');
+
+app.use(express.static(staticPath));
 
 const pool = mariadb.createPool({
   host: process.env.DB_HOST || 'localhost',
@@ -114,6 +120,12 @@ app.post('/api/movements', async (req, res) => {
   } catch (err) { res.status(500).json({ error: err.message }); } finally { if (conn) conn.release(); }
 });
 
-app.get('*', (req, res) => res.sendFile(path.join(__dirname, 'index.html')));
+// Serve index.html for any unknown routes (SPA support)
+app.get('*', (req, res) => {
+  const indexFile = process.env.NODE_ENV === 'production'
+    ? path.join(__dirname, 'dist', 'index.html')
+    : path.join(__dirname, 'index.html');
+  res.sendFile(indexFile);
+});
 
-app.listen(port, () => console.log(`SmartStock ERP Server Active on port ${port}`));
+app.listen(port, () => console.log(`SmartStock ERP Server Active on port ${port} [Mode: ${process.env.NODE_ENV || 'development'}]`));
