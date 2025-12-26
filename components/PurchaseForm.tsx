@@ -1,21 +1,25 @@
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { ItemStatus, InventoryItem, Supplier, LocationRecord } from '../types';
 
-// Updated interface to include suppliers and locations passed from App.tsx
 interface PurchaseFormProps {
   onSubmit: (item: InventoryItem) => void;
   suppliers: Supplier[];
   locations: LocationRecord[];
+  initialData?: InventoryItem;
 }
 
-const PurchaseForm: React.FC<PurchaseFormProps> = ({ onSubmit, suppliers, locations }) => {
+const PurchaseForm: React.FC<PurchaseFormProps> = ({ onSubmit, suppliers, locations, initialData }) => {
   const [formData, setFormData] = useState({
-    name: '',
-    category: 'Computers',
-    serial: '',
-    supplier: '',
-    price: '',
+    id: initialData?.id || '',
+    name: initialData?.name || '',
+    category: initialData?.category || 'Computers',
+    serial: initialData?.serial || '',
+    status: initialData?.status || ItemStatus.AVAILABLE,
+    location: initialData?.location || 'IT Store',
+    cost: initialData?.cost?.toString() || '',
+    assignedTo: initialData?.assignedTo || '-',
+    department: initialData?.department || '-',
     warrantyMonths: '12'
   });
 
@@ -23,31 +27,30 @@ const PurchaseForm: React.FC<PurchaseFormProps> = ({ onSubmit, suppliers, locati
     e.preventDefault();
     if (!formData.name || !formData.serial) return;
 
-    // Fixed newItem creation by relying on the updated InventoryItem interface
-    const newItem: InventoryItem = {
-      id: `IT-${Math.floor(Math.random() * 10000).toString().padStart(4, '0')}`,
+    const finalItem: InventoryItem = {
+      id: formData.id || `IT-${Math.floor(Math.random() * 10000).toString().padStart(4, '0')}`,
       name: formData.name,
       category: formData.category,
       serial: formData.serial,
-      status: ItemStatus.AVAILABLE,
-      location: 'IT Store',
-      assignedTo: '-',
-      department: '-',
-      purchaseDate: new Date().toISOString().split('T')[0],
-      warranty: new Date(new Date().setMonth(new Date().getMonth() + parseInt(formData.warrantyMonths))).toISOString().split('T')[0],
+      status: formData.status as ItemStatus,
+      location: formData.location,
+      assignedTo: formData.assignedTo,
+      department: formData.department,
+      purchaseDate: initialData?.purchaseDate || new Date().toISOString().split('T')[0],
+      warranty: initialData?.warranty || new Date(new Date().setMonth(new Date().getMonth() + parseInt(formData.warrantyMonths))).toISOString().split('T')[0],
+      cost: parseFloat(formData.cost) || 0
     };
 
-    onSubmit(newItem);
+    onSubmit(finalItem);
   };
 
   return (
     <form onSubmit={handleSubmit} className="space-y-6">
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
         <div className="space-y-2">
-          <label className="text-xs font-bold text-slate-500 uppercase tracking-wider ml-1">Item Name</label>
+          <label className="text-xs font-bold text-slate-500 uppercase tracking-wider ml-1">Asset Name</label>
           <input 
             type="text" 
-            placeholder="e.g. MacBook Pro 14 M3" 
             className="w-full px-4 py-3 bg-slate-50 border border-slate-100 rounded-xl focus:ring-2 focus:ring-indigo-500 outline-none transition"
             required
             value={formData.name}
@@ -71,7 +74,6 @@ const PurchaseForm: React.FC<PurchaseFormProps> = ({ onSubmit, suppliers, locati
           <label className="text-xs font-bold text-slate-500 uppercase tracking-wider ml-1">Serial Number</label>
           <input 
             type="text" 
-            placeholder="SN-2024-XXXX" 
             className="w-full px-4 py-3 bg-slate-50 border border-slate-100 rounded-xl focus:ring-2 focus:ring-indigo-500 outline-none transition"
             required
             value={formData.serial}
@@ -79,32 +81,31 @@ const PurchaseForm: React.FC<PurchaseFormProps> = ({ onSubmit, suppliers, locati
           />
         </div>
         <div className="space-y-2">
-          <label className="text-xs font-bold text-slate-500 uppercase tracking-wider ml-1">Supplier</label>
+          <label className="text-xs font-bold text-slate-500 uppercase tracking-wider ml-1">Status</label>
+          <select 
+            className="w-full px-4 py-3 bg-slate-50 border border-slate-100 rounded-xl focus:ring-2 focus:ring-indigo-500 outline-none transition"
+            value={formData.status}
+            onChange={e => setFormData({...formData, status: e.target.value as any})}
+          >
+            {Object.values(ItemStatus).map(s => <option key={s} value={s}>{s.replace('-', ' ')}</option>)}
+          </select>
+        </div>
+        <div className="space-y-2">
+          <label className="text-xs font-bold text-slate-500 uppercase tracking-wider ml-1">Cost ($)</label>
+          <input 
+            type="number" 
+            className="w-full px-4 py-3 bg-slate-50 border border-slate-100 rounded-xl focus:ring-2 focus:ring-indigo-500 outline-none transition"
+            value={formData.cost}
+            onChange={e => setFormData({...formData, cost: e.target.value})}
+          />
+        </div>
+        <div className="space-y-2">
+          <label className="text-xs font-bold text-slate-500 uppercase tracking-wider ml-1">Current Location</label>
           <input 
             type="text" 
-            placeholder="e.g. Dell Inc." 
             className="w-full px-4 py-3 bg-slate-50 border border-slate-100 rounded-xl focus:ring-2 focus:ring-indigo-500 outline-none transition"
-            value={formData.supplier}
-            onChange={e => setFormData({...formData, supplier: e.target.value})}
-          />
-        </div>
-        <div className="space-y-2">
-          <label className="text-xs font-bold text-slate-500 uppercase tracking-wider ml-1">Unit Price ($)</label>
-          <input 
-            type="number" 
-            placeholder="0.00" 
-            className="w-full px-4 py-3 bg-slate-50 border border-slate-100 rounded-xl focus:ring-2 focus:ring-indigo-500 outline-none transition"
-            value={formData.price}
-            onChange={e => setFormData({...formData, price: e.target.value})}
-          />
-        </div>
-        <div className="space-y-2">
-          <label className="text-xs font-bold text-slate-500 uppercase tracking-wider ml-1">Warranty (Months)</label>
-          <input 
-            type="number" 
-            className="w-full px-4 py-3 bg-slate-50 border border-slate-100 rounded-xl focus:ring-2 focus:ring-indigo-500 outline-none transition"
-            value={formData.warrantyMonths}
-            onChange={e => setFormData({...formData, warrantyMonths: e.target.value})}
+            value={formData.location}
+            onChange={e => setFormData({...formData, location: e.target.value})}
           />
         </div>
       </div>
@@ -115,7 +116,7 @@ const PurchaseForm: React.FC<PurchaseFormProps> = ({ onSubmit, suppliers, locati
           className="w-full py-4 bg-indigo-600 hover:bg-indigo-700 text-white rounded-2xl font-bold transition shadow-lg shadow-indigo-100 flex items-center justify-center gap-2"
         >
           <i className="fas fa-save"></i>
-          <span>Save to Inventory</span>
+          <span>{initialData ? 'Update Asset' : 'Add to Inventory'}</span>
         </button>
       </div>
     </form>

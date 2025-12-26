@@ -21,29 +21,27 @@ const App: React.FC = () => {
   const [movements, setMovements] = useState<Movement[]>([]);
   const [suppliers, setSuppliers] = useState<Supplier[]>([]);
   const [locations, setLocations] = useState<LocationRecord[]>([]);
-  const [licenses, setLicenses] = useState<License[]>([]);
   const [maintenance, setMaintenance] = useState<MaintenanceLog[]>([]);
   const [loading, setLoading] = useState(true);
   
   const [isPurchaseModalOpen, setIsPurchaseModalOpen] = useState(false);
   const [isAssignModalOpen, setIsAssignModalOpen] = useState(false);
+  const [editingItem, setEditingItem] = useState<InventoryItem | null>(null);
 
   const fetchData = useCallback(async () => {
     try {
-      const [fItems, fMovements, fSuppliers, fLocations, fMaintenance, fLicenses] = await Promise.all([
+      const [fItems, fMovements, fSuppliers, fLocations, fMaintenance] = await Promise.all([
         apiService.getAllItems(),
         apiService.getAllMovements(),
         apiService.getAllSuppliers(),
         apiService.getAllLocations(),
-        apiService.getAllMaintenance(),
-        apiService.getAllLicenses()
+        apiService.getAllMaintenance()
       ]);
       setItems(fItems || []);
       setMovements(fMovements || []);
       setSuppliers(fSuppliers || []);
       setLocations(fLocations || []);
       setMaintenance(fMaintenance || []);
-      setLicenses(fLicenses || []);
     } catch (err) {
       console.error("ERP Connectivity Error", err);
     } finally {
@@ -62,22 +60,32 @@ const App: React.FC = () => {
     backup: items.filter(i => i.status === ItemStatus.BACKUP).length,
     faulty: items.filter(i => i.status === ItemStatus.FAULTY).length,
     available: items.filter(i => i.status === ItemStatus.AVAILABLE).length,
-    licenses_total: licenses.length,
-    expiring_soon: licenses.filter(l => {
-        const exp = new Date(l.expiration_date);
-        const soon = new Date();
-        soon.setMonth(soon.getMonth() + 1);
-        return exp < soon;
-    }).length
+    licenses_total: 0,
+    expiring_soon: 0
+  };
+
+  const handleSaveItem = async (item: InventoryItem) => {
+    try {
+      if (editingItem) {
+        await apiService.updateItem(item.id, item);
+      } else {
+        await apiService.saveItem(item);
+      }
+      setIsPurchaseModalOpen(false);
+      setEditingItem(null);
+      fetchData();
+    } catch (err) {
+      alert("Error saving item: " + err);
+    }
   };
 
   const renderContent = () => {
     switch (activeTab) {
       case 'dashboard': return <Dashboard stats={stats} movements={movements} items={items} />;
-      case 'inventory': return <InventoryTable items={items} onUpdate={fetchData} locations={locations} />;
+      case 'inventory': return <InventoryTable items={items} onUpdate={fetchData} onEdit={setEditingItem} />;
       case 'maintenance': return <MaintenanceList logs={maintenance} items={items} onUpdate={fetchData} />;
       case 'suppliers': return <SupplierList suppliers={suppliers} />;
-      case 'licenses': return <LicenseList licenses={licenses} suppliers={suppliers} />;
+      case 'licenses': return <LicenseList licenses={[]} suppliers={suppliers} />;
       default: return <Dashboard stats={stats} movements={movements} items={items} />;
     }
   };
@@ -98,7 +106,7 @@ const App: React.FC = () => {
       <Sidebar 
         activeTab={activeTab as any} 
         setActiveTab={setActiveTab as any} 
-        openPurchase={() => setIsPurchaseModalOpen(true)}
+        openPurchase={() => { setEditingItem(null); setIsPurchaseModalOpen(true); }}
         openAssign={() => setIsAssignModalOpen(true)} 
         runAnalysis={fetchData}
       />
@@ -115,9 +123,6 @@ const App: React.FC = () => {
             <button onClick={fetchData} className="p-2.5 bg-white border border-slate-200 text-slate-600 rounded-xl hover:bg-slate-50 transition">
               <i className="fas fa-sync-alt"></i>
             </button>
-            <div className="px-3 py-2 bg-indigo-50 text-indigo-600 rounded-xl flex items-center gap-2 text-[10px] font-bold border border-indigo-100 uppercase tracking-widest">
-              Live Database Active
-            </div>
           </div>
         </header>
 
@@ -128,13 +133,24 @@ const App: React.FC = () => {
 
       {isPurchaseModalOpen && (
         <Modal title="🛒 ERP - New Procurement" onClose={() => setIsPurchaseModalOpen(false)}>
-          <PurchaseForm onSubmit={() => {setIsPurchaseModalOpen(false); fetchData();}} suppliers={suppliers} locations={locations} />
+          <PurchaseForm onSubmit={handleSaveItem} suppliers={suppliers} locations={locations} />
         </Modal>
       )}
 
       {isAssignModalOpen && (
         <Modal title="👥 Asset Handover" onClose={() => setIsAssignModalOpen(false)}>
-          <AssignmentForm items={items} onSubmit={() => {setIsAssignModalOpen(false); fetchData();}} />
+          <AssignmentForm items={items} onSubmit={async (item) => { await apiService.saveItem(item); setIsAssignModalOpen(false); fetchData();}} />
+        </Modal>
+      )}
+
+      {editingItem && (
+        <Modal title="✏️ Edit Asset" onClose={() => setEditingItem(null)}>
+          <PurchaseForm 
+            initialData={editingItem} 
+            onSubmit={handleSaveItem} 
+            suppliers={suppliers} 
+            locations={locations} 
+          />
         </Modal>
       )}
     </div>
