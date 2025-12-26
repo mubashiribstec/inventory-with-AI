@@ -1,14 +1,29 @@
-
 import { InventoryItem, Movement, Supplier, LocationRecord, MaintenanceLog, License } from './types.ts';
 
 const BASE_URL = '/api';
 
+/**
+ * Enhanced response handler. 
+ * Reads text first to avoid stream controller issues and logs raw response on parse failure.
+ */
 const handleResponse = async (res: Response) => {
+  const text = await res.text();
+  
   if (!res.ok) {
-    const errorText = await res.text();
-    throw new Error(`API Error (${res.status}): ${errorText}`);
+    throw new Error(`API Error (${res.status}): ${text || 'Unknown Server Error'}`);
   }
-  return res.json();
+
+  if (!text || text.trim() === '') {
+    return {};
+  }
+
+  try {
+    // Trim to remove any potential trailing whitespace or non-printable chars from stream
+    return JSON.parse(text.trim());
+  } catch (e) {
+    console.error('Invalid JSON response from server:', text);
+    throw new Error('The server sent a response that could not be parsed as JSON.');
+  }
 };
 
 export const apiService = {
@@ -72,6 +87,7 @@ export const apiService = {
   },
   
   async getAllLicenses(): Promise<License[]> {
-    return []; // Placeholder
+    // Return empty array for now as per current spec
+    return [];
   }
 };
