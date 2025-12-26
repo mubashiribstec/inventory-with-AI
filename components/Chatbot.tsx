@@ -1,7 +1,7 @@
 
 import React, { useState, useRef, useEffect } from 'react';
 import { GoogleGenAI } from "@google/genai";
-import { InventoryItem, DashboardStats } from '../types';
+import { InventoryItem, DashboardStats } from '../types.ts';
 
 interface Message {
   role: 'user' | 'model';
@@ -31,15 +31,21 @@ const Chatbot: React.FC<ChatbotProps> = ({ items, stats }) => {
   const handleSend = async () => {
     if (!input.trim() || isLoading) return;
 
+    const apiKey = process.env.API_KEY;
+    if (!apiKey) {
+      setMessages(prev => [...prev, { role: 'user', text: input.trim() }, { role: 'model', text: "Chat unavailable: No API Key configured." }]);
+      setInput('');
+      return;
+    }
+
     const userMessage = input.trim();
     setInput('');
     setMessages(prev => [...prev, { role: 'user', text: userMessage }]);
     setIsLoading(true);
 
     try {
-      const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+      const ai = new GoogleGenAI({ apiKey });
       
-      // Prepare inventory context for the model
       const inventoryContext = items.map(i => ({
         id: i.id,
         name: i.name,
@@ -47,7 +53,7 @@ const Chatbot: React.FC<ChatbotProps> = ({ items, stats }) => {
         dept: i.department,
         warranty: i.warranty,
         category: i.category
-      })).slice(0, 100); // Send a significant portion of the catalog for context
+      })).slice(0, 100);
 
       const systemInstruction = `
         You are the SmartStock Enterprise AI assistant. 

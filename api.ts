@@ -1,39 +1,43 @@
 
-import { InventoryItem, Movement, Supplier, LocationRecord, MaintenanceLog, License } from './types';
-import { dbService } from './db';
-import { initialItems, initialMovements } from './services/mockData';
+import { InventoryItem, Movement, Supplier, LocationRecord, MaintenanceLog, License } from './types.ts';
+import { dbService } from './db.ts';
+import { initialItems, initialMovements } from './services/mockData.ts';
 
 // This service now acts as a bridge to IndexedDB to ensure the app works in environments without a running backend.
 export const apiService = {
   async ensureInitialized() {
-    await dbService.init();
-    const items = await dbService.getAllItems();
-    if (items.length === 0) {
-      // Seed initial data
-      for (const item of initialItems) await dbService.saveItem(item);
-      for (const mov of initialMovements) await dbService.saveMovement(mov);
-      
-      // Seed some mock suppliers and licenses since we don't have them in mockData.ts yet
-      await dbService.saveSupplier({ id: 1, name: 'Dell Technologies', contact_person: 'Michael Dell', email: 'support@dell.com', rating: 5 });
-      await dbService.saveSupplier({ id: 2, name: 'Apple Inc.', contact_person: 'Tim Cook', email: 'business@apple.com', rating: 4 });
-      
-      await dbService.saveLicense({ 
-        id: 1, 
-        software_name: 'Microsoft Office 365', 
-        product_key: 'XXXXX-XXXXX-XXXXX-XXXXX-XXXXX', 
-        total_seats: 100, 
-        assigned_seats: 45, 
-        expiration_date: '2025-12-31', 
-        supplier_id: 1 
-      });
+    try {
+      await dbService.init();
+      const items = await dbService.getAllItems();
+      if (items.length === 0) {
+        // Seed initial data
+        for (const item of initialItems) await dbService.saveItem(item);
+        for (const mov of initialMovements) await dbService.saveMovement(mov);
+        
+        // Seed some mock suppliers and licenses since we don't have them in mockData.ts yet
+        await dbService.saveSupplier({ id: 1, name: 'Dell Technologies', contact_person: 'Michael Dell', email: 'support@dell.com', rating: 5 });
+        await dbService.saveSupplier({ id: 2, name: 'Apple Inc.', contact_person: 'Tim Cook', email: 'business@apple.com', rating: 4 });
+        
+        await dbService.saveLicense({ 
+          id: 1, 
+          software_name: 'Microsoft Office 365', 
+          product_key: 'XXXXX-XXXXX-XXXXX-XXXXX-XXXXX', 
+          total_seats: 100, 
+          assigned_seats: 45, 
+          expiration_date: '2025-12-31', 
+          supplier_id: 1 
+        });
 
-      await dbService.saveLocation({
-        id: 1,
-        building: 'Headquarters',
-        floor: '4th Floor',
-        room: 'IT Operations',
-        manager: 'Sarah Jenkins'
-      });
+        await dbService.saveLocation({
+          id: 1,
+          building: 'Headquarters',
+          floor: '4th Floor',
+          room: 'IT Operations',
+          manager: 'Sarah Jenkins'
+        });
+      }
+    } catch (err) {
+      console.error("Failed to initialize database", err);
     }
   },
 

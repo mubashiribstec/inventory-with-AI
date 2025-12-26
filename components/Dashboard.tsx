@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect } from 'react';
-import { DashboardStats, Movement, InventoryItem } from '../types';
+import { DashboardStats, Movement, InventoryItem } from '../types.ts';
 import { GoogleGenAI } from "@google/genai";
 
 interface DashboardProps {
@@ -14,15 +14,21 @@ const Dashboard: React.FC<DashboardProps> = ({ stats, movements, items }) => {
   const [isAiLoading, setIsAiLoading] = useState(false);
 
   const getAiInsight = async () => {
+    const apiKey = process.env.API_KEY;
+    if (!apiKey) {
+      setAiInsight("AI Analysis unavailable: No API Key found.");
+      return;
+    }
+
     setIsAiLoading(true);
     try {
-      const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+      const ai = new GoogleGenAI({ apiKey });
       const inventorySummary = items.map(i => ({
         name: i.name,
         status: i.status,
         warranty: i.warranty,
         dept: i.department
-      })).slice(0, 50); // Limit context for token efficiency
+      })).slice(0, 50);
 
       const response = await ai.models.generateContent({
         model: "gemini-3-flash-preview",
@@ -43,7 +49,7 @@ const Dashboard: React.FC<DashboardProps> = ({ stats, movements, items }) => {
 
   useEffect(() => {
     getAiInsight();
-  }, []);
+  }, [items.length]);
 
   const statCards = [
     { label: 'Purchased Stock', value: stats.purchased, icon: 'fa-shopping-cart', color: 'indigo', trend: '+12%' },
@@ -194,7 +200,12 @@ const Dashboard: React.FC<DashboardProps> = ({ stats, movements, items }) => {
                     <i className="fas fa-clock text-amber-500"></i>
                     Warranty Alerts
                 </h4>
-                <p className="text-xs text-slate-500 mb-4">You have 3 items expiring within 30 days.</p>
+                <p className="text-xs text-slate-500 mb-4">You have {items.filter(i => {
+                    const exp = new Date(i.warranty);
+                    const soon = new Date();
+                    soon.setDate(soon.getDate() + 30);
+                    return exp < soon;
+                }).length} items expiring within 30 days.</p>
                 <button className="text-indigo-600 text-xs font-bold hover:underline">View Expirations</button>
             </div>
         </div>

@@ -1,7 +1,13 @@
 
 import React from 'react';
 import ReactDOM from 'react-dom/client';
-import App from './App';
+import App from './App.tsx';
+
+// Shim for process.env to prevent ReferenceError in browser ESM environments
+if (typeof window !== 'undefined' && !window.process) {
+  // @ts-ignore
+  window.process = { env: { API_KEY: '' } };
+}
 
 const rootElement = document.getElementById('root');
 if (!rootElement) {

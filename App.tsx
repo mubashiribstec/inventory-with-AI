@@ -1,16 +1,17 @@
+
 import React, { useState, useEffect, useCallback } from 'react';
-import Sidebar from './components/Sidebar';
-import Dashboard from './components/Dashboard';
-import InventoryTable from './components/InventoryTable';
-import MaintenanceList from './components/MaintenanceList';
-import SupplierList from './components/SupplierList';
-import LicenseList from './components/LicenseList';
-import { ItemStatus, InventoryItem, Movement, Supplier, LocationRecord, MaintenanceLog, License } from './types';
-import Modal from './components/Modal';
-import PurchaseForm from './components/PurchaseForm';
-import AssignmentForm from './components/AssignmentForm';
-import Chatbot from './components/Chatbot';
-import { apiService } from './api';
+import Sidebar from './components/Sidebar.tsx';
+import Dashboard from './components/Dashboard.tsx';
+import InventoryTable from './components/InventoryTable.tsx';
+import MaintenanceList from './components/MaintenanceList.tsx';
+import SupplierList from './components/SupplierList.tsx';
+import LicenseList from './components/LicenseList.tsx';
+import { ItemStatus, InventoryItem, Movement, Supplier, LocationRecord, MaintenanceLog, License } from './types.ts';
+import Modal from './components/Modal.tsx';
+import PurchaseForm from './components/PurchaseForm.tsx';
+import AssignmentForm from './components/AssignmentForm.tsx';
+import Chatbot from './components/Chatbot.tsx';
+import { apiService } from './api.ts';
 
 type AppTab = 'dashboard' | 'inventory' | 'maintenance' | 'suppliers' | 'locations' | 'licenses';
 
@@ -37,11 +38,11 @@ const App: React.FC = () => {
         apiService.getAllMaintenance(),
         apiService.getAllLicenses()
       ]);
-      setItems(fItems);
-      setMovements(fMovements);
-      setSuppliers(fSuppliers);
-      setLocations(fLocations);
-      setMaintenance(fMaintenance);
+      setItems(fItems || []);
+      setMovements(fMovements || []);
+      setSuppliers(fSuppliers || []);
+      setLocations(fLocations || []);
+      setMaintenance(fMaintenance || []);
       setLicenses(fLicenses || []);
     } catch (err) {
       console.error("ERP Connectivity Error", err);
