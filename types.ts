@@ -72,6 +72,29 @@ export interface MaintenanceLog {
   start_date: string;
 }
 
+export interface Category {
+  id: string;
+  name: string;
+  icon: string;
+  itemCount: number;
+}
+
+export interface Employee {
+  id: string;
+  name: string;
+  email: string;
+  department: string;
+  role: string;
+  avatar?: string;
+}
+
+export interface Department {
+  id: string;
+  name: string;
+  head: string;
+  budget: number;
+}
+
 export interface DashboardStats {
   purchased: number;
   assigned: number;
