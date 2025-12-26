@@ -1,0 +1,33 @@
+services:
+  db:
+    image: mariadb:latest
+    container_name: smartstock-db
+    restart: always
+    environment:
+      MARIADB_ROOT_PASSWORD: root_password
+      MARIADB_DATABASE: smartstock
+      MARIADB_USER: inventory_user
+      MARIADB_PASSWORD: inventory_password
+    ports:
+      - "3306:3306"
+    volumes:
+      - mariadb_data:/var/lib/mysql
+      - ./init-db.sql:/docker-entrypoint-initdb.d/init-db.sql
+
+  app:
+    build: .
+    container_name: smartstock-app
+    restart: always
+    ports:
+      - "3000:3000"
+    environment:
+      - DB_HOST=db
+      - DB_USER=inventory_user
+      - DB_PASSWORD=inventory_password
+      - DB_NAME=smartstock
+      - API_KEY=${API_KEY}
+    depends_on:
+      - db
+
+volumes:
+  mariadb_data:

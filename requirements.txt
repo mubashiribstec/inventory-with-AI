@@ -1,0 +1,38 @@
+# SmartStock Pro Enterprise - Requirements & Prerequisites
+
+## 1. System Requirements
+- Node.js: Version 18.x or higher
+- NPM: Version 9.x or higher
+- Docker & Docker Compose: Required for the containerized MariaDB stack
+- Operating System: Windows 10+, macOS 12+, or Linux (Ubuntu 22.04+ recommended)
+
+## 2. Environment Variables
+You must have a .env file in the root directory containing:
+- API_KEY=your_google_gemini_api_key
+- DB_HOST=localhost (or 'db' if using Docker)
+- DB_USER=inventory_user
+- DB_PASSWORD=inventory_password
+- DB_NAME=smartstock
+
+## 3. Core Backend Dependencies (Installed via package.json)
+- express (^4.18.2): Web framework for the API
+- mariadb (^3.2.3): MariaDB client for database connectivity
+- cors (^2.8.5): Cross-Origin Resource Sharing middleware
+
+## 4. Frontend Dependencies (Loaded via CDN/ESM)
+- React 19.x
+- Tailwind CSS
+- FontAwesome 6.4
+- @google/genai (Gemini SDK)
+
+## 5. Installation Commands
+To install the prerequisites, run the following in your terminal:
+
+# Install Node dependencies
+npm install
+
+# Start the Docker database
+docker-compose up -d
+
+# Initialize the database (if not using Docker auto-init)
+# mysql -u root -p < init-db.sql

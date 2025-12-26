@@ -1,0 +1,16 @@
+FROM node:18-alpine
+
+WORKDIR /app
+
+# Copy package.json and install dependencies
+COPY package.json ./
+RUN npm install
+
+# Copy all application files
+COPY . .
+
+# Expose the API and Web port
+EXPOSE 3000
+
+# Start the Node.js server
+CMD ["node", "server.js"]
