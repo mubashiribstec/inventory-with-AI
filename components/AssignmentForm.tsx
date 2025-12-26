@@ -1,4 +1,3 @@
-
 import React, { useState } from 'react';
 import { ItemStatus, InventoryItem } from '../types';
 
@@ -15,6 +14,16 @@ const AssignmentForm: React.FC<AssignmentFormProps> = ({ items, onSubmit }) => {
   const [department, setDepartment] = useState('IT');
   const [markInUse, setMarkInUse] = useState(true);
 
+  const formatDate = (dateInput: string | Date | undefined): string => {
+    if (!dateInput) return new Date().toISOString().split('T')[0];
+    try {
+        const d = new Date(dateInput);
+        return d.toISOString().split('T')[0];
+    } catch(e) {
+        return new Date().toISOString().split('T')[0];
+    }
+  };
+
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!selectedItemId || !employee) return;
@@ -27,7 +36,9 @@ const AssignmentForm: React.FC<AssignmentFormProps> = ({ items, onSubmit }) => {
       status: markInUse ? ItemStatus.IN_USE : ItemStatus.ASSIGNED,
       assignedTo: employee,
       department: department,
-      location: department + ' Area'
+      location: department + ' Area',
+      purchaseDate: formatDate(originalItem.purchaseDate),
+      warranty: formatDate(originalItem.warranty)
     };
 
     onSubmit(updatedItem);

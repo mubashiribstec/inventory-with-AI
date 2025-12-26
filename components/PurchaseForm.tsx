@@ -1,5 +1,4 @@
-
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { ItemStatus, InventoryItem, Supplier, LocationRecord } from '../types';
 
 interface PurchaseFormProps {
@@ -23,9 +22,23 @@ const PurchaseForm: React.FC<PurchaseFormProps> = ({ onSubmit, suppliers, locati
     warrantyMonths: '12'
   });
 
+  const formatDate = (dateInput: string | Date): string => {
+    if (!dateInput) return new Date().toISOString().split('T')[0];
+    const d = new Date(dateInput);
+    return d.toISOString().split('T')[0];
+  };
+
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!formData.name || !formData.serial) return;
+
+    // Calculate warranty if not present
+    let warrantyDate = initialData?.warranty;
+    if (!warrantyDate) {
+      const d = new Date();
+      d.setMonth(d.getMonth() + parseInt(formData.warrantyMonths));
+      warrantyDate = d.toISOString().split('T')[0];
+    }
 
     const finalItem: InventoryItem = {
       id: formData.id || `IT-${Math.floor(Math.random() * 10000).toString().padStart(4, '0')}`,
@@ -36,8 +49,8 @@ const PurchaseForm: React.FC<PurchaseFormProps> = ({ onSubmit, suppliers, locati
       location: formData.location,
       assignedTo: formData.assignedTo,
       department: formData.department,
-      purchaseDate: initialData?.purchaseDate || new Date().toISOString().split('T')[0],
-      warranty: initialData?.warranty || new Date(new Date().setMonth(new Date().getMonth() + parseInt(formData.warrantyMonths))).toISOString().split('T')[0],
+      purchaseDate: formatDate(initialData?.purchaseDate || new Date()),
+      warranty: formatDate(warrantyDate),
       cost: parseFloat(formData.cost) || 0
     };
 
@@ -55,6 +68,7 @@ const PurchaseForm: React.FC<PurchaseFormProps> = ({ onSubmit, suppliers, locati
             required
             value={formData.name}
             onChange={e => setFormData({...formData, name: e.target.value})}
+            placeholder="e.g. Dell Latitude 5440"
           />
         </div>
         <div className="space-y-2">
@@ -78,6 +92,7 @@ const PurchaseForm: React.FC<PurchaseFormProps> = ({ onSubmit, suppliers, locati
             required
             value={formData.serial}
             onChange={e => setFormData({...formData, serial: e.target.value})}
+            placeholder="SN-XXXXX-XXXX"
           />
         </div>
         <div className="space-y-2">
@@ -97,6 +112,7 @@ const PurchaseForm: React.FC<PurchaseFormProps> = ({ onSubmit, suppliers, locati
             className="w-full px-4 py-3 bg-slate-50 border border-slate-100 rounded-xl focus:ring-2 focus:ring-indigo-500 outline-none transition"
             value={formData.cost}
             onChange={e => setFormData({...formData, cost: e.target.value})}
+            placeholder="0.00"
           />
         </div>
         <div className="space-y-2">
@@ -106,6 +122,7 @@ const PurchaseForm: React.FC<PurchaseFormProps> = ({ onSubmit, suppliers, locati
             className="w-full px-4 py-3 bg-slate-50 border border-slate-100 rounded-xl focus:ring-2 focus:ring-indigo-500 outline-none transition"
             value={formData.location}
             onChange={e => setFormData({...formData, location: e.target.value})}
+            placeholder="e.g. IT Store"
           />
         </div>
       </div>

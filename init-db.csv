@@ -5,3 +5,7 @@ IT-003,Cisco Catalyst Switch,Networking,CS-2024-001,backup,-,-,2024-03-05,2025-0
 IT-004,HP LaserJet Enterprise,Peripherals,HP-2024-001,faulty,-,-,2024-01-20,2025-01-20,450.00,Maintenance Hub
 IT-005,USB-C Universal Dock,Accessories,UD-2024-001,available,-,-,2024-02-28,2025-02-28,180.00,IT Store
 IT-006,Logitech MX Master 3S,Accessories,MX-2024-882,in-use,Robert Chen,Finance,2024-03-12,2025-03-12,99.00,Finance Suite
+IT-007,Dell UltraSharp 27",Peripherals,DELL-27-001,available,-,-,2024-04-01,2026-04-01,350.00,IT Store
+IT-008,Lenovo ThinkPad X1,Computers,TP-X1-992,backup,-,-,2024-01-10,2025-01-10,1800.00,Storage Rack B
+IT-009,Ubiquiti UniFi AP,Networking,UAP-AC-01,in-use,Infrastructure,IT,2023-11-20,2024-11-20,150.00,Ceiling Hub 1
+IT-010,Keychron K2 Keyboard,Accessories,K2-BT-05,assigned,Emily Davis,Sales,2024-05-15,2025-05-15,85.00,Sales Area

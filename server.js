@@ -1,3 +1,4 @@
+
 const express = require('express');
 const mariadb = require('mariadb');
 const cors = require('cors');
@@ -16,7 +17,13 @@ const pool = mariadb.createPool({
   password: process.env.DB_PASSWORD || 'inventory_password',
   database: process.env.DB_NAME || 'smartstock',
   connectionLimit: 20,
-  connectTimeout: 10000
+  connectTimeout: 15000
+});
+
+// Request Logging Middleware for Debugging 404s
+app.use((req, res, next) => {
+  console.log(`[${new Date().toISOString()}] ${req.method} ${req.url}`);
+  next();
 });
 
 // Middleware to enforce JSON content type for all /api routes
@@ -25,7 +32,6 @@ app.use('/api', (req, res, next) => {
   next();
 });
 
-// Helper for sending clean JSON and ensuring response termination
 const sendJSON = (res, data, status = 200) => {
   return res.status(status).send(JSON.stringify(data));
 };
@@ -37,11 +43,10 @@ app.get('/api/items', async (req, res) => {
   try {
     conn = await pool.getConnection();
     const rows = await conn.query("SELECT * FROM items ORDER BY id DESC");
-    // Explicit conversion to standard array
     sendJSON(res, Array.from(rows));
   } catch (err) {
     console.error('Fetch Items Error:', err);
-    sendJSON(res, { error: 'Database fetch failed' }, 500);
+    sendJSON(res, { error: 'Database fetch failed: ' + err.message }, 500);
   } finally {
     if (conn) conn.release();
   }
@@ -162,7 +167,7 @@ app.use(express.static(staticPath));
 // Catch-all to handle SPA routing or 404s for missing API endpoints
 app.get('*', (req, res) => {
   if (req.path.startsWith('/api/')) {
-    return res.status(404).send(JSON.stringify({ error: 'API endpoint not found' }));
+    return res.status(404).send(JSON.stringify({ error: `API endpoint ${req.url} not found on this server.` }));
   }
   const indexFile = process.env.NODE_ENV === 'production'
     ? path.join(__dirname, 'dist', 'index.html')
@@ -171,5 +176,5 @@ app.get('*', (req, res) => {
 });
 
 app.listen(port, '0.0.0.0', () => {
-  console.log(`SmartStock ERP Server Active on port ${port} - PID: ${process.pid}`);
+  console.log(`SmartStock ERP Server Active on port ${port} [ENV: ${process.env.NODE_ENV || 'development'}]`);
 });
