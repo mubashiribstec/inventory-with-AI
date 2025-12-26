@@ -7,9 +7,10 @@ interface InventoryTableProps {
   items: InventoryItem[];
   onUpdate: () => void;
   onEdit: (item: InventoryItem) => void;
+  onView: (item: InventoryItem) => void;
 }
 
-const InventoryTable: React.FC<InventoryTableProps> = ({ items, onUpdate, onEdit }) => {
+const InventoryTable: React.FC<InventoryTableProps> = ({ items, onUpdate, onEdit, onView }) => {
   const [search, setSearch] = useState('');
   const [filter, setFilter] = useState<ItemStatus | ''>('');
 
@@ -110,14 +111,23 @@ const InventoryTable: React.FC<InventoryTableProps> = ({ items, onUpdate, onEdit
                   <td className="px-6 py-4">
                     <div className="flex items-center justify-center gap-2">
                       <button 
+                        onClick={() => onView(item)}
+                        className="w-8 h-8 rounded-lg bg-indigo-50 text-indigo-600 hover:bg-indigo-100 transition flex items-center justify-center"
+                        title="View Details"
+                      >
+                        <i className="fas fa-eye text-xs"></i>
+                      </button>
+                      <button 
                         onClick={() => onEdit(item)}
                         className="w-8 h-8 rounded-lg bg-amber-50 text-amber-600 hover:bg-amber-100 transition flex items-center justify-center"
+                        title="Edit Asset"
                       >
                         <i className="fas fa-edit text-xs"></i>
                       </button>
                       <button 
                         onClick={() => handleDelete(item.id)}
                         className="w-8 h-8 rounded-lg bg-rose-50 text-rose-600 hover:bg-rose-100 transition flex items-center justify-center"
+                        title="Delete Asset"
                       >
                         <i className="fas fa-trash text-xs"></i>
                       </button>

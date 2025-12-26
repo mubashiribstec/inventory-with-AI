@@ -6,6 +6,7 @@ import InventoryTable from './components/InventoryTable.tsx';
 import MaintenanceList from './components/MaintenanceList.tsx';
 import SupplierList from './components/SupplierList.tsx';
 import LicenseList from './components/LicenseList.tsx';
+import ItemDetails from './components/ItemDetails.tsx';
 import { ItemStatus, InventoryItem, Movement, Supplier, LocationRecord, MaintenanceLog, License } from './types.ts';
 import Modal from './components/Modal.tsx';
 import PurchaseForm from './components/PurchaseForm.tsx';
@@ -27,6 +28,7 @@ const App: React.FC = () => {
   const [isPurchaseModalOpen, setIsPurchaseModalOpen] = useState(false);
   const [isAssignModalOpen, setIsAssignModalOpen] = useState(false);
   const [editingItem, setEditingItem] = useState<InventoryItem | null>(null);
+  const [viewingItem, setViewingItem] = useState<InventoryItem | null>(null);
 
   const fetchData = useCallback(async () => {
     try {
@@ -82,7 +84,7 @@ const App: React.FC = () => {
   const renderContent = () => {
     switch (activeTab) {
       case 'dashboard': return <Dashboard stats={stats} movements={movements} items={items} />;
-      case 'inventory': return <InventoryTable items={items} onUpdate={fetchData} onEdit={setEditingItem} />;
+      case 'inventory': return <InventoryTable items={items} onUpdate={fetchData} onEdit={setEditingItem} onView={setViewingItem} />;
       case 'maintenance': return <MaintenanceList logs={maintenance} items={items} onUpdate={fetchData} />;
       case 'suppliers': return <SupplierList suppliers={suppliers} />;
       case 'licenses': return <LicenseList licenses={[]} suppliers={suppliers} />;
@@ -120,6 +122,12 @@ const App: React.FC = () => {
             <p className="text-slate-500 mt-1">SmartStock Enterprise Resource Planning</p>
           </div>
           <div className="flex items-center gap-3">
+            <button 
+              onClick={() => { setEditingItem(null); setIsPurchaseModalOpen(true); }} 
+              className="px-4 py-2.5 bg-indigo-600 text-white rounded-xl hover:bg-indigo-700 transition font-bold text-sm shadow-lg shadow-indigo-100 flex items-center gap-2"
+            >
+              <i className="fas fa-plus"></i> Add Asset
+            </button>
             <button onClick={fetchData} className="p-2.5 bg-white border border-slate-200 text-slate-600 rounded-xl hover:bg-slate-50 transition">
               <i className="fas fa-sync-alt"></i>
             </button>
@@ -151,6 +159,12 @@ const App: React.FC = () => {
             suppliers={suppliers} 
             locations={locations} 
           />
+        </Modal>
+      )}
+
+      {viewingItem && (
+        <Modal title="🔍 Asset Intelligence View" onClose={() => setViewingItem(null)}>
+          <ItemDetails item={viewingItem} />
         </Modal>
       )}
     </div>

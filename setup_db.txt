@@ -1,0 +1,75 @@
+-- SmartStock Pro - Database Setup SQL
+-- Copy and paste these commands into your SQL runner (e.g., phpMyAdmin SQL tab)
+
+-- 1. Create the Database
+CREATE DATABASE IF NOT EXISTS smartstock;
+USE smartstock;
+
+-- 2. Create Asset Registry Table
+CREATE TABLE IF NOT EXISTS items (
+    id VARCHAR(50) PRIMARY KEY,
+    name VARCHAR(255) NOT NULL,
+    category VARCHAR(100),
+    serial VARCHAR(100),
+    status VARCHAR(50),
+    location VARCHAR(255),
+    assignedTo VARCHAR(255),
+    department VARCHAR(100),
+    purchaseDate DATE,
+    warranty DATE,
+    cost DECIMAL(10, 2)
+);
+
+-- 3. Create Movements Log Table
+CREATE TABLE IF NOT EXISTS movements (
+    id VARCHAR(50) PRIMARY KEY,
+    date DATE,
+    item VARCHAR(255),
+    `from` VARCHAR(255),
+    `to` VARCHAR(255),
+    employee VARCHAR(255),
+    department VARCHAR(100),
+    status VARCHAR(50)
+);
+
+-- 4. Create Supplier Registry
+CREATE TABLE IF NOT EXISTS suppliers (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    name VARCHAR(255) NOT NULL,
+    contact_person VARCHAR(255),
+    email VARCHAR(255),
+    rating INT DEFAULT 0
+);
+
+-- 5. Create Location Registry
+CREATE TABLE IF NOT EXISTS locations (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    building VARCHAR(100),
+    floor VARCHAR(50),
+    room VARCHAR(50),
+    manager VARCHAR(255)
+);
+
+-- 6. Create Maintenance Ticket System
+CREATE TABLE IF NOT EXISTS maintenance_logs (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    item_id VARCHAR(50),
+    issue_type VARCHAR(100),
+    description TEXT,
+    status VARCHAR(50),
+    cost DECIMAL(10, 2),
+    start_date DATE,
+    FOREIGN KEY (item_id) REFERENCES items(id) ON DELETE CASCADE
+);
+
+-- 7. Seed Essential Data for Dropdowns
+INSERT IGNORE INTO suppliers (name, contact_person, email, rating) VALUES 
+('Dell Technologies', 'Michael Dell', 'enterprise@dell.com', 5),
+('Apple Inc.', 'Tim Cook', 'business@apple.com', 5),
+('Cisco Systems', 'Chuck Robbins', 'support@cisco.com', 4),
+('HP Inc.', 'Enrique Lores', 'support@hp.com', 4);
+
+INSERT IGNORE INTO locations (building, floor, room, manager) VALUES 
+('Main HQ', 'Ground', 'Server Room', 'Alice Johnson'),
+('Innovation Hub', '2nd', 'Marketing Office', 'Bob Smith'),
+('IT Storage', 'Basement', 'Cage A', 'System Admin');
