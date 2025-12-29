@@ -46,7 +46,7 @@ const Sidebar: React.FC<SidebarProps> = ({ userRole, activeTab, setActiveTab, on
       title: 'Procurement & Ops',
       items: [
         { id: 'purchase-history', icon: 'fa-history', label: 'Purchase Ledger', hide: isStaff },
-        { id: 'requests', icon: 'fa-clipboard-list', label: 'Employee Requests', hide: isStaff },
+        { id: 'requests', icon: 'fa-clipboard-list', label: 'Employee Requests' },
         { id: 'maintenance', icon: 'fa-tools', label: 'Maintenance Hub', hide: isStaff },
         { id: 'faulty-reports', icon: 'fa-exclamation-triangle', label: 'Faulty Reports' },
       ]

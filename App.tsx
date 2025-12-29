@@ -192,7 +192,17 @@ const App: React.FC = () => {
       case 'employees': return isStaff ? null : <GenericListView title="Employee Registry" icon="fa-users" items={employees} columns={['id', 'name', 'email', 'department', 'role']} onAdd={isAdmin ? () => setManagementModal({ isOpen: true, type: 'Employee' }) : undefined} onDelete={isAdmin ? (item) => handleManagementDelete(item, 'Employee') : undefined} onView={(emp) => setViewingEmployee(emp)} />;
       case 'departments': return isStaff ? null : <GenericListView title="Departmental Overview" icon="fa-building" items={departments} columns={['id', 'name', 'budget_month', 'head', 'spent', 'budget']} onAdd={isAdmin ? () => setManagementModal({ isOpen: true, type: 'Department' }) : undefined} onDelete={isAdmin ? (item) => handleManagementDelete(item, 'Department') : undefined} />;
       case 'purchase-history': return isStaff ? null : <GenericListView title="Procurement History" icon="fa-history" items={movements.filter(m => m.status === 'PURCHASED')} columns={['date', 'item', 'from', 'to']} onAdd={canEdit ? () => setIsPurchaseModalOpen(true) : undefined} onEdit={canEdit ? handleEditPurchase : undefined} onDelete={isAdmin ? (m) => handleManagementDelete(m, 'Movement') : undefined} />;
-      case 'requests': return isStaff ? null : <GenericListView title="Employee Asset Requests" icon="fa-clipboard-list" items={requests} columns={['item', 'employee', 'urgency', 'status', 'request_date']} onAdd={() => setIsRequestModalOpen(true)} onDelete={canEdit ? (item) => handleManagementDelete(item, 'Request') : undefined} onView={(item) => alert(item.notes)} />;
+      case 'requests': 
+        const staffRequests = isStaff ? requests.filter(r => r.employee === currentUser.full_name) : requests;
+        return <GenericListView 
+          title="Employee Asset Requests" 
+          icon="fa-clipboard-list" 
+          items={staffRequests} 
+          columns={['item', 'employee', 'urgency', 'status', 'request_date']} 
+          onAdd={() => setIsRequestModalOpen(true)} 
+          onDelete={canEdit ? (item) => handleManagementDelete(item, 'Request') : undefined} 
+          onView={(item) => alert(item.notes)} 
+        />;
       case 'faulty-reports': return <GenericListView title="Faulty Reports" icon="fa-exclamation-circle" items={maintenance} columns={['item_id', 'issue_type', 'description', 'status']} onAdd={() => setIsMaintenanceModalOpen(true)} onView={() => !isStaff && setActiveTab('maintenance')} />;
       case 'budgets': return isStaff ? null : <GenericListView title="Budget Tracker" icon="fa-wallet" items={departments} columns={['name', 'budget_month', 'budget', 'spent', 'remaining', 'utilization', 'budget_status']} onAdd={isAdmin ? () => setManagementModal({ isOpen: true, type: 'Department' }) : undefined} onView={(dept) => setViewingBudgetBreakdown(dept)} />;
       case 'audit-trail': return isStaff ? null : <GenericListView title="Movement Ledger" icon="fa-history" items={movements} columns={['date', 'item', 'from', 'to', 'employee', 'department', 'status']} onDelete={isAdmin ? (item) => handleManagementDelete(item, 'Movement') : undefined} />;
@@ -221,6 +231,7 @@ const App: React.FC = () => {
         if (type === 'Employee') await apiService.deleteEmployee(item.id);
         if (type === 'Department') await apiService.deleteDepartment(item.id);
         if (type === 'Movement') await apiService.genericDelete('movements', item.id);
+        if (type === 'Request') await apiService.deleteRequest(item.id);
         fetchData();
       } catch (err) { alert(err); }
     }
@@ -246,6 +257,14 @@ const App: React.FC = () => {
     try {
       await apiService.saveMaintenance(log);
       setIsMaintenanceModalOpen(false);
+      fetchData();
+    } catch (err) { alert(err); }
+  };
+
+  const handleRequestSubmit = async (req: any) => {
+    try {
+      await apiService.saveRequest(req);
+      setIsRequestModalOpen(false);
       fetchData();
     } catch (err) { alert(err); }
   };
@@ -317,6 +336,12 @@ const App: React.FC = () => {
             setIsAssignModalOpen(false); 
             fetchData();
           }} />
+        </Modal>
+      )}
+
+      {isRequestModalOpen && (
+        <Modal title="📝 Asset Request" onClose={() => setIsRequestModalOpen(false)}>
+          <RequestForm employees={employees} departments={departments} categories={categories} onSubmit={handleRequestSubmit} />
         </Modal>
       )}
 

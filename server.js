@@ -97,6 +97,8 @@ app.post('/api/init-db', async (req, res) => {
         full_name VARCHAR(100),
         shift_start_time VARCHAR(5) DEFAULT '09:00'
       )`,
+      // Migration: Ensure column exists if table was already created
+      `ALTER TABLE users ADD COLUMN IF NOT EXISTS shift_start_time VARCHAR(5) DEFAULT '09:00'`,
       `CREATE TABLE IF NOT EXISTS user_logs (
         id INT AUTO_INCREMENT PRIMARY KEY,
         user_id VARCHAR(50),

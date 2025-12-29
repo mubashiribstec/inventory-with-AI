@@ -11,6 +11,7 @@ const AttendanceModule: React.FC<AttendanceModuleProps> = ({ currentUser }) => {
   const [records, setRecords] = useState<AttendanceRecord[]>([]);
   const [loading, setLoading] = useState(false);
   const [todayRecord, setTodayRecord] = useState<AttendanceRecord | null>(null);
+  const [editingRecord, setEditingRecord] = useState<AttendanceRecord | null>(null);
 
   // Use a stable reference for today's date string
   const todayStr = new Date().toISOString().split('T')[0];
@@ -63,11 +64,8 @@ const AttendanceModule: React.FC<AttendanceModuleProps> = ({ currentUser }) => {
     const now = new Date();
     const checkInTime = formatDateTimeForSQL(now);
     
-    // Status Logic based on user's specific shift start time
-    // Default to 09:00 if not set
     const shiftStart = currentUser.shift_start_time || '09:00';
     const [shiftH, shiftM] = shiftStart.split(':').map(Number);
-    
     const isLate = now.getHours() > shiftH || (now.getHours() === shiftH && now.getMinutes() > shiftM);
     
     const record: AttendanceRecord = {
@@ -95,7 +93,6 @@ const AttendanceModule: React.FC<AttendanceModuleProps> = ({ currentUser }) => {
     const now = new Date();
     const checkOutTime = formatDateTimeForSQL(now);
     
-    // Recalculate duration and status
     const parseDate = (dStr: string | null) => {
       if (!dStr) return null;
       let iso = dStr;
@@ -110,8 +107,6 @@ const AttendanceModule: React.FC<AttendanceModuleProps> = ({ currentUser }) => {
 
     if (checkIn) {
       const durationHours = (now.getTime() - checkIn.getTime()) / (1000 * 60 * 60);
-      
-      // Logic: Less than 5 hours is Half-Day
       if (durationHours < 5) {
         finalStatus = 'HALF-DAY';
       }
@@ -133,8 +128,28 @@ const AttendanceModule: React.FC<AttendanceModuleProps> = ({ currentUser }) => {
     }
   };
 
-  const isAdmin = currentUser.role === UserRole.ADMIN || currentUser.role === UserRole.MANAGER;
-  const filteredRecords = isAdmin ? records : records.filter(r => r.user_id === currentUser.id);
+  const handleManualEdit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editingRecord) return;
+
+    try {
+      const recordToSave = {
+        ...editingRecord,
+        date: sanitizeDateForSQL(editingRecord.date),
+        check_in: editingRecord.check_in ? formatDateTimeForSQL(editingRecord.check_in) : null,
+        check_out: editingRecord.check_out ? formatDateTimeForSQL(editingRecord.check_out) : null
+      };
+      await apiService.saveAttendance(recordToSave);
+      setEditingRecord(null);
+      fetchRecords();
+    } catch (err) {
+      alert("Error updating record: " + err);
+    }
+  };
+
+  const isFullAdmin = currentUser.role === UserRole.ADMIN;
+  const isManagement = currentUser.role === UserRole.ADMIN || currentUser.role === UserRole.MANAGER;
+  const filteredRecords = isManagement ? records : records.filter(r => r.user_id === currentUser.id);
 
   const displayTime = (timeStr: string | null) => {
     if (!timeStr) return '-';
@@ -213,12 +228,13 @@ const AttendanceModule: React.FC<AttendanceModuleProps> = ({ currentUser }) => {
             <thead>
               <tr className="bg-slate-50 text-slate-500 text-[10px] font-bold uppercase tracking-wider">
                 <th className="px-6 py-5">Date</th>
-                {isAdmin && <th className="px-6 py-5">Employee</th>}
+                {isManagement && <th className="px-6 py-5">Employee</th>}
                 <th className="px-6 py-5">Check In</th>
                 <th className="px-6 py-5">Check Out</th>
                 <th className="px-6 py-5">Hours</th>
                 <th className="px-6 py-5">Status</th>
                 <th className="px-6 py-5">Alerts</th>
+                {isFullAdmin && <th className="px-6 py-5 text-center">Actions</th>}
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-50">
@@ -234,14 +250,12 @@ const AttendanceModule: React.FC<AttendanceModuleProps> = ({ currentUser }) => {
                 const checkIn = parseDate(record.check_in);
                 const checkOut = parseDate(record.check_out);
                 const diff = checkIn && checkOut ? (checkOut.getTime() - checkIn.getTime()) / (1000 * 60 * 60) : 0;
-                
-                // Alert logic
                 const hoursShort = checkOut && diff < 7.5;
 
                 return (
                   <tr key={record.id} className="hover:bg-slate-50/50 transition">
                     <td className="px-6 py-4 text-xs font-bold text-slate-800">{sanitizeDateForSQL(record.date)}</td>
-                    {isAdmin && <td className="px-6 py-4 text-xs font-bold text-indigo-600">{record.username}</td>}
+                    {isManagement && <td className="px-6 py-4 text-xs font-bold text-indigo-600">{record.username}</td>}
                     <td className="px-6 py-4 text-xs text-slate-600">{displayTime(record.check_in)}</td>
                     <td className="px-6 py-4 text-xs text-slate-600">{displayTime(record.check_out)}</td>
                     <td className="px-6 py-4 text-xs font-bold text-slate-800">{diff > 0 ? `${diff.toFixed(1)} hrs` : '-'}</td>
@@ -263,6 +277,16 @@ const AttendanceModule: React.FC<AttendanceModuleProps> = ({ currentUser }) => {
                         </div>
                       )}
                     </td>
+                    {isFullAdmin && (
+                      <td className="px-6 py-4 text-center">
+                        <button 
+                          onClick={() => setEditingRecord(record)}
+                          className="w-8 h-8 rounded-lg bg-indigo-50 text-indigo-600 hover:bg-indigo-100 transition flex items-center justify-center mx-auto"
+                        >
+                          <i className="fas fa-edit text-xs"></i>
+                        </button>
+                      </td>
+                    )}
                   </tr>
                 );
               })}
@@ -270,6 +294,67 @@ const AttendanceModule: React.FC<AttendanceModuleProps> = ({ currentUser }) => {
           </table>
         </div>
       </div>
+
+      {/* Manual Edit Modal - Admin Only */}
+      {isFullAdmin && editingRecord && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm">
+          <div className="bg-white w-full max-w-lg rounded-3xl p-8 animate-fadeIn">
+            <h3 className="text-xl font-bold mb-2">Adjust Attendance Record</h3>
+            <p className="text-slate-500 text-xs mb-6 font-medium uppercase tracking-widest">
+              Modifying log for: <span className="text-indigo-600 font-bold">{editingRecord.username}</span> on {sanitizeDateForSQL(editingRecord.date)}
+            </p>
+            <form onSubmit={handleManualEdit} className="space-y-4">
+              <div className="space-y-1">
+                <label className="text-xs font-bold text-slate-500 uppercase tracking-widest">Check In Time</label>
+                <input 
+                  type="datetime-local" 
+                  className="w-full px-4 py-3 bg-slate-50 border border-slate-100 rounded-xl font-mono text-sm" 
+                  value={editingRecord.check_in ? new Date(new Date(editingRecord.check_in).getTime() - new Date().getTimezoneOffset() * 60000).toISOString().slice(0, 16) : ''} 
+                  onChange={e => setEditingRecord({...editingRecord, check_in: e.target.value})} 
+                />
+              </div>
+              <div className="space-y-1">
+                <label className="text-xs font-bold text-slate-500 uppercase tracking-widest">Check Out Time</label>
+                <input 
+                  type="datetime-local" 
+                  className="w-full px-4 py-3 bg-slate-50 border border-slate-100 rounded-xl font-mono text-sm" 
+                  value={editingRecord.check_out ? new Date(new Date(editingRecord.check_out).getTime() - new Date().getTimezoneOffset() * 60000).toISOString().slice(0, 16) : ''} 
+                  onChange={e => setEditingRecord({...editingRecord, check_out: e.target.value})} 
+                />
+              </div>
+              <div className="space-y-1">
+                <label className="text-xs font-bold text-slate-500 uppercase tracking-widest">Calculated Status</label>
+                <select 
+                  className="w-full px-4 py-3 bg-slate-50 border border-slate-100 rounded-xl font-bold" 
+                  value={editingRecord.status} 
+                  onChange={e => setEditingRecord({...editingRecord, status: e.target.value as any})}
+                >
+                  <option value="PRESENT">PRESENT</option>
+                  <option value="LATE">LATE</option>
+                  <option value="HALF-DAY">HALF-DAY</option>
+                  <option value="ABSENT">ABSENT</option>
+                  <option value="ON-LEAVE">ON-LEAVE</option>
+                </select>
+              </div>
+              <div className="flex gap-4 pt-4">
+                <button 
+                  type="button" 
+                  onClick={() => setEditingRecord(null)} 
+                  className="flex-1 py-4 bg-slate-100 text-slate-600 rounded-2xl font-bold"
+                >
+                  Cancel
+                </button>
+                <button 
+                  type="submit" 
+                  className="flex-1 py-4 bg-indigo-600 text-white rounded-2xl font-bold shadow-lg shadow-indigo-100"
+                >
+                  Save Changes
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
     </div>
   );
 };
