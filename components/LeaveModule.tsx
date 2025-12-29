@@ -34,11 +34,19 @@ const LeaveModule: React.FC<LeaveModuleProps> = ({ currentUser }) => {
     fetchLeaves();
   }, []);
 
+  const sanitizeDate = (d: string) => {
+    if (!d) return '';
+    // Ensure we only send YYYY-MM-DD to MariaDB DATE columns
+    return d.includes('T') ? d.split('T')[0] : d;
+  };
+
   const handleSubmitRequest = async (e: React.FormEvent) => {
     e.preventDefault();
     const id = `LV-${Date.now()}`;
     const request: LeaveRequest = {
       ...newLeave,
+      start_date: sanitizeDate(newLeave.start_date),
+      end_date: sanitizeDate(newLeave.end_date),
       id,
       user_id: currentUser.id,
       username: currentUser.username,
@@ -56,7 +64,13 @@ const LeaveModule: React.FC<LeaveModuleProps> = ({ currentUser }) => {
 
   const handleUpdateStatus = async (leave: LeaveRequest, status: 'APPROVED' | 'REJECTED') => {
     try {
-      await apiService.saveLeaveRequest({ ...leave, status });
+      await apiService.saveLeaveRequest({ 
+        ...leave, 
+        status,
+        // Also sanitize these just in case they were stored incorrectly before
+        start_date: sanitizeDate(leave.start_date),
+        end_date: sanitizeDate(leave.end_date)
+      });
       fetchLeaves();
     } catch (err) {
       alert(err);
@@ -108,7 +122,7 @@ const LeaveModule: React.FC<LeaveModuleProps> = ({ currentUser }) => {
               {filteredLeaves.map(leave => (
                 <tr key={leave.id} className="hover:bg-slate-50 transition">
                   <td className="px-6 py-4 text-xs font-bold text-slate-800">{leave.username}</td>
-                  <td className="px-6 py-4 text-xs text-slate-600">{leave.start_date} to {leave.end_date}</td>
+                  <td className="px-6 py-4 text-xs text-slate-600">{sanitizeDate(leave.start_date)} to {sanitizeDate(leave.end_date)}</td>
                   <td className="px-6 py-4">
                     <span className="px-2 py-0.5 rounded-lg bg-slate-100 text-slate-600 text-[10px] font-bold uppercase">{leave.leave_type}</span>
                   </td>

@@ -14,6 +14,13 @@ const AttendanceModule: React.FC<AttendanceModuleProps> = ({ currentUser }) => {
 
   const todayStr = new Date().toISOString().split('T')[0];
 
+  // Helper to sanitize date for MariaDB DATE columns (YYYY-MM-DD)
+  const sanitizeDate = (d: string) => {
+    if (!d) return '';
+    // If it's a full ISO string, take only the date part
+    return d.includes('T') ? d.split('T')[0] : d;
+  };
+
   // Helper to format date for MariaDB DATETIME (YYYY-MM-DD HH:MM:SS)
   const formatForSQL = (date: Date) => {
     return date.toISOString().slice(0, 19).replace('T', ' ');
@@ -25,7 +32,7 @@ const AttendanceModule: React.FC<AttendanceModuleProps> = ({ currentUser }) => {
       const all = await apiService.getAttendance();
       setRecords(all);
       
-      const mine = all.find(r => r.user_id === currentUser.id && r.date.startsWith(todayStr));
+      const mine = all.find(r => r.user_id === currentUser.id && sanitizeDate(r.date) === todayStr);
       setTodayRecord(mine || null);
     } catch (err) {
       console.error(err);
@@ -69,6 +76,7 @@ const AttendanceModule: React.FC<AttendanceModuleProps> = ({ currentUser }) => {
     
     const record: AttendanceRecord = {
       ...todayRecord,
+      date: sanitizeDate(todayRecord.date), // Critical fix: Ensure YYYY-MM-DD
       check_out: formatForSQL(new Date())
     };
 
@@ -82,6 +90,20 @@ const AttendanceModule: React.FC<AttendanceModuleProps> = ({ currentUser }) => {
 
   const isAdmin = currentUser.role === UserRole.ADMIN || currentUser.role === UserRole.MANAGER;
   const filteredRecords = isAdmin ? records : records.filter(r => r.user_id === currentUser.id);
+
+  // Robust date parsing for display
+  const displayTime = (timeStr: string | null) => {
+    if (!timeStr) return '-';
+    try {
+      // If it has a space, convert to T for standard parsing
+      const isoCompatible = timeStr.includes(' ') ? timeStr.replace(' ', 'T') : timeStr;
+      // Append Z if not present to treat as UTC (standard for our formatForSQL)
+      const date = new Date(isoCompatible.includes('Z') ? isoCompatible : isoCompatible + 'Z');
+      return isNaN(date.getTime()) ? 'Invalid Time' : date.toLocaleTimeString();
+    } catch (e) {
+      return 'Invalid Time';
+    }
+  };
 
   return (
     <div className="space-y-8 animate-fadeIn">
@@ -110,7 +132,7 @@ const AttendanceModule: React.FC<AttendanceModuleProps> = ({ currentUser }) => {
             <div className="flex flex-col md:flex-row gap-4 w-full">
               <div className="px-6 py-4 bg-emerald-50 border border-emerald-100 rounded-2xl flex flex-col justify-center">
                  <span className="text-[10px] text-emerald-600 font-bold uppercase">Checked In At</span>
-                 <span className="text-emerald-800 font-bold">{new Date(todayRecord.check_in.replace(' ', 'T') + 'Z').toLocaleTimeString()}</span>
+                 <span className="text-emerald-800 font-bold">{displayTime(todayRecord.check_in)}</span>
               </div>
               <button 
                 onClick={handleCheckOut}
@@ -158,17 +180,22 @@ const AttendanceModule: React.FC<AttendanceModuleProps> = ({ currentUser }) => {
             </thead>
             <tbody className="divide-y divide-slate-50">
               {filteredRecords.sort((a,b) => b.date.localeCompare(a.date)).map(record => {
-                const parseDate = (dStr: string | null) => dStr ? new Date(dStr.replace(' ', 'T') + 'Z') : null;
+                const parseDate = (dStr: string | null) => {
+                  if (!dStr) return null;
+                  const iso = dStr.includes(' ') ? dStr.replace(' ', 'T') : dStr;
+                  const d = new Date(iso.includes('Z') ? iso : iso + 'Z');
+                  return isNaN(d.getTime()) ? null : d;
+                };
                 const checkIn = parseDate(record.check_in);
                 const checkOut = parseDate(record.check_out);
                 const diff = checkIn && checkOut ? (checkOut.getTime() - checkIn.getTime()) / (1000 * 60 * 60) : 0;
                 
                 return (
                   <tr key={record.id} className="hover:bg-slate-50/50 transition">
-                    <td className="px-6 py-4 text-xs font-bold text-slate-800">{record.date}</td>
+                    <td className="px-6 py-4 text-xs font-bold text-slate-800">{sanitizeDate(record.date)}</td>
                     {isAdmin && <td className="px-6 py-4 text-xs font-bold text-indigo-600">{record.username}</td>}
-                    <td className="px-6 py-4 text-xs text-slate-600">{checkIn ? checkIn.toLocaleTimeString() : '-'}</td>
-                    <td className="px-6 py-4 text-xs text-slate-600">{checkOut ? checkOut.toLocaleTimeString() : '-'}</td>
+                    <td className="px-6 py-4 text-xs text-slate-600">{displayTime(record.check_in)}</td>
+                    <td className="px-6 py-4 text-xs text-slate-600">{displayTime(record.check_out)}</td>
                     <td className="px-6 py-4 text-xs font-bold text-slate-800">{diff > 0 ? `${diff.toFixed(1)} hrs` : '-'}</td>
                     <td className="px-6 py-4">
                       <span className={`px-2 py-0.5 rounded-full text-[9px] font-bold uppercase border ${
