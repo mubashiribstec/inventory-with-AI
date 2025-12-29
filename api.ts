@@ -1,78 +1,75 @@
 
-import { InventoryItem, Movement, Supplier, LocationRecord, MaintenanceLog, License, Category, Employee, Department, AssetRequest } from './types.ts';
+import { InventoryItem, Movement, Supplier, LocationRecord, MaintenanceLog, License, Category, Employee, Department, AssetRequest, User, UserLog } from './types.ts';
 import { dbService } from './db.ts';
 
 const BASE_URL = '/api';
 
-const handleRequest = async <T>(url: string, options?: RequestInit, fallbackAction?: () => Promise<T>): Promise<T> => {
+// Simple session helper
+const getUserContext = () => {
+  const user = localStorage.getItem('smartstock_user');
+  return user ? JSON.parse(user) : null;
+};
+
+const handleRequest = async <T>(url: string, options: RequestInit = {}, fallbackAction?: () => Promise<T>): Promise<T> => {
+  const user = getUserContext();
+  const headers = {
+    ...options.headers,
+    'Content-Type': 'application/json',
+    ...(user ? { 'x-user-id': user.id, 'x-username': user.username } : {})
+  };
+
   try {
-    const res = await fetch(url, options);
+    const res = await fetch(url, { ...options, headers });
     
     if (!res.ok) {
-      if (res.status === 404 && fallbackAction) {
-        return await fallbackAction();
-      }
+      if (res.status === 404 && fallbackAction) return await fallbackAction();
       const text = await res.text();
-      throw new Error(`API Error (${res.status}): ${text || 'Unknown Server Error'}`);
+      throw new Error(`API Error (${res.status}): ${text || 'Unknown Error'}`);
     }
 
     const text = await res.text();
     if (!text || text.trim() === '') return {} as T;
     return JSON.parse(text.trim());
   } catch (e) {
-    if (fallbackAction) {
-      return await fallbackAction();
-    }
+    if (fallbackAction) return await fallbackAction();
     throw e;
   }
 };
 
 export const apiService = {
-  async initDatabase(): Promise<{ success: boolean; message: string }> {
-    return handleRequest<{ success: boolean; message: string }>(`${BASE_URL}/init-db`, {
-      method: 'POST'
+  async login(username, password): Promise<User> {
+    return handleRequest<User>(`${BASE_URL}/login`, {
+      method: 'POST',
+      body: JSON.stringify({ username, password })
     });
   },
 
-  // Generic Save/Delete Helper
+  async initDatabase(): Promise<{ success: boolean; message: string }> {
+    return handleRequest<{ success: boolean; message: string }>(`${BASE_URL}/init-db`, { method: 'POST' });
+  },
+
+  async getSystemLogs(): Promise<UserLog[]> {
+    return handleRequest<UserLog[]>(`${BASE_URL}/system-logs`);
+  },
+
+  // Generic Save Helper
   async genericSave(endpoint: string, data: any): Promise<void> {
     return handleRequest<void>(`${BASE_URL}/${endpoint}`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(data)
     });
   },
+
   async genericDelete(endpoint: string, id: string | number): Promise<void> {
     return handleRequest<void>(`${BASE_URL}/${endpoint}/${id}`, { method: 'DELETE' });
   },
 
-  // Items
-  async getAllItems(): Promise<InventoryItem[]> {
-    return handleRequest<InventoryItem[]>(`${BASE_URL}/items`, {}, () => dbService.getAllItems());
-  },
-  async saveItem(item: InventoryItem): Promise<void> {
-    return handleRequest<void>(`${BASE_URL}/items`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(item)
-    }, () => dbService.saveItem(item));
-  },
-  async updateItem(id: string, item: Partial<InventoryItem>): Promise<void> {
-    return handleRequest<void>(`${BASE_URL}/items`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ ...item, id })
-    }, async () => {
-      const all = await dbService.getAllItems();
-      const match = all.find(i => i.id === id);
-      if (match) await dbService.saveItem({ ...match, ...item });
-    });
-  },
-  async deleteItem(id: string): Promise<void> {
-    return handleRequest<void>(`${BASE_URL}/items/${id}`, { method: 'DELETE' }, () => dbService.deleteItem(id));
-  },
+  // Specific Entity Methods (matching current App pattern)
+  async getAllItems(): Promise<InventoryItem[]> { return handleRequest<InventoryItem[]>(`${BASE_URL}/items`, {}, () => dbService.getAllItems()); },
+  async saveItem(item: InventoryItem): Promise<void> { return this.genericSave('items', item); },
+  async updateItem(id: string, item: Partial<InventoryItem>): Promise<void> { return this.genericSave('items', { ...item, id }); },
+  async deleteItem(id: string): Promise<void> { return this.genericDelete('items', id); },
 
-  // Management Entities
   async getCategories(): Promise<Category[]> { return handleRequest<Category[]>(`${BASE_URL}/categories`, {}, () => dbService.getAllCategories()); },
   async saveCategory(cat: Category): Promise<void> { return this.genericSave('categories', cat); },
   async deleteCategory(id: string): Promise<void> { return this.genericDelete('categories', id); },
@@ -85,26 +82,18 @@ export const apiService = {
   async saveDepartment(dept: Department): Promise<void> { return this.genericSave('departments', dept); },
   async deleteDepartment(id: string): Promise<void> { return this.genericDelete('departments', id); },
 
-  // Maintenance & Tickets
   async getAllMaintenance(): Promise<MaintenanceLog[]> { return handleRequest<MaintenanceLog[]>(`${BASE_URL}/maintenance_logs`, {}, () => dbService.getAllMaintenance()); },
   async saveMaintenance(log: MaintenanceLog): Promise<void> { return this.genericSave('maintenance_logs', log); },
   async deleteMaintenance(id: number): Promise<void> { return this.genericDelete('maintenance_logs', id); },
 
-  // Licenses
   async getAllLicenses(): Promise<License[]> { return handleRequest<License[]>(`${BASE_URL}/licenses`, {}, () => dbService.getAllLicenses()); },
   async saveLicense(license: License): Promise<void> { return this.genericSave('licenses', license); },
   async deleteLicense(id: number): Promise<void> { return this.genericDelete('licenses', id); },
 
-  // Requests
   async getAllRequests(): Promise<AssetRequest[]> { return handleRequest<AssetRequest[]>(`${BASE_URL}/requests`, {}, () => dbService.getAllRequests()); },
-  async saveRequest(req: AssetRequest): Promise<void> { return handleRequest<void>(`${BASE_URL}/requests`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(req)
-  }, () => dbService.saveRequest(req)); },
-  async deleteRequest(id: string): Promise<void> { return handleRequest<void>(`${BASE_URL}/requests/${id}`, { method: 'DELETE' }, () => dbService.deleteRequest(id)); },
+  async saveRequest(req: AssetRequest): Promise<void> { return this.genericSave('requests', req); },
+  async deleteRequest(id: string): Promise<void> { return this.genericDelete('requests', id); },
 
-  // Others
   async getAllMovements(): Promise<Movement[]> { return handleRequest<Movement[]>(`${BASE_URL}/movements`, {}, () => dbService.getAllMovements()); },
   async saveMovement(movement: Movement): Promise<void> { return this.genericSave('movements', movement); },
   async getAllSuppliers(): Promise<Supplier[]> { return handleRequest<Supplier[]>(`${BASE_URL}/suppliers`, {}, () => dbService.getAllSuppliers()); },

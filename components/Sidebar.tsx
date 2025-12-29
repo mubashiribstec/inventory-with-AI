@@ -1,22 +1,26 @@
 
 import React from 'react';
+import { UserRole } from '../types.ts';
 
 interface SidebarProps {
-  activeTab: 'dashboard' | 'inventory' | 'maintenance' | 'suppliers' | 'locations' | 'licenses' | 'categories' | 'employees' | 'departments' | 'purchase-history' | 'requests' | 'faulty-reports' | 'budgets' | 'audit-trail';
+  userRole: UserRole;
+  activeTab: 'dashboard' | 'inventory' | 'maintenance' | 'suppliers' | 'locations' | 'licenses' | 'categories' | 'employees' | 'departments' | 'purchase-history' | 'requests' | 'faulty-reports' | 'budgets' | 'audit-trail' | 'system-logs';
   setActiveTab: (tab: any) => void;
-  openPurchase: () => void;
-  openAssign: () => void;
-  runAnalysis: () => void;
+  onLogout: () => void;
 }
 
-const Sidebar: React.FC<SidebarProps> = ({ activeTab, setActiveTab, openPurchase, openAssign, runAnalysis }) => {
+const Sidebar: React.FC<SidebarProps> = ({ userRole, activeTab, setActiveTab, onLogout }) => {
+  const isAdmin = userRole === UserRole.ADMIN;
+  const isManager = userRole === UserRole.MANAGER || isAdmin;
+
   const navGroups = [
     {
       title: 'Analytics',
       items: [
         { id: 'dashboard', icon: 'fa-chart-line', label: 'Overview' },
-        { id: 'budgets', icon: 'fa-wallet', label: 'Budget Tracker' },
+        { id: 'budgets', icon: 'fa-wallet', label: 'Budget Tracker', hide: !isManager },
         { id: 'audit-trail', icon: 'fa-history', label: 'Movement Ledger' },
+        { id: 'system-logs', icon: 'fa-shield-alt', label: 'System Logs', hide: !isAdmin },
       ]
     },
     {
@@ -40,7 +44,7 @@ const Sidebar: React.FC<SidebarProps> = ({ activeTab, setActiveTab, openPurchase
       title: 'Organization',
       items: [
         { id: 'employees', icon: 'fa-users', label: 'Staff Directory' },
-        { id: 'departments', icon: 'fa-building', label: 'Departments' },
+        { id: 'departments', icon: 'fa-building', label: 'Departments', hide: !isAdmin },
         { id: 'suppliers', icon: 'fa-truck', label: 'Vendor Scorecard' },
         { id: 'locations', icon: 'fa-map-marker-alt', label: 'Site Map' },
       ]
@@ -60,12 +64,12 @@ const Sidebar: React.FC<SidebarProps> = ({ activeTab, setActiveTab, openPurchase
         </div>
       </div>
 
-      <div className="px-4 pb-6 space-y-6">
+      <div className="px-4 pb-6 space-y-6 flex-1">
         {navGroups.map((group, groupIdx) => (
           <div key={groupIdx}>
             <p className="px-4 text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-3">{group.title}</p>
             <div className="space-y-1">
-              {group.items.map(item => (
+              {group.items.filter(i => !i.hide).map(item => (
                 <button
                   key={item.id}
                   onClick={() => setActiveTab(item.id)}
@@ -84,22 +88,22 @@ const Sidebar: React.FC<SidebarProps> = ({ activeTab, setActiveTab, openPurchase
         ))}
       </div>
 
-      <div className="mt-auto p-6 bg-slate-50 border-t border-slate-100">
-        <div className="bg-indigo-600 p-4 rounded-2xl text-white shadow-lg shadow-indigo-100">
-          <div className="flex items-center gap-2 mb-2">
-            <i className="fas fa-robot text-xs"></i>
-            <span className="text-[10px] font-bold uppercase">Proactive Insight</span>
-          </div>
-          <p className="text-[10px] text-indigo-100 mb-3 line-clamp-2">
-            AI analysis suggests 3 departments are near budget capacity.
-          </p>
-          <button 
-            onClick={runAnalysis}
-            className="w-full py-2 bg-white/20 hover:bg-white/30 rounded-lg text-[10px] font-bold transition flex items-center justify-center gap-2 backdrop-blur-sm"
-          >
-            <i className="fas fa-calculator text-[8px]"></i> Verify Budgets
-          </button>
-        </div>
+      <div className="mt-auto p-4 space-y-3">
+        {isAdmin && (
+           <div className="bg-slate-50 p-4 rounded-2xl border border-slate-100">
+              <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-2">Admin Panel</p>
+              <button onClick={() => setActiveTab('system-logs')} className="w-full py-2 bg-white border border-slate-200 text-slate-600 rounded-xl text-xs font-bold hover:bg-slate-50 transition">
+                 <i className="fas fa-shield-alt mr-2"></i> Audit Logs
+              </button>
+           </div>
+        )}
+        <button 
+          onClick={onLogout}
+          className="w-full flex items-center gap-3 px-4 py-3 rounded-xl text-rose-500 hover:bg-rose-50 transition font-bold text-sm"
+        >
+          <i className="fas fa-sign-out-alt w-5"></i>
+          <span>Logout Session</span>
+        </button>
       </div>
     </div>
   );

@@ -14,7 +14,14 @@ interface GenericListViewProps {
 
 const GenericListView: React.FC<GenericListViewProps> = ({ title, icon, items, columns, onAdd, onView, onEdit, onDelete }) => {
   const formatValue = (item: any, col: string, val: any) => {
-    // Special handling for the 'spent' column to make it interactive
+    // Special handling for audit logs details
+    if (col === 'details' && typeof val === 'string') {
+        try {
+            const parsed = JSON.parse(val);
+            return <span className="text-[10px] text-slate-400 truncate max-w-[200px] block">{JSON.stringify(parsed)}</span>;
+        } catch (e) { return val; }
+    }
+
     if (col === 'spent') {
       return (
         <button 
@@ -45,7 +52,7 @@ const GenericListView: React.FC<GenericListViewProps> = ({ title, icon, items, c
       );
     }
 
-    if (col === 'status' || col === 'budget_status') {
+    if (col === 'status' || col === 'budget_status' || col === 'action') {
       const statusVal = String(val).toUpperCase();
       const colors: any = {
         'OPEN': 'bg-rose-50 text-rose-600 border-rose-100',
@@ -55,10 +62,19 @@ const GenericListView: React.FC<GenericListViewProps> = ({ title, icon, items, c
         'ASSIGNED': 'bg-blue-50 text-blue-600 border-blue-100',
         'OVER BUDGET': 'bg-rose-50 text-rose-600 border-rose-100',
         'ON TRACK': 'bg-emerald-50 text-emerald-600 border-emerald-100',
-        'NEAR LIMIT': 'bg-amber-50 text-amber-600 border-amber-100'
+        'NEAR LIMIT': 'bg-amber-50 text-amber-600 border-amber-100',
+        'DELETE': 'bg-rose-50 text-rose-600 border-rose-100',
+        'CREATE': 'bg-emerald-50 text-emerald-600 border-emerald-100',
+        'UPDATE': 'bg-indigo-50 text-indigo-600 border-indigo-100',
+        'LOGIN': 'bg-slate-100 text-slate-600'
       };
       return <span className={`px-2 py-0.5 rounded-full text-[9px] font-bold uppercase border ${colors[statusVal] || 'bg-slate-50 text-slate-500'}`}>{statusVal}</span>;
     }
+
+    if (col === 'timestamp') {
+        return <span className="text-[10px] text-slate-400">{new Date(val).toLocaleString()}</span>;
+    }
+
     return val;
   };
 
@@ -92,7 +108,7 @@ const GenericListView: React.FC<GenericListViewProps> = ({ title, icon, items, c
               {columns.map(col => (
                 <th key={col} className="px-6 py-4">{col.replace('_', ' ').charAt(0).toUpperCase() + col.replace('_', ' ').slice(1)}</th>
               ))}
-              <th className="px-6 py-4 text-center">Action</th>
+              {(onView || onEdit || onDelete) && <th className="px-6 py-4 text-center">Action</th>}
             </tr>
           </thead>
           <tbody className="divide-y divide-slate-50">
@@ -103,37 +119,27 @@ const GenericListView: React.FC<GenericListViewProps> = ({ title, icon, items, c
                     {formatValue(item, col, item[col])}
                   </td>
                 ))}
-                <td className="px-6 py-4 text-center">
-                  <div className="flex justify-center gap-2">
-                      {onView && (
-                        <button 
-                          onClick={() => onView(item)}
-                          className="w-8 h-8 rounded-lg bg-indigo-50 text-indigo-600 hover:bg-indigo-100 flex items-center justify-center transition" 
-                          title="Details"
-                        >
-                          <i className="fas fa-search-plus text-[10px]"></i>
-                        </button>
-                      )}
-                      {onEdit && (
-                        <button 
-                          onClick={() => onEdit(item)}
-                          className="w-8 h-8 rounded-lg bg-amber-50 text-amber-600 hover:bg-amber-100 flex items-center justify-center transition" 
-                          title="Edit"
-                        >
-                          <i className="fas fa-edit text-[10px]"></i>
-                        </button>
-                      )}
-                      {onDelete && (
-                        <button 
-                          onClick={() => onDelete(item)}
-                          className="w-8 h-8 rounded-lg bg-slate-50 text-slate-400 hover:bg-rose-50 hover:text-rose-500 flex items-center justify-center transition" 
-                          title="Delete"
-                        >
-                          <i className="fas fa-trash-alt text-[10px]"></i>
-                        </button>
-                      )}
-                  </div>
-                </td>
+                {(onView || onEdit || onDelete) && (
+                  <td className="px-6 py-4 text-center">
+                    <div className="flex justify-center gap-2">
+                        {onView && (
+                          <button onClick={() => onView(item)} className="w-8 h-8 rounded-lg bg-indigo-50 text-indigo-600 hover:bg-indigo-100 flex items-center justify-center transition" title="Details">
+                            <i className="fas fa-search-plus text-[10px]"></i>
+                          </button>
+                        )}
+                        {onEdit && (
+                          <button onClick={() => onEdit(item)} className="w-8 h-8 rounded-lg bg-amber-50 text-amber-600 hover:bg-amber-100 flex items-center justify-center transition" title="Edit">
+                            <i className="fas fa-edit text-[10px]"></i>
+                          </button>
+                        )}
+                        {onDelete && (
+                          <button onClick={() => onDelete(item)} className="w-8 h-8 rounded-lg bg-slate-50 text-slate-400 hover:bg-rose-50 hover:text-rose-500 flex items-center justify-center transition" title="Delete">
+                            <i className="fas fa-trash-alt text-[10px]"></i>
+                          </button>
+                        )}
+                    </div>
+                  </td>
+                )}
               </tr>
             ))}
             {items.length === 0 && (

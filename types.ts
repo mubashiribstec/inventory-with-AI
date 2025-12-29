@@ -9,6 +9,31 @@ export enum ItemStatus {
   ARCHIVED = 'archived'
 }
 
+export enum UserRole {
+  ADMIN = 'ADMIN',
+  MANAGER = 'MANAGER',
+  STAFF = 'STAFF'
+}
+
+export interface User {
+  id: string;
+  username: string;
+  role: UserRole;
+  full_name: string;
+  avatar?: string;
+}
+
+export interface UserLog {
+  id: number;
+  user_id: string;
+  username: string;
+  action: string;
+  target_type: string;
+  target_id: string;
+  details: string;
+  timestamp: string;
+}
+
 export interface InventoryItem {
   id: string;
   name: string;
