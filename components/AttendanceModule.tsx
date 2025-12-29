@@ -66,7 +66,13 @@ const AttendanceModule: React.FC<AttendanceModuleProps> = ({ currentUser }) => {
     
     const shiftStart = currentUser.shift_start_time || '09:00';
     const [shiftH, shiftM] = shiftStart.split(':').map(Number);
-    const isLate = now.getHours() > shiftH || (now.getHours() === shiftH && now.getMinutes() > shiftM);
+    
+    // Calculate minutes from midnight for comparison
+    const shiftMinutes = shiftH * 60 + shiftM;
+    const currentMinutes = now.getHours() * 60 + now.getMinutes();
+    
+    // Employee is LATE only if check-in is > 30 minutes after shift start
+    const isLate = currentMinutes > (shiftMinutes + 30);
     
     const record: AttendanceRecord = {
       id: `ATT-${todayStr}-${currentUser.id}`,
@@ -144,6 +150,17 @@ const AttendanceModule: React.FC<AttendanceModuleProps> = ({ currentUser }) => {
       fetchRecords();
     } catch (err) {
       alert("Error updating record: " + err);
+    }
+  };
+
+  const handleDeleteRecord = async (id: string) => {
+    if (window.confirm("Are you sure you want to permanently delete this attendance record?")) {
+      try {
+        await apiService.deleteAttendance(id);
+        fetchRecords();
+      } catch (err) {
+        alert("Error deleting record: " + err);
+      }
     }
   };
 
@@ -279,12 +296,22 @@ const AttendanceModule: React.FC<AttendanceModuleProps> = ({ currentUser }) => {
                     </td>
                     {isFullAdmin && (
                       <td className="px-6 py-4 text-center">
-                        <button 
-                          onClick={() => setEditingRecord(record)}
-                          className="w-8 h-8 rounded-lg bg-indigo-50 text-indigo-600 hover:bg-indigo-100 transition flex items-center justify-center mx-auto"
-                        >
-                          <i className="fas fa-edit text-xs"></i>
-                        </button>
+                        <div className="flex items-center justify-center gap-2">
+                          <button 
+                            onClick={() => setEditingRecord(record)}
+                            className="w-8 h-8 rounded-lg bg-indigo-50 text-indigo-600 hover:bg-indigo-100 transition flex items-center justify-center"
+                            title="Edit"
+                          >
+                            <i className="fas fa-edit text-xs"></i>
+                          </button>
+                          <button 
+                            onClick={() => handleDeleteRecord(record.id)}
+                            className="w-8 h-8 rounded-lg bg-rose-50 text-rose-600 hover:bg-rose-100 transition flex items-center justify-center"
+                            title="Delete"
+                          >
+                            <i className="fas fa-trash-alt text-xs"></i>
+                          </button>
+                        </div>
                       </td>
                     )}
                   </tr>

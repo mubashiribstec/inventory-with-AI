@@ -102,6 +102,7 @@ export const apiService = {
   // Attendance & Leaves & Users
   async getAttendance(): Promise<AttendanceRecord[]> { return handleRequest<AttendanceRecord[]>(`${BASE_URL}/attendance`); },
   async saveAttendance(record: AttendanceRecord): Promise<void> { return this.genericSave('attendance', record); },
+  async deleteAttendance(id: string): Promise<void> { return this.genericDelete('attendance', id); },
   
   async getLeaveRequests(): Promise<LeaveRequest[]> { return handleRequest<LeaveRequest[]>(`${BASE_URL}/leave_requests`); },
   async saveLeaveRequest(record: LeaveRequest): Promise<void> { return this.genericSave('leave_requests', record); },
