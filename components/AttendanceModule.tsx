@@ -14,6 +14,11 @@ const AttendanceModule: React.FC<AttendanceModuleProps> = ({ currentUser }) => {
 
   const todayStr = new Date().toISOString().split('T')[0];
 
+  // Helper to format date for MariaDB DATETIME (YYYY-MM-DD HH:MM:SS)
+  const formatForSQL = (date: Date) => {
+    return date.toISOString().slice(0, 19).replace('T', ' ');
+  };
+
   const fetchRecords = async () => {
     setLoading(true);
     try {
@@ -35,7 +40,7 @@ const AttendanceModule: React.FC<AttendanceModuleProps> = ({ currentUser }) => {
 
   const handleCheckIn = async () => {
     const now = new Date();
-    const checkInTime = now.toISOString();
+    const checkInTime = formatForSQL(now);
     
     // Status Logic: Late after 09:00 AM
     const isLate = now.getHours() >= 9 && now.getMinutes() > 0;
@@ -64,7 +69,7 @@ const AttendanceModule: React.FC<AttendanceModuleProps> = ({ currentUser }) => {
     
     const record: AttendanceRecord = {
       ...todayRecord,
-      check_out: new Date().toISOString()
+      check_out: formatForSQL(new Date())
     };
 
     try {
@@ -105,7 +110,7 @@ const AttendanceModule: React.FC<AttendanceModuleProps> = ({ currentUser }) => {
             <div className="flex flex-col md:flex-row gap-4 w-full">
               <div className="px-6 py-4 bg-emerald-50 border border-emerald-100 rounded-2xl flex flex-col justify-center">
                  <span className="text-[10px] text-emerald-600 font-bold uppercase">Checked In At</span>
-                 <span className="text-emerald-800 font-bold">{new Date(todayRecord.check_in).toLocaleTimeString()}</span>
+                 <span className="text-emerald-800 font-bold">{new Date(todayRecord.check_in.replace(' ', 'T') + 'Z').toLocaleTimeString()}</span>
               </div>
               <button 
                 onClick={handleCheckOut}
@@ -153,8 +158,9 @@ const AttendanceModule: React.FC<AttendanceModuleProps> = ({ currentUser }) => {
             </thead>
             <tbody className="divide-y divide-slate-50">
               {filteredRecords.sort((a,b) => b.date.localeCompare(a.date)).map(record => {
-                const checkIn = record.check_in ? new Date(record.check_in) : null;
-                const checkOut = record.check_out ? new Date(record.check_out) : null;
+                const parseDate = (dStr: string | null) => dStr ? new Date(dStr.replace(' ', 'T') + 'Z') : null;
+                const checkIn = parseDate(record.check_in);
+                const checkOut = parseDate(record.check_out);
                 const diff = checkIn && checkOut ? (checkOut.getTime() - checkIn.getTime()) / (1000 * 60 * 60) : 0;
                 
                 return (
