@@ -40,8 +40,9 @@ app.post('/api/init-db', async (req, res) => {
   try {
     conn = await pool.getConnection();
     
-    await conn.query(`
-      CREATE TABLE IF NOT EXISTS items (
+    // Create tables one by one for better control
+    const queries = [
+      `CREATE TABLE IF NOT EXISTS items (
         id VARCHAR(50) PRIMARY KEY,
         name VARCHAR(255) NOT NULL,
         category VARCHAR(100),
@@ -53,11 +54,8 @@ app.post('/api/init-db', async (req, res) => {
         purchaseDate DATE,
         warranty DATE,
         cost DECIMAL(10, 2)
-      )
-    `);
-
-    await conn.query(`
-      CREATE TABLE IF NOT EXISTS movements (
+      )`,
+      `CREATE TABLE IF NOT EXISTS movements (
         id VARCHAR(50) PRIMARY KEY,
         date DATE,
         item VARCHAR(255),
@@ -66,31 +64,22 @@ app.post('/api/init-db', async (req, res) => {
         employee VARCHAR(255),
         department VARCHAR(100),
         status VARCHAR(50)
-      )
-    `);
-
-    await conn.query(`
-      CREATE TABLE IF NOT EXISTS suppliers (
+      )`,
+      `CREATE TABLE IF NOT EXISTS suppliers (
         id INT AUTO_INCREMENT PRIMARY KEY,
         name VARCHAR(255) NOT NULL,
         contact_person VARCHAR(255),
         email VARCHAR(255),
         rating INT DEFAULT 0
-      )
-    `);
-
-    await conn.query(`
-      CREATE TABLE IF NOT EXISTS locations (
+      )`,
+      `CREATE TABLE IF NOT EXISTS locations (
         id INT AUTO_INCREMENT PRIMARY KEY,
         building VARCHAR(100),
         floor VARCHAR(50),
         room VARCHAR(50),
         manager VARCHAR(255)
-      )
-    `);
-
-    await conn.query(`
-      CREATE TABLE IF NOT EXISTS maintenance_logs (
+      )`,
+      `CREATE TABLE IF NOT EXISTS maintenance_logs (
         id INT AUTO_INCREMENT PRIMARY KEY,
         item_id VARCHAR(50),
         issue_type VARCHAR(100),
@@ -98,11 +87,8 @@ app.post('/api/init-db', async (req, res) => {
         status VARCHAR(50),
         cost DECIMAL(10, 2),
         start_date DATE
-      )
-    `);
-
-    await conn.query(`
-      CREATE TABLE IF NOT EXISTS licenses (
+      )`,
+      `CREATE TABLE IF NOT EXISTS licenses (
         id INT AUTO_INCREMENT PRIMARY KEY,
         software_name VARCHAR(255) NOT NULL,
         product_key VARCHAR(255),
@@ -110,38 +96,26 @@ app.post('/api/init-db', async (req, res) => {
         assigned_seats INT,
         expiration_date DATE,
         supplier_id INT
-      )
-    `);
-
-    await conn.query(`
-      CREATE TABLE IF NOT EXISTS categories (
+      )`,
+      `CREATE TABLE IF NOT EXISTS categories (
         id VARCHAR(50) PRIMARY KEY,
         name VARCHAR(100) NOT NULL,
         icon VARCHAR(50)
-      )
-    `);
-
-    await conn.query(`
-      CREATE TABLE IF NOT EXISTS employees (
+      )`,
+      `CREATE TABLE IF NOT EXISTS employees (
         id VARCHAR(50) PRIMARY KEY,
         name VARCHAR(255) NOT NULL,
         email VARCHAR(255),
         department VARCHAR(100),
         role VARCHAR(100)
-      )
-    `);
-
-    await conn.query(`
-      CREATE TABLE IF NOT EXISTS departments (
+      )`,
+      `CREATE TABLE IF NOT EXISTS departments (
         id VARCHAR(50) PRIMARY KEY,
         name VARCHAR(100) NOT NULL,
         head VARCHAR(255),
         budget DECIMAL(15, 2) DEFAULT 0
-      )
-    `);
-
-    await conn.query(`
-      CREATE TABLE IF NOT EXISTS requests (
+      )`,
+      `CREATE TABLE IF NOT EXISTS requests (
         id VARCHAR(50) PRIMARY KEY,
         item VARCHAR(255),
         employee VARCHAR(255),
@@ -150,10 +124,14 @@ app.post('/api/init-db', async (req, res) => {
         status VARCHAR(50),
         request_date DATE,
         notes TEXT
-      )
-    `);
+      )`
+    ];
 
-    sendJSON(res, { success: true, message: 'Database schema initialized successfully' });
+    for (const query of queries) {
+      await conn.query(query);
+    }
+
+    sendJSON(res, { success: true, message: 'Database schema successfully verified/initialized' });
   } catch (err) {
     console.error('Init DB Error:', err);
     sendJSON(res, { error: err.message }, 500);
@@ -164,48 +142,77 @@ app.post('/api/init-db', async (req, res) => {
 
 // Generic CRUD handlers
 const handleCRUD = (tableName) => {
+  // GET all
   app.get(`/api/${tableName}`, async (req, res) => {
     let conn;
     try {
       conn = await pool.getConnection();
       const rows = await conn.query(`SELECT * FROM ${tableName}`);
       sendJSON(res, Array.from(rows));
-    } catch (err) { sendJSON(res, { error: err.message }, 500); }
+    } catch (err) { 
+      console.error(`Error fetching ${tableName}:`, err);
+      sendJSON(res, { error: err.message }, 500); 
+    }
     finally { if (conn) conn.release(); }
   });
 
+  // POST (Insert or Update)
   app.post(`/api/${tableName}`, async (req, res) => {
     let conn;
     try {
       const keys = Object.keys(req.body);
-      const values = Object.values(req.body);
+      if (keys.length === 0) return sendJSON(res, { error: "Empty body" }, 400);
+
+      // Clean values: Convert empty strings to null for database compatibility (especially for INT/DATE columns)
+      const values = Object.values(req.body).map(v => v === '' ? null : v);
       const placeholders = keys.map(() => '?').join(', ');
       const updates = keys.map(k => `${k}=VALUES(${k})`).join(', ');
       
       conn = await pool.getConnection();
-      await conn.query(
-        `INSERT INTO ${tableName} (${keys.join(', ')}) VALUES (${placeholders}) ON DUPLICATE KEY UPDATE ${updates}`,
-        values
-      );
+      const query = `INSERT INTO ${tableName} (${keys.join(', ')}) VALUES (${placeholders}) ON DUPLICATE KEY UPDATE ${updates}`;
+      await conn.query(query, values);
+      
       sendJSON(res, { success: true }, 201);
-    } catch (err) { sendJSON(res, { error: err.message }, 500); }
+    } catch (err) { 
+      console.error(`Error saving to ${tableName}:`, err);
+      sendJSON(res, { error: err.message }, 500); 
+    }
     finally { if (conn) conn.release(); }
   });
 
+  // DELETE
   app.delete(`/api/${tableName}/:id`, async (req, res) => {
     let conn;
     try {
       conn = await pool.getConnection();
+      // Most tables use 'id' as primary key
       await conn.query(`DELETE FROM ${tableName} WHERE id = ?`, [req.params.id]);
       sendJSON(res, { success: true });
-    } catch (err) { sendJSON(res, { error: err.message }, 500); }
+    } catch (err) { 
+      console.error(`Error deleting from ${tableName}:`, err);
+      sendJSON(res, { error: err.message }, 500); 
+    }
     finally { if (conn) conn.release(); }
   });
 };
 
-['items', 'movements', 'suppliers', 'locations', 'maintenance_logs', 'categories', 'employees', 'departments', 'licenses', 'requests'].forEach(handleCRUD);
+// Register routes for all modules
+const modules = [
+  'items', 
+  'movements', 
+  'suppliers', 
+  'locations', 
+  'maintenance_logs', 
+  'categories', 
+  'employees', 
+  'departments', 
+  'licenses', 
+  'requests'
+];
 
-// Serve static assets
+modules.forEach(handleCRUD);
+
+// Static file serving
 const staticPath = path.join(__dirname, 'dist');
 app.use(express.static(staticPath));
 

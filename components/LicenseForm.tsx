@@ -20,10 +20,18 @@ const LicenseForm: React.FC<LicenseFormProps> = ({ suppliers, onSubmit, initialD
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    onSubmit({
+    
+    // Clean data before submission to avoid SQL integer errors
+    const cleanedData = {
       ...formData,
-      id: initialData?.id || Math.floor(Math.random() * 1000000)
-    });
+      id: initialData?.id || Math.floor(Math.random() * 1000000),
+      // If supplier_id is an empty string, send null so the database doesn't complain about incorrect integer value
+      supplier_id: formData.supplier_id === '' ? null : Number(formData.supplier_id),
+      total_seats: Number(formData.total_seats),
+      assigned_seats: Number(formData.assigned_seats)
+    };
+    
+    onSubmit(cleanedData);
   };
 
   return (

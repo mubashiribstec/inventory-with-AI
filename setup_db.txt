@@ -1,11 +1,11 @@
--- SmartStock Pro - Database Setup SQL
--- Copy and paste these commands into your SQL runner (e.g., phpMyAdmin SQL tab)
+-- SmartStock Pro Enterprise - Database Setup SQL
+-- Run this script in your MariaDB or MySQL client (e.g., phpMyAdmin or command line)
 
--- 1. Create the Database
+-- 1. Create and Use the Database
 CREATE DATABASE IF NOT EXISTS smartstock;
 USE smartstock;
 
--- 2. Create Asset Registry Table
+-- 2. Asset Registry Table
 CREATE TABLE IF NOT EXISTS items (
     id VARCHAR(50) PRIMARY KEY,
     name VARCHAR(255) NOT NULL,
@@ -20,7 +20,7 @@ CREATE TABLE IF NOT EXISTS items (
     cost DECIMAL(10, 2)
 );
 
--- 3. Create Movements Log Table
+-- 3. Movements & Audit Trail
 CREATE TABLE IF NOT EXISTS movements (
     id VARCHAR(50) PRIMARY KEY,
     date DATE,
@@ -32,7 +32,7 @@ CREATE TABLE IF NOT EXISTS movements (
     status VARCHAR(50)
 );
 
--- 4. Create Supplier Registry
+-- 4. Supplier Registry
 CREATE TABLE IF NOT EXISTS suppliers (
     id INT AUTO_INCREMENT PRIMARY KEY,
     name VARCHAR(255) NOT NULL,
@@ -41,7 +41,7 @@ CREATE TABLE IF NOT EXISTS suppliers (
     rating INT DEFAULT 0
 );
 
--- 5. Create Location Registry
+-- 5. Physical Site Locations
 CREATE TABLE IF NOT EXISTS locations (
     id INT AUTO_INCREMENT PRIMARY KEY,
     building VARCHAR(100),
@@ -50,7 +50,7 @@ CREATE TABLE IF NOT EXISTS locations (
     manager VARCHAR(255)
 );
 
--- 6. Create Maintenance Ticket System
+-- 6. Maintenance & Technical Tickets
 CREATE TABLE IF NOT EXISTS maintenance_logs (
     id INT AUTO_INCREMENT PRIMARY KEY,
     item_id VARCHAR(50),
@@ -58,11 +58,55 @@ CREATE TABLE IF NOT EXISTS maintenance_logs (
     description TEXT,
     status VARCHAR(50),
     cost DECIMAL(10, 2),
-    start_date DATE,
-    FOREIGN KEY (item_id) REFERENCES items(id) ON DELETE CASCADE
+    start_date DATE
 );
 
--- 7. Seed Essential Data for Dropdowns
+-- 7. Software License Compliance
+CREATE TABLE IF NOT EXISTS licenses (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    software_name VARCHAR(255) NOT NULL,
+    product_key VARCHAR(255),
+    total_seats INT,
+    assigned_seats INT,
+    expiration_date DATE,
+    supplier_id INT
+);
+
+-- 8. Organizational Structures (Management)
+CREATE TABLE IF NOT EXISTS categories (
+    id VARCHAR(50) PRIMARY KEY,
+    name VARCHAR(100) NOT NULL,
+    icon VARCHAR(50)
+);
+
+CREATE TABLE IF NOT EXISTS employees (
+    id VARCHAR(50) PRIMARY KEY,
+    name VARCHAR(255) NOT NULL,
+    email VARCHAR(255),
+    department VARCHAR(100),
+    role VARCHAR(100)
+);
+
+CREATE TABLE IF NOT EXISTS departments (
+    id VARCHAR(50) PRIMARY KEY,
+    name VARCHAR(100) NOT NULL,
+    head VARCHAR(255),
+    budget DECIMAL(15, 2) DEFAULT 0
+);
+
+-- 9. Employee Asset Requests
+CREATE TABLE IF NOT EXISTS requests (
+    id VARCHAR(50) PRIMARY KEY,
+    item VARCHAR(255),
+    employee VARCHAR(255),
+    department VARCHAR(100),
+    urgency VARCHAR(50),
+    status VARCHAR(50),
+    request_date DATE,
+    notes TEXT
+);
+
+-- 10. Seed Essential Data
 INSERT IGNORE INTO suppliers (name, contact_person, email, rating) VALUES 
 ('Dell Technologies', 'Michael Dell', 'enterprise@dell.com', 5),
 ('Apple Inc.', 'Tim Cook', 'business@apple.com', 5),
@@ -73,3 +117,20 @@ INSERT IGNORE INTO locations (building, floor, room, manager) VALUES
 ('Main HQ', 'Ground', 'Server Room', 'Alice Johnson'),
 ('Innovation Hub', '2nd', 'Marketing Office', 'Bob Smith'),
 ('IT Storage', 'Basement', 'Cage A', 'System Admin');
+
+INSERT IGNORE INTO categories (id, name, icon) VALUES 
+('CAT-001', 'Computers', 'fa-laptop'),
+('CAT-002', 'Networking', 'fa-network-wired'),
+('CAT-003', 'Peripherals', 'fa-keyboard'),
+('CAT-004', 'Mobile Devices', 'fa-mobile-alt'),
+('CAT-005', 'Furniture', 'fa-chair');
+
+INSERT IGNORE INTO departments (id, name, head, budget) VALUES 
+('DEPT-IT', 'IT Infrastructure', 'Alice Johnson', 250000.00),
+('DEPT-MKT', 'Marketing & Creative', 'Bob Smith', 120000.00),
+('DEPT-FIN', 'Finance', 'Robert Chen', 80000.00),
+('DEPT-HR', 'Human Resources', 'Sarah Johnson', 45000.00);
+
+INSERT IGNORE INTO items (id, name, category, serial, status, location, assignedTo, department, purchaseDate, warranty, cost) VALUES 
+('IT-001', 'Dell Latitude 5440', 'Computers', 'DL-2024-001', 'in-use', 'Main HQ', 'John Smith', 'IT Infrastructure', '2024-01-15', '2025-01-15', 1200.00),
+('IT-002', 'Apple MacBook Pro 16', 'Computers', 'MBP-2024-001', 'assigned', 'Innovation Hub', 'Sarah Johnson', 'Marketing & Creative', '2024-02-10', '2025-02-10', 2400.00);
