@@ -12,18 +12,38 @@ const AttendanceModule: React.FC<AttendanceModuleProps> = ({ currentUser }) => {
   const [loading, setLoading] = useState(false);
   const [todayRecord, setTodayRecord] = useState<AttendanceRecord | null>(null);
 
+  // Use a stable reference for today's date string
   const todayStr = new Date().toISOString().split('T')[0];
 
-  // Helper to sanitize date for MariaDB DATE columns (YYYY-MM-DD)
-  const sanitizeDate = (d: string) => {
+  /**
+   * Helper to sanitize date for MariaDB DATE columns (YYYY-MM-DD)
+   * This removes any time component or ISO characters (T, Z).
+   */
+  const sanitizeDateForSQL = (d: string | null | undefined): string => {
     if (!d) return '';
     // If it's a full ISO string, take only the date part
-    return d.includes('T') ? d.split('T')[0] : d;
+    if (d.includes('T')) return d.split('T')[0];
+    // If it contains a space (SQL format), take only the date part
+    if (d.includes(' ')) return d.split(' ')[0];
+    return d;
   };
 
-  // Helper to format date for MariaDB DATETIME (YYYY-MM-DD HH:MM:SS)
-  const formatForSQL = (date: Date) => {
-    return date.toISOString().slice(0, 19).replace('T', ' ');
+  /**
+   * Helper to format any date/time string for MariaDB DATETIME (YYYY-MM-DD HH:MM:SS)
+   * MariaDB is strict and rejects ISO 8601 strings with 'T' or 'Z' offsets.
+   */
+  const formatDateTimeForSQL = (dateVal: string | Date | null | undefined): string | null => {
+    if (!dateVal) return null;
+    try {
+      const d = dateVal instanceof Date ? dateVal : new Date(dateVal);
+      if (isNaN(d.getTime())) return null;
+      // Convert to UTC ISO string: "2023-10-27T10:00:00.000Z"
+      // Then slice to "2023-10-27T10:00:00" and replace T with space
+      return d.toISOString().slice(0, 19).replace('T', ' ');
+    } catch (e) {
+      console.error("Formatting error", e);
+      return null;
+    }
   };
 
   const fetchRecords = async () => {
@@ -32,10 +52,10 @@ const AttendanceModule: React.FC<AttendanceModuleProps> = ({ currentUser }) => {
       const all = await apiService.getAttendance();
       setRecords(all);
       
-      const mine = all.find(r => r.user_id === currentUser.id && sanitizeDate(r.date) === todayStr);
+      const mine = all.find(r => r.user_id === currentUser.id && sanitizeDateForSQL(r.date) === todayStr);
       setTodayRecord(mine || null);
     } catch (err) {
-      console.error(err);
+      console.error("Fetch attendance error", err);
     } finally {
       setLoading(false);
     }
@@ -47,17 +67,17 @@ const AttendanceModule: React.FC<AttendanceModuleProps> = ({ currentUser }) => {
 
   const handleCheckIn = async () => {
     const now = new Date();
-    const checkInTime = formatForSQL(now);
+    const checkInTime = formatDateTimeForSQL(now);
     
-    // Status Logic: Late after 09:00 AM
+    // Status Logic: Late after 09:00 AM local time (adjust as needed)
     const isLate = now.getHours() >= 9 && now.getMinutes() > 0;
     
     const record: AttendanceRecord = {
       id: `ATT-${todayStr}-${currentUser.id}`,
       user_id: currentUser.id,
       username: currentUser.username,
-      date: todayStr,
-      check_in: checkInTime,
+      date: todayStr, // YYYY-MM-DD
+      check_in: checkInTime, // YYYY-MM-DD HH:MM:SS
       check_out: null,
       status: isLate ? 'LATE' : 'PRESENT',
       location: 'Remote/Office'
@@ -76,8 +96,9 @@ const AttendanceModule: React.FC<AttendanceModuleProps> = ({ currentUser }) => {
     
     const record: AttendanceRecord = {
       ...todayRecord,
-      date: sanitizeDate(todayRecord.date), // Critical fix: Ensure YYYY-MM-DD
-      check_out: formatForSQL(new Date())
+      date: sanitizeDateForSQL(todayRecord.date), // Ensure date is only YYYY-MM-DD
+      check_in: formatDateTimeForSQL(todayRecord.check_in), // Ensure existing check_in is SQL-compliant
+      check_out: formatDateTimeForSQL(new Date()) // Current time in SQL format
     };
 
     try {
@@ -91,17 +112,25 @@ const AttendanceModule: React.FC<AttendanceModuleProps> = ({ currentUser }) => {
   const isAdmin = currentUser.role === UserRole.ADMIN || currentUser.role === UserRole.MANAGER;
   const filteredRecords = isAdmin ? records : records.filter(r => r.user_id === currentUser.id);
 
-  // Robust date parsing for display
+  /**
+   * Robust time parsing for local display
+   */
   const displayTime = (timeStr: string | null) => {
     if (!timeStr) return '-';
     try {
-      // If it has a space, convert to T for standard parsing
-      const isoCompatible = timeStr.includes(' ') ? timeStr.replace(' ', 'T') : timeStr;
-      // Append Z if not present to treat as UTC (standard for our formatForSQL)
-      const date = new Date(isoCompatible.includes('Z') ? isoCompatible : isoCompatible + 'Z');
-      return isNaN(date.getTime()) ? 'Invalid Time' : date.toLocaleTimeString();
+      // MariaDB format is "YYYY-MM-DD HH:MM:SS" (Implicitly UTC based on our formatDateTimeForSQL)
+      // JS needs "YYYY-MM-DDTHH:MM:SSZ" to parse correctly as UTC
+      let iso = timeStr;
+      if (iso.includes(' ') && !iso.includes('T')) {
+        iso = iso.replace(' ', 'T');
+      }
+      if (!iso.includes('Z')) {
+        iso += 'Z';
+      }
+      const date = new Date(iso);
+      return isNaN(date.getTime()) ? '-' : date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
     } catch (e) {
-      return 'Invalid Time';
+      return '-';
     }
   };
 
@@ -162,8 +191,8 @@ const AttendanceModule: React.FC<AttendanceModuleProps> = ({ currentUser }) => {
         <div className="p-6 border-b border-slate-100 flex items-center justify-between">
           <h3 className="font-bold text-slate-800 poppins">Attendance Ledger {isAdmin ? '(All Staff)' : '(Personal)'}</h3>
           <div className="flex gap-2">
-             <button className="p-2 hover:bg-slate-50 rounded-lg text-slate-400"><i className="fas fa-filter"></i></button>
-             <button className="p-2 hover:bg-slate-50 rounded-lg text-slate-400"><i className="fas fa-download"></i></button>
+             <button className="p-2 hover:bg-slate-50 rounded-lg text-slate-400" title="Filter"><i className="fas fa-filter"></i></button>
+             <button className="p-2 hover:bg-slate-50 rounded-lg text-slate-400" title="Export"><i className="fas fa-download"></i></button>
           </div>
         </div>
         <div className="overflow-x-auto">
@@ -182,8 +211,10 @@ const AttendanceModule: React.FC<AttendanceModuleProps> = ({ currentUser }) => {
               {filteredRecords.sort((a,b) => b.date.localeCompare(a.date)).map(record => {
                 const parseDate = (dStr: string | null) => {
                   if (!dStr) return null;
-                  const iso = dStr.includes(' ') ? dStr.replace(' ', 'T') : dStr;
-                  const d = new Date(iso.includes('Z') ? iso : iso + 'Z');
+                  let iso = dStr;
+                  if (iso.includes(' ') && !iso.includes('T')) iso = iso.replace(' ', 'T');
+                  if (!iso.includes('Z')) iso += 'Z';
+                  const d = new Date(iso);
                   return isNaN(d.getTime()) ? null : d;
                 };
                 const checkIn = parseDate(record.check_in);
@@ -192,7 +223,7 @@ const AttendanceModule: React.FC<AttendanceModuleProps> = ({ currentUser }) => {
                 
                 return (
                   <tr key={record.id} className="hover:bg-slate-50/50 transition">
-                    <td className="px-6 py-4 text-xs font-bold text-slate-800">{sanitizeDate(record.date)}</td>
+                    <td className="px-6 py-4 text-xs font-bold text-slate-800">{sanitizeDateForSQL(record.date)}</td>
                     {isAdmin && <td className="px-6 py-4 text-xs font-bold text-indigo-600">{record.username}</td>}
                     <td className="px-6 py-4 text-xs text-slate-600">{displayTime(record.check_in)}</td>
                     <td className="px-6 py-4 text-xs text-slate-600">{displayTime(record.check_out)}</td>
