@@ -12,6 +12,7 @@ import { ItemStatus, InventoryItem, Movement, Supplier, LocationRecord, Maintena
 import Modal from './components/Modal.tsx';
 import PurchaseForm from './components/PurchaseForm.tsx';
 import AssignmentForm from './components/AssignmentForm.tsx';
+import ManagementForm from './components/ManagementForm.tsx';
 import Chatbot from './components/Chatbot.tsx';
 import { apiService } from './api.ts';
 import { dbService } from './db.ts';
@@ -31,24 +32,29 @@ const App: React.FC = () => {
   const [departments, setDepartments] = useState<Department[]>([]);
 
   const [loading, setLoading] = useState(true);
+  const [syncing, setSyncing] = useState(false);
   const [error, setError] = useState<string | null>(null);
   
   const [isPurchaseModalOpen, setIsPurchaseModalOpen] = useState(false);
   const [isAssignModalOpen, setIsAssignModalOpen] = useState(false);
+  const [managementModal, setManagementModal] = useState<{ isOpen: boolean, type: 'Category' | 'Employee' | 'Department' | null }>({ isOpen: false, type: null });
   const [editingItem, setEditingItem] = useState<InventoryItem | null>(null);
   const [viewingItem, setViewingItem] = useState<InventoryItem | null>(null);
 
   const fetchData = useCallback(async () => {
     try {
       setError(null);
-      await dbService.init(); // Ensure local DB is ready
+      await dbService.init(); 
       
-      const [fItems, fMovements, fSuppliers, fLocations, fMaintenance] = await Promise.all([
+      const [fItems, fMovements, fSuppliers, fLocations, fMaintenance, fCats, fEmps, fDepts] = await Promise.all([
         apiService.getAllItems(),
         apiService.getAllMovements(),
         apiService.getAllSuppliers(),
         apiService.getAllLocations(),
-        apiService.getAllMaintenance()
+        apiService.getAllMaintenance(),
+        apiService.getCategories(),
+        apiService.getEmployees(),
+        apiService.getDepartments()
       ]);
       
       setItems(fItems || []);
@@ -56,38 +62,33 @@ const App: React.FC = () => {
       setSuppliers(fSuppliers || []);
       setLocations(fLocations || []);
       setMaintenance(fMaintenance || []);
-
-      // Derive additional ERP entities
-      const cats: Category[] = [...new Set(fItems.map(i => i.category))].map((name, i) => ({
+      
+      // Use API fetched data or derive if empty
+      setCategories(fCats && fCats.length > 0 ? fCats : [...new Set(fItems.map(i => i.category))].map((name, i) => ({
         id: `CAT-${i}`,
         name,
         icon: name.toLowerCase().includes('comp') ? 'fa-laptop' : 'fa-tags',
         itemCount: fItems.filter(item => item.category === name).length
-      }));
-      setCategories(cats);
+      })));
 
-      const emps: Employee[] = [...new Set(fItems.map(i => i.assignedTo))].filter(e => e && e !== '-').map((name, i) => ({
+      setEmployees(fEmps && fEmps.length > 0 ? fEmps : [...new Set(fItems.map(i => i.assignedTo))].filter(e => e && e !== '-').map((name, i) => ({
         id: `EMP-${100 + i}`,
         name,
         email: `${name.toLowerCase().replace(' ', '.')}@enterprise.com`,
         department: fItems.find(item => item.assignedTo === name)?.department || 'IT',
         role: 'Professional Staff'
-      }));
-      setEmployees(emps);
+      })));
 
-      const depts: Department[] = ['IT', 'Marketing', 'Finance', 'Operations', 'Sales'].map((name, i) => ({
+      setDepartments(fDepts && fDepts.length > 0 ? fDepts : ['IT', 'Marketing', 'Finance', 'Operations', 'Sales'].map((name, i) => ({
         id: `DEPT-${i}`,
         name,
         head: 'Department Lead',
         budget: 50000 + (i * 10000),
         spent: fItems.filter(item => item.department === name).reduce((acc, item) => acc + (item.cost || 0), 0)
-      }));
-      setDepartments(depts);
+      })));
 
     } catch (err: any) {
-      console.error("ERP Connectivity Error", err);
-      setError("The ERP server is offline. Switching to localized Edge mode.");
-      // If server fails, we still have state from IndexedDB fallbacks in apiService
+      setError("ERP server offline. Syncing with local database.");
     } finally {
       setLoading(false);
     }
@@ -96,6 +97,19 @@ const App: React.FC = () => {
   useEffect(() => {
     fetchData();
   }, [fetchData]);
+
+  const handleInitDB = async () => {
+    setSyncing(true);
+    try {
+      const result = await apiService.initDatabase();
+      alert(result.message);
+      await fetchData();
+    } catch (err: any) {
+      alert("Database initialization failed: " + err.message);
+    } finally {
+      setSyncing(false);
+    }
+  };
 
   const stats = {
     purchased: items.length,
@@ -114,7 +128,6 @@ const App: React.FC = () => {
         await apiService.updateItem(item.id, item);
       } else {
         await apiService.saveItem(item);
-        // Log movement for purchase
         await apiService.saveMovement({
           id: `MOV-${Date.now()}`,
           date: new Date().toISOString().split('T')[0],
@@ -134,6 +147,19 @@ const App: React.FC = () => {
     }
   };
 
+  const handleManagementSubmit = async (data: any) => {
+    try {
+      if (managementModal.type === 'Category') await apiService.saveCategory(data);
+      if (managementModal.type === 'Employee') await apiService.saveEmployee(data);
+      if (managementModal.type === 'Department') await apiService.saveDepartment(data);
+      
+      setManagementModal({ isOpen: false, type: null });
+      fetchData();
+    } catch (err) {
+      alert("Error saving " + managementModal.type + ": " + err);
+    }
+  };
+
   const renderContent = () => {
     switch (activeTab) {
       case 'dashboard': return <Dashboard stats={stats} movements={movements} items={items} />;
@@ -141,12 +167,12 @@ const App: React.FC = () => {
       case 'maintenance': return <MaintenanceList logs={maintenance} items={items} onUpdate={fetchData} />;
       case 'suppliers': return <SupplierList suppliers={suppliers} />;
       case 'licenses': return <LicenseList licenses={[]} suppliers={suppliers} />;
-      case 'categories': return <GenericListView title="Asset Categories" icon="fa-tags" items={categories} columns={['id', 'name', 'itemCount']} />;
-      case 'employees': return <GenericListView title="Employee Registry" icon="fa-users" items={employees} columns={['id', 'name', 'email', 'department', 'role']} />;
-      case 'departments': return <GenericListView title="Departmental Overview" icon="fa-building" items={departments} columns={['id', 'name', 'head', 'spent', 'budget']} />;
-      case 'purchase-history': return <GenericListView title="Procurement History" icon="fa-history" items={movements.filter(m => m.status === 'PURCHASED')} columns={['date', 'item', 'from', 'to']} />;
-      case 'requests': return <GenericListView title="Employee Requests" icon="fa-clipboard-list" items={[]} columns={['id', 'item', 'employee', 'urgency', 'status']} />;
-      case 'faulty-reports': return <GenericListView title="Faulty Reports" icon="fa-exclamation-circle" items={maintenance} columns={['item_id', 'issue_type', 'description', 'status']} />;
+      case 'categories': return <GenericListView title="Asset Categories" icon="fa-tags" items={categories} columns={['id', 'name', 'itemCount']} onAdd={() => setManagementModal({ isOpen: true, type: 'Category' })} />;
+      case 'employees': return <GenericListView title="Employee Registry" icon="fa-users" items={employees} columns={['id', 'name', 'email', 'department', 'role']} onAdd={() => setManagementModal({ isOpen: true, type: 'Employee' })} />;
+      case 'departments': return <GenericListView title="Departmental Overview" icon="fa-building" items={departments} columns={['id', 'name', 'head', 'spent', 'budget']} onAdd={() => setManagementModal({ isOpen: true, type: 'Department' })} />;
+      case 'purchase-history': return <GenericListView title="Procurement History" icon="fa-history" items={movements.filter(m => m.status === 'PURCHASED')} columns={['date', 'item', 'from', 'to']} onAdd={() => setIsPurchaseModalOpen(true)} />;
+      case 'requests': return <GenericListView title="Employee Requests" icon="fa-clipboard-list" items={[]} columns={['id', 'item', 'employee', 'urgency', 'status']} onAdd={() => alert('Request Management Coming Soon')} />;
+      case 'faulty-reports': return <GenericListView title="Faulty Reports" icon="fa-exclamation-circle" items={maintenance} columns={['item_id', 'issue_type', 'description', 'status']} onAdd={() => setActiveTab('maintenance')} />;
       case 'budgets': return <GenericListView title="Budget Consumption" icon="fa-wallet" items={departments} columns={['name', 'budget', 'spent']} />;
       default: return <Dashboard stats={stats} movements={movements} items={items} />;
     }
@@ -157,7 +183,7 @@ const App: React.FC = () => {
       <div className="flex h-screen w-full items-center justify-center bg-slate-50">
         <div className="text-center">
           <div className="mb-4 h-12 w-12 animate-spin rounded-full border-4 border-indigo-600 border-t-transparent mx-auto"></div>
-          <p className="font-bold text-slate-600 poppins uppercase tracking-widest text-[10px]">Synchronizing ERP Modules...</p>
+          <p className="font-bold text-slate-600 uppercase tracking-widest text-[10px]">Synchronizing ERP Modules...</p>
         </div>
       </div>
     );
@@ -168,27 +194,12 @@ const App: React.FC = () => {
       <Sidebar 
         activeTab={activeTab as any} 
         setActiveTab={setActiveTab as any} 
-        openPurchase={() => { setEditingItem(null); setIsPurchaseModalOpen(true); }}
+        openPurchase={() => setIsPurchaseModalOpen(true)}
         openAssign={() => setIsAssignModalOpen(true)} 
         runAnalysis={fetchData}
       />
       
       <main className="flex-1 lg:ml-64 p-6 lg:p-10 transition-all duration-300">
-        {error && (
-          <div className="mb-6 bg-amber-50 border border-amber-200 p-4 rounded-2xl flex items-center justify-between text-amber-700 animate-fadeIn">
-            <div className="flex items-center gap-3">
-              <i className="fas fa-wifi-slash text-xl"></i>
-              <div>
-                <p className="font-bold text-sm">Offline Edge Mode Active</p>
-                <p className="text-xs opacity-80">{error}</p>
-              </div>
-            </div>
-            <button onClick={fetchData} className="px-3 py-1.5 bg-white border border-amber-200 rounded-xl text-xs font-bold hover:bg-amber-100 transition">
-              Reconnect
-            </button>
-          </div>
-        )}
-
         <header className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-8">
           <div>
             <h1 className="text-3xl font-bold text-slate-800 capitalize tracking-tight">
@@ -197,18 +208,11 @@ const App: React.FC = () => {
             <p className="text-slate-500 mt-1">SmartStock Enterprise Resource Planning</p>
           </div>
           <div className="flex items-center gap-3">
-            <div className="hidden sm:flex items-center bg-white border border-slate-200 rounded-xl px-3 py-1.5 shadow-sm">
-                <i className="fas fa-shield-alt text-indigo-500 mr-2 text-xs"></i>
-                <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">RBAC: Administrator</span>
-            </div>
-            <button 
-              onClick={() => { setEditingItem(null); setIsPurchaseModalOpen(true); }} 
-              className="px-4 py-2.5 bg-indigo-600 text-white rounded-xl hover:bg-indigo-700 transition font-bold text-sm shadow-lg shadow-indigo-100 flex items-center gap-2"
-            >
-              <i className="fas fa-plus"></i> New Asset
+            <button onClick={handleInitDB} disabled={syncing} className={`px-4 py-2.5 bg-white border border-slate-200 text-slate-700 rounded-xl hover:bg-slate-50 transition font-bold text-sm shadow-sm flex items-center gap-2 ${syncing ? 'opacity-50 cursor-not-allowed' : ''}`}>
+              <i className={`fas fa-database ${syncing ? 'animate-spin' : ''}`}></i> Sync & Init DB
             </button>
-            <button onClick={fetchData} className="p-2.5 bg-white border border-slate-200 text-slate-600 rounded-xl hover:bg-slate-50 transition">
-              <i className="fas fa-sync-alt"></i>
+            <button onClick={() => { setEditingItem(null); setIsPurchaseModalOpen(true); }} className="px-4 py-2.5 bg-indigo-600 text-white rounded-xl hover:bg-indigo-700 transition font-bold text-sm shadow-lg shadow-indigo-100 flex items-center gap-2">
+              <i className="fas fa-plus"></i> New Asset
             </button>
           </div>
         </header>
@@ -244,14 +248,15 @@ const App: React.FC = () => {
         </Modal>
       )}
 
+      {managementModal.isOpen && (
+        <Modal title={`➕ Add New ${managementModal.type}`} onClose={() => setManagementModal({ isOpen: false, type: null })}>
+          <ManagementForm type={managementModal.type!} onSubmit={handleManagementSubmit} />
+        </Modal>
+      )}
+
       {editingItem && (
         <Modal title="✏️ Edit Asset" onClose={() => setEditingItem(null)}>
-          <PurchaseForm 
-            initialData={editingItem} 
-            onSubmit={handleSaveItem} 
-            suppliers={suppliers} 
-            locations={locations} 
-          />
+          <PurchaseForm initialData={editingItem} onSubmit={handleSaveItem} suppliers={suppliers} locations={locations} />
         </Modal>
       )}
 

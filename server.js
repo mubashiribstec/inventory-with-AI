@@ -20,13 +20,7 @@ const pool = mariadb.createPool({
   connectTimeout: 15000
 });
 
-// Request Logging Middleware for Debugging 404s
-app.use((req, res, next) => {
-  console.log(`[${new Date().toISOString()}] ${req.method} ${req.url}`);
-  next();
-});
-
-// Middleware to enforce JSON content type for all /api routes
+// Middleware to enforce JSON content type
 app.use('/api', (req, res, next) => {
   res.setHeader('Content-Type', 'application/json; charset=utf-8');
   next();
@@ -38,143 +32,165 @@ const sendJSON = (res, data, status = 200) => {
 
 // --- API Endpoints ---
 
-app.get('/api/items', async (req, res) => {
+/**
+ * Initialize Database Schema
+ */
+app.post('/api/init-db', async (req, res) => {
   let conn;
   try {
     conn = await pool.getConnection();
-    const rows = await conn.query("SELECT * FROM items ORDER BY id DESC");
-    sendJSON(res, Array.from(rows));
-  } catch (err) {
-    console.error('Fetch Items Error:', err);
-    sendJSON(res, { error: 'Database fetch failed: ' + err.message }, 500);
-  } finally {
-    if (conn) conn.release();
-  }
-});
+    
+    await conn.query(`
+      CREATE TABLE IF NOT EXISTS items (
+        id VARCHAR(50) PRIMARY KEY,
+        name VARCHAR(255) NOT NULL,
+        category VARCHAR(100),
+        serial VARCHAR(100),
+        status VARCHAR(50),
+        location VARCHAR(255),
+        assignedTo VARCHAR(255),
+        department VARCHAR(100),
+        purchaseDate DATE,
+        warranty DATE,
+        cost DECIMAL(10, 2)
+      )
+    `);
 
-app.post('/api/items', async (req, res) => {
-  let conn;
-  try {
-    const { id, name, category, serial, status, location, assignedTo, department, purchaseDate, warranty, cost } = req.body;
-    conn = await pool.getConnection();
-    await conn.query(
-      "INSERT INTO items (id, name, category, serial, status, location, assignedTo, department, purchaseDate, warranty, cost) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) ON DUPLICATE KEY UPDATE status=?, location=?, assignedTo=?, department=?, name=?, category=?, cost=?",
-      [id, name, category, serial, status, location, assignedTo, department, purchaseDate, warranty, cost, status, location, assignedTo, department, name, category, cost]
-    );
-    sendJSON(res, { success: true, id }, 201);
+    await conn.query(`
+      CREATE TABLE IF NOT EXISTS movements (
+        id VARCHAR(50) PRIMARY KEY,
+        date DATE,
+        item VARCHAR(255),
+        \`from\` VARCHAR(255),
+        \`to\` VARCHAR(255),
+        employee VARCHAR(255),
+        department VARCHAR(100),
+        status VARCHAR(50)
+      )
+    `);
+
+    await conn.query(`
+      CREATE TABLE IF NOT EXISTS suppliers (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        name VARCHAR(255) NOT NULL,
+        contact_person VARCHAR(255),
+        email VARCHAR(255),
+        rating INT DEFAULT 0
+      )
+    `);
+
+    await conn.query(`
+      CREATE TABLE IF NOT EXISTS locations (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        building VARCHAR(100),
+        floor VARCHAR(50),
+        room VARCHAR(50),
+        manager VARCHAR(255)
+      )
+    `);
+
+    await conn.query(`
+      CREATE TABLE IF NOT EXISTS maintenance_logs (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        item_id VARCHAR(50),
+        issue_type VARCHAR(100),
+        description TEXT,
+        status VARCHAR(50),
+        cost DECIMAL(10, 2),
+        start_date DATE
+      )
+    `);
+
+    await conn.query(`
+      CREATE TABLE IF NOT EXISTS categories (
+        id VARCHAR(50) PRIMARY KEY,
+        name VARCHAR(100) NOT NULL,
+        icon VARCHAR(50)
+      )
+    `);
+
+    await conn.query(`
+      CREATE TABLE IF NOT EXISTS employees (
+        id VARCHAR(50) PRIMARY KEY,
+        name VARCHAR(255) NOT NULL,
+        email VARCHAR(255),
+        department VARCHAR(100),
+        role VARCHAR(100)
+      )
+    `);
+
+    await conn.query(`
+      CREATE TABLE IF NOT EXISTS departments (
+        id VARCHAR(50) PRIMARY KEY,
+        name VARCHAR(100) NOT NULL,
+        head VARCHAR(255),
+        budget DECIMAL(15, 2) DEFAULT 0
+      )
+    `);
+
+    sendJSON(res, { success: true, message: 'Database schema initialized successfully' });
   } catch (err) {
-    console.error('Save Item Error:', err);
+    console.error('Init DB Error:', err);
     sendJSON(res, { error: err.message }, 500);
   } finally {
     if (conn) conn.release();
   }
 });
 
-app.put('/api/items/:id', async (req, res) => {
-  let conn;
-  try {
-    const { id } = req.params;
-    const { name, category, serial, status, location, assignedTo, department, purchaseDate, warranty, cost } = req.body;
-    conn = await pool.getConnection();
-    await conn.query(
-      "UPDATE items SET name=?, category=?, serial=?, status=?, location=?, assignedTo=?, department=?, purchaseDate=?, warranty=?, cost=? WHERE id=?",
-      [name, category, serial, status, location, assignedTo, department, purchaseDate, warranty, cost, id]
-    );
-    sendJSON(res, { success: true });
-  } catch (err) {
-    console.error('Update Item Error:', err);
-    sendJSON(res, { error: err.message }, 500);
-  } finally {
-    if (conn) conn.release();
-  }
-});
+// Generic CRUD handlers
+const handleCRUD = (tableName) => {
+  app.get(`/api/${tableName}`, async (req, res) => {
+    let conn;
+    try {
+      conn = await pool.getConnection();
+      const rows = await conn.query(`SELECT * FROM ${tableName}`);
+      sendJSON(res, Array.from(rows));
+    } catch (err) { sendJSON(res, { error: err.message }, 500); }
+    finally { if (conn) conn.release(); }
+  });
 
-app.delete('/api/items/:id', async (req, res) => {
-  let conn;
-  try {
-    const { id } = req.params;
-    conn = await pool.getConnection();
-    await conn.query("DELETE FROM items WHERE id = ?", [id]);
-    sendJSON(res, { success: true });
-  } catch (err) {
-    console.error('Delete Item Error:', err);
-    sendJSON(res, { error: err.message }, 500);
-  } finally {
-    if (conn) conn.release();
-  }
-});
+  app.post(`/api/${tableName}`, async (req, res) => {
+    let conn;
+    try {
+      const keys = Object.keys(req.body);
+      const values = Object.values(req.body);
+      const placeholders = keys.map(() => '?').join(', ');
+      const updates = keys.map(k => `${k}=VALUES(${k})`).join(', ');
+      
+      conn = await pool.getConnection();
+      await conn.query(
+        `INSERT INTO ${tableName} (${keys.join(', ')}) VALUES (${placeholders}) ON DUPLICATE KEY UPDATE ${updates}`,
+        values
+      );
+      sendJSON(res, { success: true }, 201);
+    } catch (err) { sendJSON(res, { error: err.message }, 500); }
+    finally { if (conn) conn.release(); }
+  });
 
-app.get('/api/movements', async (req, res) => {
-  let conn;
-  try {
-    conn = await pool.getConnection();
-    const rows = await conn.query("SELECT * FROM movements ORDER BY date DESC LIMIT 50");
-    sendJSON(res, Array.from(rows));
-  } catch (err) { 
-    sendJSON(res, { error: err.message }, 500); 
-  } finally { 
-    if (conn) conn.release(); 
-  }
-});
+  app.delete(`/api/${tableName}/:id`, async (req, res) => {
+    let conn;
+    try {
+      conn = await pool.getConnection();
+      await conn.query(`DELETE FROM ${tableName} WHERE id = ?`, [req.params.id]);
+      sendJSON(res, { success: true });
+    } catch (err) { sendJSON(res, { error: err.message }, 500); }
+    finally { if (conn) conn.release(); }
+  });
+};
 
-app.get('/api/suppliers', async (req, res) => {
-  let conn;
-  try {
-    conn = await pool.getConnection();
-    const rows = await conn.query("SELECT * FROM suppliers");
-    sendJSON(res, Array.from(rows));
-  } catch (err) { 
-    sendJSON(res, { error: err.message }, 500); 
-  } finally { 
-    if (conn) conn.release(); 
-  }
-});
+['items', 'movements', 'suppliers', 'locations', 'maintenance_logs', 'categories', 'employees', 'departments'].forEach(handleCRUD);
 
-app.get('/api/locations', async (req, res) => {
-  let conn;
-  try {
-    conn = await pool.getConnection();
-    const rows = await conn.query("SELECT * FROM locations");
-    sendJSON(res, Array.from(rows));
-  } catch (err) { 
-    sendJSON(res, { error: err.message }, 500); 
-  } finally { 
-    if (conn) conn.release(); 
-  }
-});
-
-app.get('/api/maintenance', async (req, res) => {
-  let conn;
-  try {
-    conn = await pool.getConnection();
-    const rows = await conn.query("SELECT * FROM maintenance_logs");
-    sendJSON(res, Array.from(rows));
-  } catch (err) { 
-    sendJSON(res, { error: err.message }, 500); 
-  } finally { 
-    if (conn) conn.release(); 
-  }
-});
-
-// --- Static Assets & Routing ---
-
-const staticPath = process.env.NODE_ENV === 'production' 
-  ? path.join(__dirname, 'dist') 
-  : path.join(__dirname, '.');
-
+// Serve static assets
+const staticPath = path.join(__dirname, 'dist');
 app.use(express.static(staticPath));
 
-// Catch-all to handle SPA routing or 404s for missing API endpoints
 app.get('*', (req, res) => {
   if (req.path.startsWith('/api/')) {
-    return res.status(404).send(JSON.stringify({ error: `API endpoint ${req.url} not found on this server.` }));
+    return res.status(404).send(JSON.stringify({ error: `API endpoint ${req.url} not found.` }));
   }
-  const indexFile = process.env.NODE_ENV === 'production'
-    ? path.join(__dirname, 'dist', 'index.html')
-    : path.join(__dirname, 'index.html');
-  res.sendFile(indexFile);
+  res.sendFile(path.join(staticPath, 'index.html'));
 });
 
 app.listen(port, '0.0.0.0', () => {
-  console.log(`SmartStock ERP Server Active on port ${port} [ENV: ${process.env.NODE_ENV || 'development'}]`);
+  console.log(`SmartStock ERP Server Active on port ${port}`);
 });

@@ -17,7 +17,7 @@ export class DatabaseService {
         
         stores.forEach(store => {
           if (!db.objectStoreNames.contains(store)) {
-            db.createObjectStore(store, { keyPath: store === 'items' || store === 'movements' ? 'id' : 'id', autoIncrement: store !== 'items' && store !== 'movements' });
+            db.createObjectStore(store, { keyPath: 'id', autoIncrement: store !== 'items' && store !== 'movements' });
           }
         });
         
@@ -39,6 +39,11 @@ export class DatabaseService {
 
   async saveItem(item: InventoryItem): Promise<void> {
     return this.put('items', item);
+  }
+
+  // Add deleteItem to support asset removal
+  async deleteItem(id: string): Promise<void> {
+    return this.delete('items', id);
   }
 
   async getAllMovements(): Promise<Movement[]> {
@@ -99,6 +104,18 @@ export class DatabaseService {
       const transaction = this.db.transaction(storeName, 'readwrite');
       const store = transaction.objectStore(storeName);
       const request = store.put(data);
+      request.onsuccess = () => resolve();
+      request.onerror = () => reject(request.error);
+    });
+  }
+
+  // Generic delete method for IndexedDB stores
+  private async delete(storeName: string, id: any): Promise<void> {
+    return new Promise((resolve, reject) => {
+      if (!this.db) return reject('DB not initialized');
+      const transaction = this.db.transaction(storeName, 'readwrite');
+      const store = transaction.objectStore(storeName);
+      const request = store.delete(id);
       request.onsuccess = () => resolve();
       request.onerror = () => reject(request.error);
     });

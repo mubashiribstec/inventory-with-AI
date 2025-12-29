@@ -6,9 +6,10 @@ interface GenericListViewProps {
   icon: string;
   items: any[];
   columns: string[];
+  onAdd?: () => void;
 }
 
-const GenericListView: React.FC<GenericListViewProps> = ({ title, icon, items, columns }) => {
+const GenericListView: React.FC<GenericListViewProps> = ({ title, icon, items, columns, onAdd }) => {
   const formatValue = (col: string, val: any) => {
     if (col === 'budget' || col === 'spent' || col === 'cost') {
       return <span className="font-bold text-slate-800">${(Number(val) || 0).toLocaleString()}</span>;
@@ -39,9 +40,14 @@ const GenericListView: React.FC<GenericListViewProps> = ({ title, icon, items, c
             <button className="px-4 py-2 bg-slate-50 border border-slate-200 text-slate-600 rounded-xl text-xs font-bold hover:bg-slate-100 transition">
                 <i className="fas fa-filter mr-2"></i> Filter
             </button>
-            <button className="px-4 py-2 bg-indigo-600 text-white rounded-xl text-xs font-bold hover:bg-indigo-700 transition">
-                <i className="fas fa-plus mr-2"></i> Add Record
-            </button>
+            {onAdd && (
+              <button 
+                onClick={onAdd}
+                className="px-4 py-2 bg-indigo-600 text-white rounded-xl text-xs font-bold hover:bg-indigo-700 transition"
+              >
+                  <i className="fas fa-plus mr-2"></i> Add Record
+              </button>
+            )}
         </div>
       </div>
       <div className="overflow-x-auto">
