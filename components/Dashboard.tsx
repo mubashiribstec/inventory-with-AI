@@ -7,9 +7,10 @@ interface DashboardProps {
   stats: DashboardStats;
   movements: Movement[];
   items: InventoryItem[];
+  onFullAudit: () => void;
 }
 
-const Dashboard: React.FC<DashboardProps> = ({ stats, movements, items }) => {
+const Dashboard: React.FC<DashboardProps> = ({ stats, movements, items, onFullAudit }) => {
   const [aiInsight, setAiInsight] = useState<string | null>(null);
   const [isAiLoading, setIsAiLoading] = useState(false);
 
@@ -64,7 +65,7 @@ const Dashboard: React.FC<DashboardProps> = ({ stats, movements, items }) => {
     switch (color) {
       case 'indigo': return 'bg-indigo-100 text-indigo-600 border-indigo-200';
       case 'blue': return 'bg-blue-100 text-blue-600 border-blue-200';
-      case 'emerald': return 'bg-emerald-100 text-emerald-600 border-emerald-200';
+      case 'emerald': return 'bg-emerald-100 text-emerald-600 border-emerald-100';
       case 'amber': return 'bg-amber-100 text-amber-600 border-amber-200';
       case 'rose': return 'bg-rose-100 text-rose-600 border-rose-200';
       case 'violet': return 'bg-violet-100 text-violet-600 border-violet-200';
@@ -129,7 +130,7 @@ const Dashboard: React.FC<DashboardProps> = ({ stats, movements, items }) => {
             <div className="bg-white rounded-3xl border border-slate-100 shadow-sm overflow-hidden">
                 <div className="p-6 border-b border-slate-50 flex items-center justify-between">
                     <h3 className="text-lg font-bold text-slate-800 poppins">Recent Activity Log</h3>
-                    <button className="text-indigo-600 text-sm font-semibold hover:underline">Full Audit</button>
+                    <button onClick={onFullAudit} className="text-indigo-600 text-sm font-semibold hover:underline">Full Audit</button>
                 </div>
                 <div className="overflow-x-auto">
                     <table className="w-full text-left">

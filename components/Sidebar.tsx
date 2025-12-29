@@ -2,7 +2,7 @@
 import React from 'react';
 
 interface SidebarProps {
-  activeTab: 'dashboard' | 'inventory' | 'maintenance' | 'suppliers' | 'locations' | 'licenses' | 'categories' | 'employees' | 'departments' | 'purchase-history' | 'requests' | 'faulty-reports' | 'budgets';
+  activeTab: 'dashboard' | 'inventory' | 'maintenance' | 'suppliers' | 'locations' | 'licenses' | 'categories' | 'employees' | 'departments' | 'purchase-history' | 'requests' | 'faulty-reports' | 'budgets' | 'audit-trail';
   setActiveTab: (tab: any) => void;
   openPurchase: () => void;
   openAssign: () => void;
@@ -16,6 +16,7 @@ const Sidebar: React.FC<SidebarProps> = ({ activeTab, setActiveTab, openPurchase
       items: [
         { id: 'dashboard', icon: 'fa-chart-line', label: 'Overview' },
         { id: 'budgets', icon: 'fa-wallet', label: 'Budget Tracker' },
+        { id: 'audit-trail', icon: 'fa-history', label: 'Movement Ledger' },
       ]
     },
     {

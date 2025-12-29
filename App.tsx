@@ -20,7 +20,7 @@ import Chatbot from './components/Chatbot.tsx';
 import { apiService } from './api.ts';
 import { dbService } from './db.ts';
 
-type AppTab = 'dashboard' | 'inventory' | 'maintenance' | 'suppliers' | 'locations' | 'licenses' | 'categories' | 'employees' | 'departments' | 'purchase-history' | 'requests' | 'faulty-reports' | 'budgets';
+type AppTab = 'dashboard' | 'inventory' | 'maintenance' | 'suppliers' | 'locations' | 'licenses' | 'categories' | 'employees' | 'departments' | 'purchase-history' | 'requests' | 'faulty-reports' | 'budgets' | 'audit-trail';
 
 const App: React.FC = () => {
   const [activeTab, setActiveTab] = useState<AppTab>('dashboard');
@@ -213,6 +213,7 @@ const App: React.FC = () => {
         if (type === 'License') await apiService.deleteLicense(item.id);
         if (type === 'Maintenance') await apiService.deleteMaintenance(item.id);
         if (type === 'Request') await apiService.deleteRequest(item.id);
+        if (type === 'Movement') await apiService.genericDelete('movements', item.id);
         fetchData();
       } catch (err) { alert(`Error deleting ${type}: ${err}`); }
     }
@@ -231,7 +232,7 @@ const App: React.FC = () => {
 
   const renderContent = () => {
     switch (activeTab) {
-      case 'dashboard': return <Dashboard stats={stats} movements={movements} items={items} />;
+      case 'dashboard': return <Dashboard stats={stats} movements={movements} items={items} onFullAudit={() => setActiveTab('audit-trail')} />;
       case 'inventory': return <InventoryTable items={items} onUpdate={fetchData} onEdit={setEditingItem} onView={setViewingItem} />;
       case 'maintenance': return <MaintenanceList logs={maintenance} items={items} onUpdate={fetchData} onAdd={() => setIsMaintenanceModalOpen(true)} />;
       case 'suppliers': return <SupplierList suppliers={suppliers} />;
@@ -283,10 +284,25 @@ const App: React.FC = () => {
       );
       case 'budgets': return (
         <GenericListView 
-          title="Budget Tracker" icon="fa-wallet" items={departments} columns={['name', 'budget', 'spent', 'remaining', 'utilization', 'budget_status']} 
+          title="Budget Tracker" 
+          icon="fa-wallet" 
+          items={departments} 
+          columns={['name', 'budget', 'spent', 'remaining', 'utilization', 'budget_status']} 
+          onAdd={() => setManagementModal({ isOpen: true, type: 'Department' })} 
+          onDelete={(item) => handleManagementDelete(item, 'Department')}
+          onView={(item) => alert(`Budget Overview for ${item.name}: $${item.spent} spent of $${item.budget}. Status: ${item.budget_status}`)}
         />
       );
-      default: return <Dashboard stats={stats} movements={movements} items={items} />;
+      case 'audit-trail': return (
+        <GenericListView 
+          title="Comprehensive Audit Trail" 
+          icon="fa-history" 
+          items={movements} 
+          columns={['date', 'item', 'from', 'to', 'employee', 'department', 'status']} 
+          onDelete={(item) => handleManagementDelete(item, 'Movement')}
+        />
+      );
+      default: return <Dashboard stats={stats} movements={movements} items={items} onFullAudit={() => setActiveTab('audit-trail')} />;
     }
   };
 
