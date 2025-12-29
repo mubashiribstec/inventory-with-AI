@@ -1,6 +1,6 @@
 
 import React, { useState } from 'react';
-import { InventoryItem, ItemStatus, LocationRecord } from '../types';
+import { InventoryItem, ItemStatus, Employee } from '../types';
 import { apiService } from '../api.ts';
 
 interface InventoryTableProps {
@@ -8,9 +8,10 @@ interface InventoryTableProps {
   onUpdate: () => void;
   onEdit: (item: InventoryItem) => void;
   onView: (item: InventoryItem) => void;
+  onViewEmployee?: (emp: Employee) => void;
 }
 
-const InventoryTable: React.FC<InventoryTableProps> = ({ items, onUpdate, onEdit, onView }) => {
+const InventoryTable: React.FC<InventoryTableProps> = ({ items, onUpdate, onEdit, onView, onViewEmployee }) => {
   const [search, setSearch] = useState('');
   const [filter, setFilter] = useState<ItemStatus | ''>('');
 
@@ -105,7 +106,18 @@ const InventoryTable: React.FC<InventoryTableProps> = ({ items, onUpdate, onEdit
                   </td>
                   <td className="px-6 py-4 text-xs font-bold text-slate-700">{item.location || 'N/A'}</td>
                   <td className="px-6 py-4">
-                    <p className="text-xs font-bold text-slate-800">{item.assignedTo || '-'}</p>
+                    <button 
+                      onClick={() => {
+                        if (onViewEmployee && item.assignedTo !== '-') {
+                          // Note: In a real app, we'd find the full employee object
+                          // Here we create a partial or handle the mismatch
+                          onViewEmployee({ name: item.assignedTo, department: item.department } as any);
+                        }
+                      }}
+                      className={`text-xs font-bold text-left ${item.assignedTo !== '-' ? 'text-indigo-600 hover:underline' : 'text-slate-800'}`}
+                    >
+                      {item.assignedTo || '-'}
+                    </button>
                     <p className="text-[10px] text-slate-400">{item.department || '-'}</p>
                   </td>
                   <td className="px-6 py-4">

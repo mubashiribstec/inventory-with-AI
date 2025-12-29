@@ -7,6 +7,7 @@ import MaintenanceList from './components/MaintenanceList.tsx';
 import SupplierList from './components/SupplierList.tsx';
 import LicenseList from './components/LicenseList.tsx';
 import ItemDetails from './components/ItemDetails.tsx';
+import EmployeeDetails from './components/EmployeeDetails.tsx';
 import GenericListView from './components/GenericListView.tsx';
 import { ItemStatus, InventoryItem, Movement, Supplier, LocationRecord, MaintenanceLog, Category, Employee, Department, License, AssetRequest } from './types.ts';
 import Modal from './components/Modal.tsx';
@@ -49,6 +50,7 @@ const App: React.FC = () => {
   
   const [editingItem, setEditingItem] = useState<InventoryItem | null>(null);
   const [viewingItem, setViewingItem] = useState<InventoryItem | null>(null);
+  const [viewingEmployee, setViewingEmployee] = useState<Employee | null>(null);
 
   const fetchData = useCallback(async () => {
     try {
@@ -249,6 +251,7 @@ const App: React.FC = () => {
           title="Employee Registry" icon="fa-users" items={employees} columns={['id', 'name', 'email', 'department', 'role']} 
           onAdd={() => setManagementModal({ isOpen: true, type: 'Employee' })} 
           onDelete={(item) => handleManagementDelete(item, 'Employee')}
+          onView={(emp) => setViewingEmployee(emp)}
         />
       );
       case 'departments': return (
@@ -350,7 +353,12 @@ const App: React.FC = () => {
 
       {isPurchaseModalOpen && (
         <Modal title="🛒 ERP - Procurement" onClose={() => setIsPurchaseModalOpen(false)}>
-          <PurchaseForm onSubmit={handleSaveItem} suppliers={suppliers} locations={locations} />
+          <PurchaseForm 
+            onSubmit={handleSaveItem} 
+            suppliers={suppliers} 
+            locations={locations} 
+            departments={departments}
+          />
         </Modal>
       )}
 
@@ -405,13 +413,25 @@ const App: React.FC = () => {
 
       {editingItem && (
         <Modal title="✏️ Edit Asset" onClose={() => setEditingItem(null)}>
-          <PurchaseForm initialData={editingItem} onSubmit={handleSaveItem} suppliers={suppliers} locations={locations} />
+          <PurchaseForm 
+            initialData={editingItem} 
+            onSubmit={handleSaveItem} 
+            suppliers={suppliers} 
+            locations={locations} 
+            departments={departments}
+          />
         </Modal>
       )}
 
       {viewingItem && (
         <Modal title="🔍 Intelligence View" onClose={() => setViewingItem(null)}>
           <ItemDetails item={viewingItem} />
+        </Modal>
+      )}
+
+      {viewingEmployee && (
+        <Modal title="👤 Staff Profile" onClose={() => setViewingEmployee(null)}>
+          <EmployeeDetails employee={viewingEmployee} items={items} />
         </Modal>
       )}
     </div>
