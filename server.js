@@ -56,18 +56,23 @@ app.post('/api/login', async (req, res) => {
   const { username, password } = req.body;
   let conn;
   try {
+    console.log(`Login attempt for: ${username}`);
     conn = await pool.getConnection();
     const rows = await conn.query('SELECT * FROM users WHERE username = ? AND password = ?', [username, password]);
+    
     if (rows.length > 0) {
       const user = rows[0];
+      console.log(`Login successful for: ${username} (Role: ${user.role})`);
       // Do not return password to frontend
-      const { password, ...userSafe } = user;
+      const { password: _, ...userSafe } = user;
       await logAction(user.id, user.username, 'LOGIN', 'USER', user.id, 'User logged in successfully');
       sendJSON(res, userSafe);
     } else {
+      console.log(`Login failed for: ${username} - Invalid credentials`);
       sendJSON(res, { error: 'Invalid credentials' }, 401);
     }
   } catch (err) {
+    console.error('Login Error:', err);
     sendJSON(res, { error: err.message }, 500);
   } finally {
     if (conn) conn.release();
@@ -81,6 +86,7 @@ app.post('/api/init-db', async (req, res) => {
   let conn;
   try {
     conn = await pool.getConnection();
+    console.log('Starting Database Initialization...');
     
     const queries = [
       `CREATE TABLE IF NOT EXISTS users (
@@ -130,22 +136,20 @@ app.post('/api/init-db', async (req, res) => {
         budget DECIMAL(15, 2) DEFAULT 0,
         budget_month VARCHAR(20)
       )`
-      // ... Other tables are handled by generic handlers if not specific
     ];
 
     for (const query of queries) {
       await conn.query(query);
     }
 
-    // Seed default admin if none exists
-    const adminCount = await conn.query('SELECT COUNT(*) as count FROM users');
-    if (adminCount[0].count === 0) {
-      await conn.query("INSERT INTO users (id, username, password, role, full_name) VALUES ('U-001', 'admin', 'admin123', 'ADMIN', 'System Administrator')");
-      await conn.query("INSERT INTO users (id, username, password, role, full_name) VALUES ('U-002', 'manager', 'manager123', 'MANAGER', 'Operations Manager')");
-      await conn.query("INSERT INTO users (id, username, password, role, full_name) VALUES ('U-003', 'staff', 'staff123', 'STAFF', 'Basic Staff')");
-    }
+    // Seeding default users using REPLACE INTO to ensure they exist with correct credentials
+    console.log('Seeding default system users...');
+    await conn.query("REPLACE INTO users (id, username, password, role, full_name) VALUES ('U-001', 'admin', 'admin123', 'ADMIN', 'System Administrator')");
+    await conn.query("REPLACE INTO users (id, username, password, role, full_name) VALUES ('U-002', 'manager', 'manager123', 'MANAGER', 'Operations Manager')");
+    await conn.query("REPLACE INTO users (id, username, password, role, full_name) VALUES ('U-003', 'staff', 'staff123', 'STAFF', 'Basic Staff')");
 
-    sendJSON(res, { success: true, message: 'Database schema successfully verified/initialized' });
+    console.log('Database initialization complete.');
+    sendJSON(res, { success: true, message: 'Database successfully initialized. Default accounts are ready.' });
   } catch (err) {
     console.error('Init DB Error:', err);
     sendJSON(res, { error: err.message }, 500);
