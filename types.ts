@@ -22,6 +22,7 @@ export interface User {
   role: UserRole;
   full_name: string;
   avatar?: string;
+  shift_start_time?: string; // Format: HH:mm
 }
 
 export interface UserLog {
@@ -42,7 +43,7 @@ export interface AttendanceRecord {
   date: string;
   check_in: string | null;
   check_out: string | null;
-  status: 'PRESENT' | 'LATE' | 'ON-LEAVE' | 'ABSENT';
+  status: 'PRESENT' | 'LATE' | 'ON-LEAVE' | 'ABSENT' | 'HALF-DAY';
   location?: string;
 }
 

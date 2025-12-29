@@ -17,28 +17,22 @@ const AttendanceModule: React.FC<AttendanceModuleProps> = ({ currentUser }) => {
 
   /**
    * Helper to sanitize date for MariaDB DATE columns (YYYY-MM-DD)
-   * This removes any time component or ISO characters (T, Z).
    */
   const sanitizeDateForSQL = (d: string | null | undefined): string => {
     if (!d) return '';
-    // If it's a full ISO string, take only the date part
     if (d.includes('T')) return d.split('T')[0];
-    // If it contains a space (SQL format), take only the date part
     if (d.includes(' ')) return d.split(' ')[0];
     return d;
   };
 
   /**
    * Helper to format any date/time string for MariaDB DATETIME (YYYY-MM-DD HH:MM:SS)
-   * MariaDB is strict and rejects ISO 8601 strings with 'T' or 'Z' offsets.
    */
   const formatDateTimeForSQL = (dateVal: string | Date | null | undefined): string | null => {
     if (!dateVal) return null;
     try {
       const d = dateVal instanceof Date ? dateVal : new Date(dateVal);
       if (isNaN(d.getTime())) return null;
-      // Convert to UTC ISO string: "2023-10-27T10:00:00.000Z"
-      // Then slice to "2023-10-27T10:00:00" and replace T with space
       return d.toISOString().slice(0, 19).replace('T', ' ');
     } catch (e) {
       console.error("Formatting error", e);
@@ -69,15 +63,19 @@ const AttendanceModule: React.FC<AttendanceModuleProps> = ({ currentUser }) => {
     const now = new Date();
     const checkInTime = formatDateTimeForSQL(now);
     
-    // Status Logic: Late after 09:00 AM local time (adjust as needed)
-    const isLate = now.getHours() >= 9 && now.getMinutes() > 0;
+    // Status Logic based on user's specific shift start time
+    // Default to 09:00 if not set
+    const shiftStart = currentUser.shift_start_time || '09:00';
+    const [shiftH, shiftM] = shiftStart.split(':').map(Number);
+    
+    const isLate = now.getHours() > shiftH || (now.getHours() === shiftH && now.getMinutes() > shiftM);
     
     const record: AttendanceRecord = {
       id: `ATT-${todayStr}-${currentUser.id}`,
       user_id: currentUser.id,
       username: currentUser.username,
-      date: todayStr, // YYYY-MM-DD
-      check_in: checkInTime, // YYYY-MM-DD HH:MM:SS
+      date: todayStr,
+      check_in: checkInTime,
       check_out: null,
       status: isLate ? 'LATE' : 'PRESENT',
       location: 'Remote/Office'
@@ -94,11 +92,37 @@ const AttendanceModule: React.FC<AttendanceModuleProps> = ({ currentUser }) => {
   const handleCheckOut = async () => {
     if (!todayRecord) return;
     
+    const now = new Date();
+    const checkOutTime = formatDateTimeForSQL(now);
+    
+    // Recalculate duration and status
+    const parseDate = (dStr: string | null) => {
+      if (!dStr) return null;
+      let iso = dStr;
+      if (iso.includes(' ') && !iso.includes('T')) iso = iso.replace(' ', 'T');
+      if (!iso.includes('Z')) iso += 'Z';
+      const d = new Date(iso);
+      return isNaN(d.getTime()) ? null : d;
+    };
+
+    const checkIn = parseDate(todayRecord.check_in);
+    let finalStatus = todayRecord.status;
+
+    if (checkIn) {
+      const durationHours = (now.getTime() - checkIn.getTime()) / (1000 * 60 * 60);
+      
+      // Logic: Less than 5 hours is Half-Day
+      if (durationHours < 5) {
+        finalStatus = 'HALF-DAY';
+      }
+    }
+
     const record: AttendanceRecord = {
       ...todayRecord,
-      date: sanitizeDateForSQL(todayRecord.date), // Ensure date is only YYYY-MM-DD
-      check_in: formatDateTimeForSQL(todayRecord.check_in), // Ensure existing check_in is SQL-compliant
-      check_out: formatDateTimeForSQL(new Date()) // Current time in SQL format
+      date: sanitizeDateForSQL(todayRecord.date),
+      check_in: formatDateTimeForSQL(todayRecord.check_in),
+      check_out: checkOutTime,
+      status: finalStatus as any
     };
 
     try {
@@ -112,21 +136,12 @@ const AttendanceModule: React.FC<AttendanceModuleProps> = ({ currentUser }) => {
   const isAdmin = currentUser.role === UserRole.ADMIN || currentUser.role === UserRole.MANAGER;
   const filteredRecords = isAdmin ? records : records.filter(r => r.user_id === currentUser.id);
 
-  /**
-   * Robust time parsing for local display
-   */
   const displayTime = (timeStr: string | null) => {
     if (!timeStr) return '-';
     try {
-      // MariaDB format is "YYYY-MM-DD HH:MM:SS" (Implicitly UTC based on our formatDateTimeForSQL)
-      // JS needs "YYYY-MM-DDTHH:MM:SSZ" to parse correctly as UTC
       let iso = timeStr;
-      if (iso.includes(' ') && !iso.includes('T')) {
-        iso = iso.replace(' ', 'T');
-      }
-      if (!iso.includes('Z')) {
-        iso += 'Z';
-      }
+      if (iso.includes(' ') && !iso.includes('T')) iso = iso.replace(' ', 'T');
+      if (!iso.includes('Z')) iso += 'Z';
       const date = new Date(iso);
       return isNaN(date.getTime()) ? '-' : date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
     } catch (e) {
@@ -144,7 +159,9 @@ const AttendanceModule: React.FC<AttendanceModuleProps> = ({ currentUser }) => {
           </div>
           <div>
             <h3 className="text-xl font-bold text-slate-800 poppins">Daily Attendance</h3>
-            <p className="text-slate-500 font-medium">Mark your presence for {new Date().toLocaleDateString()}</p>
+            <p className="text-slate-500 font-medium">
+               Your Shift: <span className="font-bold text-indigo-600">{currentUser.shift_start_time || '09:00'}</span>
+            </p>
           </div>
         </div>
 
@@ -174,7 +191,7 @@ const AttendanceModule: React.FC<AttendanceModuleProps> = ({ currentUser }) => {
           ) : (
             <div className="flex gap-4">
               <div className="px-6 py-4 bg-slate-100 border border-slate-200 rounded-2xl flex flex-col justify-center">
-                 <span className="text-[10px] text-slate-500 font-bold uppercase">Work Hours Complete</span>
+                 <span className="text-[10px] text-slate-500 font-bold uppercase">Shift Completed</span>
                  <span className="text-slate-800 font-bold">Shift Ended</span>
               </div>
               <div className="px-6 py-4 bg-indigo-50 border border-indigo-100 rounded-2xl flex flex-col justify-center text-center">
@@ -189,11 +206,7 @@ const AttendanceModule: React.FC<AttendanceModuleProps> = ({ currentUser }) => {
       {/* History Table */}
       <div className="bg-white rounded-3xl border border-slate-100 shadow-sm overflow-hidden">
         <div className="p-6 border-b border-slate-100 flex items-center justify-between">
-          <h3 className="font-bold text-slate-800 poppins">Attendance Ledger {isAdmin ? '(All Staff)' : '(Personal)'}</h3>
-          <div className="flex gap-2">
-             <button className="p-2 hover:bg-slate-50 rounded-lg text-slate-400" title="Filter"><i className="fas fa-filter"></i></button>
-             <button className="p-2 hover:bg-slate-50 rounded-lg text-slate-400" title="Export"><i className="fas fa-download"></i></button>
-          </div>
+          <h3 className="font-bold text-slate-800 poppins">Attendance Ledger</h3>
         </div>
         <div className="overflow-x-auto">
           <table className="w-full text-left">
@@ -205,6 +218,7 @@ const AttendanceModule: React.FC<AttendanceModuleProps> = ({ currentUser }) => {
                 <th className="px-6 py-5">Check Out</th>
                 <th className="px-6 py-5">Hours</th>
                 <th className="px-6 py-5">Status</th>
+                <th className="px-6 py-5">Alerts</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-50">
@@ -221,6 +235,9 @@ const AttendanceModule: React.FC<AttendanceModuleProps> = ({ currentUser }) => {
                 const checkOut = parseDate(record.check_out);
                 const diff = checkIn && checkOut ? (checkOut.getTime() - checkIn.getTime()) / (1000 * 60 * 60) : 0;
                 
+                // Alert logic
+                const hoursShort = checkOut && diff < 7.5;
+
                 return (
                   <tr key={record.id} className="hover:bg-slate-50/50 transition">
                     <td className="px-6 py-4 text-xs font-bold text-slate-800">{sanitizeDateForSQL(record.date)}</td>
@@ -231,22 +248,24 @@ const AttendanceModule: React.FC<AttendanceModuleProps> = ({ currentUser }) => {
                     <td className="px-6 py-4">
                       <span className={`px-2 py-0.5 rounded-full text-[9px] font-bold uppercase border ${
                         record.status === 'PRESENT' ? 'bg-emerald-50 text-emerald-600 border-emerald-100' :
-                        record.status === 'LATE' ? 'bg-amber-50 text-amber-600 border-amber-100' : 'bg-rose-50 text-rose-600 border-rose-100'
+                        record.status === 'LATE' ? 'bg-amber-50 text-amber-600 border-amber-100' :
+                        record.status === 'HALF-DAY' ? 'bg-violet-50 text-violet-600 border-violet-100' :
+                        'bg-rose-50 text-rose-600 border-rose-100'
                       }`}>
                         {record.status}
                       </span>
                     </td>
+                    <td className="px-6 py-4">
+                      {hoursShort && (
+                        <div className="flex items-center gap-1 text-rose-500 font-bold text-[9px] uppercase tracking-tighter bg-rose-50 px-2 py-1 rounded-lg border border-rose-100">
+                          <i className="fas fa-exclamation-triangle"></i>
+                          Shift Hours Not Complete
+                        </div>
+                      )}
+                    </td>
                   </tr>
                 );
               })}
-              {filteredRecords.length === 0 && (
-                <tr>
-                  <td colSpan={isAdmin ? 6 : 5} className="px-6 py-20 text-center text-slate-400">
-                    <i className="fas fa-calendar-times text-4xl mb-4 opacity-20"></i>
-                    <p className="text-sm font-bold uppercase tracking-widest">No records found</p>
-                  </td>
-                </tr>
-              )}
             </tbody>
           </table>
         </div>

@@ -94,7 +94,8 @@ app.post('/api/init-db', async (req, res) => {
         username VARCHAR(50) UNIQUE NOT NULL,
         password VARCHAR(100) NOT NULL,
         role VARCHAR(20) NOT NULL,
-        full_name VARCHAR(100)
+        full_name VARCHAR(100),
+        shift_start_time VARCHAR(5) DEFAULT '09:00'
       )`,
       `CREATE TABLE IF NOT EXISTS user_logs (
         id INT AUTO_INCREMENT PRIMARY KEY,
@@ -216,11 +217,11 @@ app.post('/api/init-db', async (req, res) => {
       await conn.query(query);
     }
 
-    // Seeding default users using REPLACE INTO to ensure they exist with correct credentials
+    // Seeding default users
     console.log('Seeding default system users...');
-    await conn.query("REPLACE INTO users (id, username, password, role, full_name) VALUES ('U-001', 'admin', 'admin123', 'ADMIN', 'System Administrator')");
-    await conn.query("REPLACE INTO users (id, username, password, role, full_name) VALUES ('U-002', 'manager', 'manager123', 'MANAGER', 'Operations Manager')");
-    await conn.query("REPLACE INTO users (id, username, password, role, full_name) VALUES ('U-003', 'staff', 'staff123', 'STAFF', 'Basic Staff')");
+    await conn.query("REPLACE INTO users (id, username, password, role, full_name, shift_start_time) VALUES ('U-001', 'admin', 'admin123', 'ADMIN', 'System Administrator', '09:00')");
+    await conn.query("REPLACE INTO users (id, username, password, role, full_name, shift_start_time) VALUES ('U-002', 'manager', 'manager123', 'MANAGER', 'Operations Manager', '09:00')");
+    await conn.query("REPLACE INTO users (id, username, password, role, full_name, shift_start_time) VALUES ('U-003', 'staff', 'staff123', 'STAFF', 'Basic Staff', '08:30')");
 
     console.log('Database initialization complete.');
     sendJSON(res, { success: true, message: 'Database successfully initialized. Default accounts are ready.' });

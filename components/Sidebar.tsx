@@ -12,6 +12,7 @@ interface SidebarProps {
 const Sidebar: React.FC<SidebarProps> = ({ userRole, activeTab, setActiveTab, onLogout }) => {
   const isAdmin = userRole === UserRole.ADMIN;
   const isManager = userRole === UserRole.MANAGER || isAdmin;
+  const isStaff = userRole === UserRole.STAFF;
 
   const navGroups = [
     {
@@ -19,7 +20,7 @@ const Sidebar: React.FC<SidebarProps> = ({ userRole, activeTab, setActiveTab, on
       items: [
         { id: 'attendance', icon: 'fa-user-clock', label: 'Attendance Hub' },
         { id: 'leaves', icon: 'fa-calendar-alt', label: 'Leave Requests' },
-        { id: 'employees', icon: 'fa-users', label: 'Staff Directory' },
+        { id: 'employees', icon: 'fa-users', label: 'Staff Directory', hide: isStaff },
         { id: 'departments', icon: 'fa-building', label: 'Departments', hide: !isAdmin },
         { id: 'user-mgmt', icon: 'fa-user-shield', label: 'User Accounts', hide: !isManager },
       ]
@@ -27,34 +28,34 @@ const Sidebar: React.FC<SidebarProps> = ({ userRole, activeTab, setActiveTab, on
     {
       title: 'Analytics',
       items: [
-        { id: 'dashboard', icon: 'fa-chart-line', label: 'Overview' },
+        { id: 'dashboard', icon: 'fa-chart-line', label: 'Overview', hide: isStaff },
         { id: 'budgets', icon: 'fa-wallet', label: 'Budget Tracker', hide: !isManager },
-        { id: 'audit-trail', icon: 'fa-history', label: 'Movement Ledger' },
+        { id: 'audit-trail', icon: 'fa-history', label: 'Movement Ledger', hide: isStaff },
         { id: 'system-logs', icon: 'fa-shield-alt', label: 'System Logs', hide: !isAdmin },
       ]
     },
     {
       title: 'Inventory Control',
       items: [
-        { id: 'inventory', icon: 'fa-boxes', label: 'Hardware Registry' },
-        { id: 'categories', icon: 'fa-tags', label: 'Asset Categories' },
-        { id: 'licenses', icon: 'fa-key', label: 'License Compliance' },
+        { id: 'inventory', icon: 'fa-boxes', label: 'Hardware Registry', hide: isStaff },
+        { id: 'categories', icon: 'fa-tags', label: 'Asset Categories', hide: isStaff },
+        { id: 'licenses', icon: 'fa-key', label: 'License Compliance', hide: isStaff },
       ]
     },
     {
       title: 'Procurement & Ops',
       items: [
-        { id: 'purchase-history', icon: 'fa-history', label: 'Purchase Ledger' },
-        { id: 'requests', icon: 'fa-clipboard-list', label: 'Employee Requests' },
-        { id: 'maintenance', icon: 'fa-tools', label: 'Maintenance Hub' },
+        { id: 'purchase-history', icon: 'fa-history', label: 'Purchase Ledger', hide: isStaff },
+        { id: 'requests', icon: 'fa-clipboard-list', label: 'Employee Requests', hide: isStaff },
+        { id: 'maintenance', icon: 'fa-tools', label: 'Maintenance Hub', hide: isStaff },
         { id: 'faulty-reports', icon: 'fa-exclamation-triangle', label: 'Faulty Reports' },
       ]
     },
     {
       title: 'Organization',
       items: [
-        { id: 'suppliers', icon: 'fa-truck', label: 'Vendor Scorecard' },
-        { id: 'locations', icon: 'fa-map-marker-alt', label: 'Site Map' },
+        { id: 'suppliers', icon: 'fa-truck', label: 'Vendor Scorecard', hide: isStaff },
+        { id: 'locations', icon: 'fa-map-marker-alt', label: 'Site Map', hide: isStaff },
       ]
     }
   ];
@@ -73,27 +74,32 @@ const Sidebar: React.FC<SidebarProps> = ({ userRole, activeTab, setActiveTab, on
       </div>
 
       <div className="px-4 pb-6 space-y-6 flex-1">
-        {navGroups.map((group, groupIdx) => (
-          <div key={groupIdx}>
-            <p className="px-4 text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-3">{group.title}</p>
-            <div className="space-y-1">
-              {group.items.filter(i => !i.hide).map(item => (
-                <button
-                  key={item.id}
-                  onClick={() => setActiveTab(item.id)}
-                  className={`w-full flex items-center gap-3 px-4 py-2.5 rounded-xl transition-all duration-200 group ${
-                    activeTab === item.id 
-                      ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-100' 
-                      : 'text-slate-500 hover:bg-slate-50'
-                  }`}
-                >
-                  <i className={`fas ${item.icon} w-5 text-center ${activeTab === item.id ? 'text-white' : 'text-slate-400 group-hover:text-indigo-600'}`}></i>
-                  <span className="font-medium text-sm">{item.label}</span>
-                </button>
-              ))}
+        {navGroups.map((group, groupIdx) => {
+          const visibleItems = group.items.filter(i => !i.hide);
+          if (visibleItems.length === 0) return null;
+          
+          return (
+            <div key={groupIdx}>
+              <p className="px-4 text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-3">{group.title}</p>
+              <div className="space-y-1">
+                {visibleItems.map(item => (
+                  <button
+                    key={item.id}
+                    onClick={() => setActiveTab(item.id)}
+                    className={`w-full flex items-center gap-3 px-4 py-2.5 rounded-xl transition-all duration-200 group ${
+                      activeTab === item.id 
+                        ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-100' 
+                        : 'text-slate-500 hover:bg-slate-50'
+                    }`}
+                  >
+                    <i className={`fas ${item.icon} w-5 text-center ${activeTab === item.id ? 'text-white' : 'text-slate-400 group-hover:text-indigo-600'}`}></i>
+                    <span className="font-medium text-sm">{item.label}</span>
+                  </button>
+                ))}
+              </div>
             </div>
-          </div>
-        ))}
+          );
+        })}
       </div>
 
       <div className="mt-auto p-4 space-y-3">

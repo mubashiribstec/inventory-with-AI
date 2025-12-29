@@ -11,7 +11,8 @@ const UserManagement: React.FC = () => {
     username: '',
     password: '',
     role: UserRole.STAFF,
-    full_name: ''
+    full_name: '',
+    shift_start_time: '09:00'
   });
 
   const fetchUsers = async () => {
@@ -36,7 +37,7 @@ const UserManagement: React.FC = () => {
     try {
       await apiService.saveUser({ ...newUser, id });
       setIsModalOpen(false);
-      setNewUser({ username: '', password: '', role: UserRole.STAFF, full_name: '' });
+      setNewUser({ username: '', password: '', role: UserRole.STAFF, full_name: '', shift_start_time: '09:00' });
       fetchUsers();
     } catch (err) {
       alert(err);
@@ -82,6 +83,7 @@ const UserManagement: React.FC = () => {
                 <th className="px-6 py-5">System ID</th>
                 <th className="px-6 py-5">Full Name</th>
                 <th className="px-6 py-5">Username</th>
+                <th className="px-6 py-5">Shift Start</th>
                 <th className="px-6 py-5">Role</th>
                 <th className="px-6 py-5 text-center">Actions</th>
               </tr>
@@ -92,6 +94,7 @@ const UserManagement: React.FC = () => {
                   <td className="px-6 py-4 text-xs font-mono text-slate-400">{u.id}</td>
                   <td className="px-6 py-4 text-xs font-bold text-slate-800">{u.full_name}</td>
                   <td className="px-6 py-4 text-xs font-medium text-slate-600">{u.username}</td>
+                  <td className="px-6 py-4 text-xs font-bold text-indigo-600">{u.shift_start_time || '09:00'}</td>
                   <td className="px-6 py-4">
                     <span className={`px-2 py-0.5 rounded-lg text-[10px] font-bold uppercase border ${
                       u.role === UserRole.ADMIN ? 'bg-rose-50 text-rose-600 border-rose-100' :
@@ -131,16 +134,21 @@ const UserManagement: React.FC = () => {
               </div>
               <div className="space-y-1">
                 <label className="text-xs font-bold text-slate-500">Password</label>
-                {/* Fixed: removed non-standard 'underline' attribute from password input field to fix TypeScript error */}
                 <input required type="password" className="w-full px-4 py-3 bg-slate-50 border border-slate-100 rounded-xl" placeholder="••••••••" value={newUser.password} onChange={e => setNewUser({...newUser, password: e.target.value})} />
               </div>
-              <div className="space-y-1">
-                <label className="text-xs font-bold text-slate-500">System Role</label>
-                <select className="w-full px-4 py-3 bg-slate-50 border border-slate-100 rounded-xl font-bold" value={newUser.role} onChange={e => setNewUser({...newUser, role: e.target.value as any})}>
-                  <option value={UserRole.STAFF}>STAFF (View, Requests, Tickets)</option>
-                  <option value={UserRole.MANAGER}>MANAGER (All + Approvals)</option>
-                  <option value={UserRole.ADMIN}>ADMIN (Full System Access)</option>
-                </select>
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-1">
+                  <label className="text-xs font-bold text-slate-500">System Role</label>
+                  <select className="w-full px-4 py-3 bg-slate-50 border border-slate-100 rounded-xl font-bold" value={newUser.role} onChange={e => setNewUser({...newUser, role: e.target.value as any})}>
+                    <option value={UserRole.STAFF}>STAFF</option>
+                    <option value={UserRole.MANAGER}>MANAGER</option>
+                    <option value={UserRole.ADMIN}>ADMIN</option>
+                  </select>
+                </div>
+                <div className="space-y-1">
+                  <label className="text-xs font-bold text-slate-500">Shift Start (HH:mm)</label>
+                  <input required type="time" className="w-full px-4 py-3 bg-slate-50 border border-slate-100 rounded-xl font-bold" value={newUser.shift_start_time} onChange={e => setNewUser({...newUser, shift_start_time: e.target.value})} />
+                </div>
               </div>
               <div className="flex gap-4 pt-4">
                 <button type="button" onClick={() => setIsModalOpen(false)} className="flex-1 py-4 bg-slate-100 text-slate-600 rounded-2xl font-bold">Cancel</button>
