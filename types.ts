@@ -98,6 +98,17 @@ export interface Department {
   utilization?: number;
 }
 
+export interface AssetRequest {
+  id: string;
+  item: string;
+  employee: string;
+  department: string;
+  urgency: 'Low' | 'Medium' | 'High' | 'Critical';
+  status: 'Pending' | 'Approved' | 'Rejected' | 'Fulfilled';
+  request_date: string;
+  notes?: string;
+}
+
 export interface DashboardStats {
   purchased: number;
   assigned: number;

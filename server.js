@@ -102,6 +102,18 @@ app.post('/api/init-db', async (req, res) => {
     `);
 
     await conn.query(`
+      CREATE TABLE IF NOT EXISTS licenses (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        software_name VARCHAR(255) NOT NULL,
+        product_key VARCHAR(255),
+        total_seats INT,
+        assigned_seats INT,
+        expiration_date DATE,
+        supplier_id INT
+      )
+    `);
+
+    await conn.query(`
       CREATE TABLE IF NOT EXISTS categories (
         id VARCHAR(50) PRIMARY KEY,
         name VARCHAR(100) NOT NULL,
@@ -125,6 +137,19 @@ app.post('/api/init-db', async (req, res) => {
         name VARCHAR(100) NOT NULL,
         head VARCHAR(255),
         budget DECIMAL(15, 2) DEFAULT 0
+      )
+    `);
+
+    await conn.query(`
+      CREATE TABLE IF NOT EXISTS requests (
+        id VARCHAR(50) PRIMARY KEY,
+        item VARCHAR(255),
+        employee VARCHAR(255),
+        department VARCHAR(100),
+        urgency VARCHAR(50),
+        status VARCHAR(50),
+        request_date DATE,
+        notes TEXT
       )
     `);
 
@@ -178,7 +203,7 @@ const handleCRUD = (tableName) => {
   });
 };
 
-['items', 'movements', 'suppliers', 'locations', 'maintenance_logs', 'categories', 'employees', 'departments'].forEach(handleCRUD);
+['items', 'movements', 'suppliers', 'locations', 'maintenance_logs', 'categories', 'employees', 'departments', 'licenses', 'requests'].forEach(handleCRUD);
 
 // Serve static assets
 const staticPath = path.join(__dirname, 'dist');

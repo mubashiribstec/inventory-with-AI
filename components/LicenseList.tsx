@@ -1,12 +1,14 @@
+
 import React from 'react';
 import { License, Supplier } from '../types';
 
 interface LicenseListProps {
   licenses: License[];
   suppliers: Supplier[];
+  onAdd: () => void;
 }
 
-const LicenseList: React.FC<LicenseListProps> = ({ licenses, suppliers }) => {
+const LicenseList: React.FC<LicenseListProps> = ({ licenses, suppliers, onAdd }) => {
   return (
     <div className="space-y-6 animate-fadeIn">
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
@@ -25,7 +27,10 @@ const LicenseList: React.FC<LicenseListProps> = ({ licenses, suppliers }) => {
       <div className="bg-white rounded-3xl border border-slate-100 shadow-sm overflow-hidden">
         <div className="p-6 border-b border-slate-100 flex items-center justify-between">
           <h3 className="font-bold text-slate-800 poppins">Software Assets & Seats</h3>
-          <button className="px-4 py-2 bg-indigo-600 text-white rounded-xl text-xs font-bold hover:bg-indigo-700 transition">
+          <button 
+            onClick={onAdd}
+            className="px-4 py-2 bg-indigo-600 text-white rounded-xl text-xs font-bold hover:bg-indigo-700 transition"
+          >
             <i className="fas fa-plus mr-2"></i>Add License
           </button>
         </div>

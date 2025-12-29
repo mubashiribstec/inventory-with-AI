@@ -7,9 +7,11 @@ interface GenericListViewProps {
   items: any[];
   columns: string[];
   onAdd?: () => void;
+  onView?: (item: any) => void;
+  onDelete?: (item: any) => void;
 }
 
-const GenericListView: React.FC<GenericListViewProps> = ({ title, icon, items, columns, onAdd }) => {
+const GenericListView: React.FC<GenericListViewProps> = ({ title, icon, items, columns, onAdd, onView, onDelete }) => {
   const formatValue = (col: string, val: any) => {
     if (col === 'budget' || col === 'spent' || col === 'cost' || col === 'remaining') {
       return <span className={`font-bold ${col === 'remaining' && val < 0 ? 'text-rose-600' : 'text-slate-800'}`}>${(Number(val) || 0).toLocaleString()}</span>;
@@ -90,10 +92,18 @@ const GenericListView: React.FC<GenericListViewProps> = ({ title, icon, items, c
                 ))}
                 <td className="px-6 py-4 text-center">
                   <div className="flex justify-center gap-2">
-                      <button className="w-8 h-8 rounded-lg bg-indigo-50 text-indigo-600 hover:bg-indigo-100 flex items-center justify-center transition" title="Details">
+                      <button 
+                        onClick={() => onView && onView(item)}
+                        className="w-8 h-8 rounded-lg bg-indigo-50 text-indigo-600 hover:bg-indigo-100 flex items-center justify-center transition" 
+                        title="Details"
+                      >
                         <i className="fas fa-search-plus text-[10px]"></i>
                       </button>
-                      <button className="w-8 h-8 rounded-lg bg-slate-50 text-slate-400 hover:bg-rose-50 hover:text-rose-500 flex items-center justify-center transition" title="Delete">
+                      <button 
+                        onClick={() => onDelete && onDelete(item)}
+                        className="w-8 h-8 rounded-lg bg-slate-50 text-slate-400 hover:bg-rose-50 hover:text-rose-500 flex items-center justify-center transition" 
+                        title="Delete"
+                      >
                         <i className="fas fa-trash-alt text-[10px]"></i>
                       </button>
                   </div>
