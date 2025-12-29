@@ -40,8 +40,8 @@ app.post('/api/init-db', async (req, res) => {
   try {
     conn = await pool.getConnection();
     
-    // Create tables one by one for better control
-    const queries = [
+    // 1. Create tables if they don't exist
+    const createQueries = [
       `CREATE TABLE IF NOT EXISTS items (
         id VARCHAR(50) PRIMARY KEY,
         name VARCHAR(255) NOT NULL,
@@ -113,8 +113,7 @@ app.post('/api/init-db', async (req, res) => {
         id VARCHAR(50) PRIMARY KEY,
         name VARCHAR(100) NOT NULL,
         head VARCHAR(255),
-        budget DECIMAL(15, 2) DEFAULT 0,
-        budget_month VARCHAR(20)
+        budget DECIMAL(15, 2) DEFAULT 0
       )`,
       `CREATE TABLE IF NOT EXISTS requests (
         id VARCHAR(50) PRIMARY KEY,
@@ -128,8 +127,20 @@ app.post('/api/init-db', async (req, res) => {
       )`
     ];
 
-    for (const query of queries) {
+    for (const query of createQueries) {
       await conn.query(query);
+    }
+
+    // 2. Schema Migrations (Add columns to existing tables)
+    try {
+      // Check if budget_month exists, if not add it
+      const columns = await conn.query("SHOW COLUMNS FROM departments LIKE 'budget_month'");
+      if (columns.length === 0) {
+        await conn.query("ALTER TABLE departments ADD COLUMN budget_month VARCHAR(20) AFTER budget");
+        console.log("Migration: Added budget_month to departments table.");
+      }
+    } catch (migErr) {
+      console.error("Migration Error:", migErr);
     }
 
     sendJSON(res, { success: true, message: 'Database schema successfully verified/initialized' });
@@ -164,7 +175,7 @@ const handleCRUD = (tableName) => {
       const keys = Object.keys(req.body);
       if (keys.length === 0) return sendJSON(res, { error: "Empty body" }, 400);
 
-      // Clean values: Convert empty strings to null for database compatibility (especially for INT/DATE columns)
+      // Clean values: Convert empty strings to null for database compatibility
       const values = Object.values(req.body).map(v => v === '' ? null : v);
       const escapedKeys = keys.map(k => `\`${k}\``);
       const placeholders = keys.map(() => '?').join(', ');
@@ -187,7 +198,6 @@ const handleCRUD = (tableName) => {
     let conn;
     try {
       conn = await pool.getConnection();
-      // Most tables use 'id' as primary key
       await conn.query(`DELETE FROM ${tableName} WHERE id = ?`, [req.params.id]);
       sendJSON(res, { success: true });
     } catch (err) { 

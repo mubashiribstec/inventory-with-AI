@@ -13,8 +13,20 @@ interface GenericListViewProps {
 }
 
 const GenericListView: React.FC<GenericListViewProps> = ({ title, icon, items, columns, onAdd, onView, onEdit, onDelete }) => {
-  const formatValue = (col: string, val: any) => {
-    if (col === 'budget' || col === 'spent' || col === 'cost' || col === 'remaining') {
+  const formatValue = (item: any, col: string, val: any) => {
+    // Special handling for the 'spent' column to make it interactive
+    if (col === 'spent') {
+      return (
+        <button 
+          onClick={() => onView && onView(item)}
+          className={`font-bold text-left transition ${onView ? 'text-indigo-600 hover:text-indigo-800 hover:underline' : 'text-slate-800'}`}
+        >
+          ${(Number(val) || 0).toLocaleString()}
+        </button>
+      );
+    }
+
+    if (col === 'budget' || col === 'cost' || col === 'remaining') {
       return <span className={`font-bold ${col === 'remaining' && val < 0 ? 'text-rose-600' : 'text-slate-800'}`}>${(Number(val) || 0).toLocaleString()}</span>;
     }
     
@@ -88,7 +100,7 @@ const GenericListView: React.FC<GenericListViewProps> = ({ title, icon, items, c
               <tr key={idx} className="hover:bg-slate-50 transition">
                 {columns.map(col => (
                   <td key={col} className="px-6 py-4 text-xs font-medium text-slate-700">
-                    {formatValue(col, item[col])}
+                    {formatValue(item, col, item[col])}
                   </td>
                 ))}
                 <td className="px-6 py-4 text-center">

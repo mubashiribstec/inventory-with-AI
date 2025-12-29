@@ -1,3 +1,4 @@
+
 -- SmartStock Pro Enterprise - Database Setup SQL
 -- Run this script in your MariaDB or MySQL client (e.g., phpMyAdmin or command line)
 
@@ -91,7 +92,8 @@ CREATE TABLE IF NOT EXISTS departments (
     id VARCHAR(50) PRIMARY KEY,
     name VARCHAR(100) NOT NULL,
     head VARCHAR(255),
-    budget DECIMAL(15, 2) DEFAULT 0
+    budget DECIMAL(15, 2) DEFAULT 0,
+    budget_month VARCHAR(20)
 );
 
 -- 9. Employee Asset Requests
@@ -125,11 +127,11 @@ INSERT IGNORE INTO categories (id, name, icon) VALUES
 ('CAT-004', 'Mobile Devices', 'fa-mobile-alt'),
 ('CAT-005', 'Furniture', 'fa-chair');
 
-INSERT IGNORE INTO departments (id, name, head, budget) VALUES 
-('DEPT-IT', 'IT Infrastructure', 'Alice Johnson', 250000.00),
-('DEPT-MKT', 'Marketing & Creative', 'Bob Smith', 120000.00),
-('DEPT-FIN', 'Finance', 'Robert Chen', 80000.00),
-('DEPT-HR', 'Human Resources', 'Sarah Johnson', 45000.00);
+INSERT IGNORE INTO departments (id, name, head, budget, budget_month) VALUES 
+('DEPT-IT', 'IT Infrastructure', 'Alice Johnson', 250000.00, '2024-03'),
+('DEPT-MKT', 'Marketing & Creative', 'Bob Smith', 120000.00, '2024-03'),
+('DEPT-FIN', 'Finance', 'Robert Chen', 80000.00, '2024-03'),
+('DEPT-HR', 'Human Resources', 'Sarah Johnson', 45000.00, '2024-03');
 
 INSERT IGNORE INTO items (id, name, category, serial, status, location, assignedTo, department, purchaseDate, warranty, cost) VALUES 
 ('IT-001', 'Dell Latitude 5440', 'Computers', 'DL-2024-001', 'in-use', 'Main HQ', 'John Smith', 'IT Infrastructure', '2024-01-15', '2025-01-15', 1200.00),

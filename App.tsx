@@ -225,11 +225,12 @@ const App: React.FC = () => {
   };
 
   const handleEditPurchase = (movement: Movement) => {
+    // Find the item associated with the name in the movement log
     const asset = items.find(i => i.name === movement.item);
     if (asset) {
       setEditingItem(asset);
     } else {
-      alert("Could not find the underlying asset record for this purchase log.");
+      alert("Asset record for this purchase could not be located.");
     }
   };
 
@@ -277,7 +278,7 @@ const App: React.FC = () => {
         <GenericListView 
           title="Procurement History" icon="fa-history" items={movements.filter(m => m.status === 'PURCHASED')} columns={['date', 'item', 'from', 'to']} 
           onAdd={() => setIsPurchaseModalOpen(true)} 
-          onEdit={(m) => handleEditPurchase(m)}
+          onEdit={handleEditPurchase}
           onDelete={(m) => handleManagementDelete(m, 'Movement')}
         />
       );
