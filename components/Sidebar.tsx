@@ -1,8 +1,9 @@
+
 import React from 'react';
 
 interface SidebarProps {
-  activeTab: 'dashboard' | 'inventory' | 'maintenance' | 'suppliers' | 'locations' | 'licenses' | 'categories' | 'employees' | 'departments' | 'purchase-history';
-  setActiveTab: (tab: 'dashboard' | 'inventory' | 'maintenance' | 'suppliers' | 'locations' | 'licenses' | 'categories' | 'employees' | 'departments' | 'purchase-history') => void;
+  activeTab: 'dashboard' | 'inventory' | 'maintenance' | 'suppliers' | 'locations' | 'licenses' | 'categories' | 'employees' | 'departments' | 'purchase-history' | 'requests' | 'faulty-reports' | 'budgets';
+  setActiveTab: (tab: any) => void;
   openPurchase: () => void;
   openAssign: () => void;
   runAnalysis: () => void;
@@ -11,33 +12,36 @@ interface SidebarProps {
 const Sidebar: React.FC<SidebarProps> = ({ activeTab, setActiveTab, openPurchase, openAssign, runAnalysis }) => {
   const navGroups = [
     {
-      title: 'Dashboard',
+      title: 'Analytics',
       items: [
         { id: 'dashboard', icon: 'fa-chart-line', label: 'Overview' },
+        { id: 'budgets', icon: 'fa-wallet', label: 'Budget Tracker' },
       ]
     },
     {
-      title: 'Inventory',
+      title: 'Inventory Control',
       items: [
-        { id: 'inventory', icon: 'fa-boxes', label: 'Hardware' },
-        { id: 'categories', icon: 'fa-tags', label: 'Categories' },
-        { id: 'licenses', icon: 'fa-key', label: 'Licenses' },
+        { id: 'inventory', icon: 'fa-boxes', label: 'Hardware Registry' },
+        { id: 'categories', icon: 'fa-tags', label: 'Asset Categories' },
+        { id: 'licenses', icon: 'fa-key', label: 'License Compliance' },
       ]
     },
     {
-      title: 'Operations',
+      title: 'Procurement & Ops',
       items: [
-        { id: 'purchase-history', icon: 'fa-history', label: 'Purchase History' },
-        { id: 'maintenance', icon: 'fa-tools', label: 'Maintenance' },
+        { id: 'purchase-history', icon: 'fa-history', label: 'Purchase Ledger' },
+        { id: 'requests', icon: 'fa-clipboard-list', label: 'Employee Requests' },
+        { id: 'maintenance', icon: 'fa-tools', label: 'Maintenance Hub' },
+        { id: 'faulty-reports', icon: 'fa-exclamation-triangle', label: 'Faulty Reports' },
       ]
     },
     {
-      title: 'Management',
+      title: 'Organization',
       items: [
-        { id: 'employees', icon: 'fa-users', label: 'Employees' },
+        { id: 'employees', icon: 'fa-users', label: 'Staff Directory' },
         { id: 'departments', icon: 'fa-building', label: 'Departments' },
-        { id: 'suppliers', icon: 'fa-truck', label: 'Suppliers' },
-        { id: 'locations', icon: 'fa-map-marker-alt', label: 'Locations' },
+        { id: 'suppliers', icon: 'fa-truck', label: 'Vendor Scorecard' },
+        { id: 'locations', icon: 'fa-map-marker-alt', label: 'Site Map' },
       ]
     }
   ];
@@ -63,7 +67,7 @@ const Sidebar: React.FC<SidebarProps> = ({ activeTab, setActiveTab, openPurchase
               {group.items.map(item => (
                 <button
                   key={item.id}
-                  onClick={() => setActiveTab(item.id as any)}
+                  onClick={() => setActiveTab(item.id)}
                   className={`w-full flex items-center gap-3 px-4 py-2.5 rounded-xl transition-all duration-200 group ${
                     activeTab === item.id 
                       ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-100' 
@@ -82,17 +86,17 @@ const Sidebar: React.FC<SidebarProps> = ({ activeTab, setActiveTab, openPurchase
       <div className="mt-auto p-6 bg-slate-50 border-t border-slate-100">
         <div className="bg-indigo-600 p-4 rounded-2xl text-white shadow-lg shadow-indigo-100">
           <div className="flex items-center gap-2 mb-2">
-            <i className="fas fa-brain text-xs"></i>
-            <span className="text-[10px] font-bold uppercase">AI Insight</span>
+            <i className="fas fa-robot text-xs"></i>
+            <span className="text-[10px] font-bold uppercase">Proactive Insight</span>
           </div>
           <p className="text-[10px] text-indigo-100 mb-3 line-clamp-2">
-            Need hardware specs? AI can automatically fetch them for you.
+            AI analysis suggests 3 departments are near budget capacity.
           </p>
           <button 
             onClick={runAnalysis}
             className="w-full py-2 bg-white/20 hover:bg-white/30 rounded-lg text-[10px] font-bold transition flex items-center justify-center gap-2 backdrop-blur-sm"
           >
-            <i className="fas fa-sync-alt text-[8px]"></i> Analyze Health
+            <i className="fas fa-calculator text-[8px]"></i> Verify Budgets
           </button>
         </div>
       </div>

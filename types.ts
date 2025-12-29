@@ -1,3 +1,4 @@
+
 export enum ItemStatus {
   PURCHASED = 'purchased',
   ASSIGNED = 'assigned',
@@ -85,7 +86,6 @@ export interface Employee {
   email: string;
   department: string;
   role: string;
-  avatar?: string;
 }
 
 export interface Department {
@@ -93,6 +93,7 @@ export interface Department {
   name: string;
   head: string;
   budget: number;
+  spent: number;
 }
 
 export interface DashboardStats {
