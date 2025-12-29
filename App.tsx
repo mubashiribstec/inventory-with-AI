@@ -57,35 +57,64 @@ const App: React.FC = () => {
         apiService.getDepartments()
       ]);
       
-      setItems(fItems || []);
+      const safeItems = fItems || [];
+      setItems(safeItems);
       setMovements(fMovements || []);
       setSuppliers(fSuppliers || []);
       setLocations(fLocations || []);
       setMaintenance(fMaintenance || []);
       
-      // Use API fetched data or derive if empty
-      setCategories(fCats && fCats.length > 0 ? fCats : [...new Set(fItems.map(i => i.category))].map((name, i) => ({
+      // Derive categories if API returns empty
+      setCategories(fCats && fCats.length > 0 ? fCats : [...new Set(safeItems.map(i => i.category))].map((name, i) => ({
         id: `CAT-${i}`,
         name,
         icon: name.toLowerCase().includes('comp') ? 'fa-laptop' : 'fa-tags',
-        itemCount: fItems.filter(item => item.category === name).length
+        itemCount: safeItems.filter(item => item.category === name).length
       })));
 
-      setEmployees(fEmps && fEmps.length > 0 ? fEmps : [...new Set(fItems.map(i => i.assignedTo))].filter(e => e && e !== '-').map((name, i) => ({
+      // Derive employees if API returns empty
+      setEmployees(fEmps && fEmps.length > 0 ? fEmps : [...new Set(safeItems.map(i => i.assignedTo))].filter(e => e && e !== '-').map((name, i) => ({
         id: `EMP-${100 + i}`,
         name,
         email: `${name.toLowerCase().replace(' ', '.')}@enterprise.com`,
-        department: fItems.find(item => item.assignedTo === name)?.department || 'IT',
+        department: safeItems.find(item => item.assignedTo === name)?.department || 'IT',
         role: 'Professional Staff'
       })));
 
-      setDepartments(fDepts && fDepts.length > 0 ? fDepts : ['IT', 'Marketing', 'Finance', 'Operations', 'Sales'].map((name, i) => ({
-        id: `DEPT-${i}`,
-        name,
-        head: 'Department Lead',
-        budget: 50000 + (i * 10000),
-        spent: fItems.filter(item => item.department === name).reduce((acc, item) => acc + (item.cost || 0), 0)
-      })));
+      // Enhanced Department budget logic: Fetch from DB and calculate SPENT from items
+      const rawDepts = (fDepts && fDepts.length > 0) 
+        ? fDepts 
+        : ['IT', 'Marketing', 'Finance', 'Operations', 'Sales'].map((name, i) => ({
+            id: `DEPT-${i}`,
+            name,
+            head: 'Department Lead',
+            budget: 50000 + (i * 10000),
+            spent: 0
+          }));
+
+      const enrichedDepts = rawDepts.map(dept => {
+        const spent = safeItems
+          .filter(item => item.department === dept.name)
+          .reduce((acc, item) => acc + (Number(item.cost) || 0), 0);
+        
+        const budget = Number(dept.budget) || 0;
+        const remaining = budget - spent;
+        const utilization = budget > 0 ? (spent / budget) * 100 : 0;
+        
+        let budget_status = 'ON TRACK';
+        if (utilization > 100) budget_status = 'OVER BUDGET';
+        else if (utilization > 85) budget_status = 'NEAR LIMIT';
+
+        return {
+          ...dept,
+          spent,
+          remaining,
+          utilization,
+          budget_status
+        };
+      });
+
+      setDepartments(enrichedDepts);
 
     } catch (err: any) {
       setError("ERP server offline. Syncing with local database.");
@@ -173,7 +202,7 @@ const App: React.FC = () => {
       case 'purchase-history': return <GenericListView title="Procurement History" icon="fa-history" items={movements.filter(m => m.status === 'PURCHASED')} columns={['date', 'item', 'from', 'to']} onAdd={() => setIsPurchaseModalOpen(true)} />;
       case 'requests': return <GenericListView title="Employee Requests" icon="fa-clipboard-list" items={[]} columns={['id', 'item', 'employee', 'urgency', 'status']} onAdd={() => alert('Request Management Coming Soon')} />;
       case 'faulty-reports': return <GenericListView title="Faulty Reports" icon="fa-exclamation-circle" items={maintenance} columns={['item_id', 'issue_type', 'description', 'status']} onAdd={() => setActiveTab('maintenance')} />;
-      case 'budgets': return <GenericListView title="Budget Consumption" icon="fa-wallet" items={departments} columns={['name', 'budget', 'spent']} />;
+      case 'budgets': return <GenericListView title="Budget Tracker" icon="fa-wallet" items={departments} columns={['name', 'budget', 'spent', 'remaining', 'utilization', 'budget_status']} />;
       default: return <Dashboard stats={stats} movements={movements} items={items} />;
     }
   };

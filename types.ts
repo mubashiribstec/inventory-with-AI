@@ -94,6 +94,8 @@ export interface Department {
   head: string;
   budget: number;
   spent: number;
+  remaining?: number;
+  utilization?: number;
 }
 
 export interface DashboardStats {

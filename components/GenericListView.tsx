@@ -11,18 +11,38 @@ interface GenericListViewProps {
 
 const GenericListView: React.FC<GenericListViewProps> = ({ title, icon, items, columns, onAdd }) => {
   const formatValue = (col: string, val: any) => {
-    if (col === 'budget' || col === 'spent' || col === 'cost') {
-      return <span className="font-bold text-slate-800">${(Number(val) || 0).toLocaleString()}</span>;
+    if (col === 'budget' || col === 'spent' || col === 'cost' || col === 'remaining') {
+      return <span className={`font-bold ${col === 'remaining' && val < 0 ? 'text-rose-600' : 'text-slate-800'}`}>${(Number(val) || 0).toLocaleString()}</span>;
     }
-    if (col === 'status') {
+    
+    if (col === 'utilization') {
+      const percent = Math.min(Math.max(Number(val) || 0, 0), 100);
+      const color = percent > 90 ? 'bg-rose-500' : percent > 70 ? 'bg-amber-500' : 'bg-indigo-600';
+      return (
+        <div className="w-full min-w-[120px]">
+          <div className="flex justify-between items-center mb-1">
+            <span className="text-[10px] font-bold text-slate-500">{percent.toFixed(1)}%</span>
+          </div>
+          <div className="w-full bg-slate-100 h-1.5 rounded-full overflow-hidden">
+            <div className={`h-full rounded-full transition-all duration-500 ${color}`} style={{ width: `${percent}%` }}></div>
+          </div>
+        </div>
+      );
+    }
+
+    if (col === 'status' || col === 'budget_status') {
+      const statusVal = String(val).toUpperCase();
       const colors: any = {
         'OPEN': 'bg-rose-50 text-rose-600 border-rose-100',
         'PENDING': 'bg-amber-50 text-amber-600 border-amber-100',
         'FIXED': 'bg-emerald-50 text-emerald-600 border-emerald-100',
         'PURCHASED': 'bg-indigo-50 text-indigo-600 border-indigo-100',
-        'ASSIGNED': 'bg-blue-50 text-blue-600 border-blue-100'
+        'ASSIGNED': 'bg-blue-50 text-blue-600 border-blue-100',
+        'OVER BUDGET': 'bg-rose-50 text-rose-600 border-rose-100',
+        'ON TRACK': 'bg-emerald-50 text-emerald-600 border-emerald-100',
+        'NEAR LIMIT': 'bg-amber-50 text-amber-600 border-amber-100'
       };
-      return <span className={`px-2 py-0.5 rounded-full text-[9px] font-bold uppercase border ${colors[val] || 'bg-slate-50 text-slate-500'}`}>{val}</span>;
+      return <span className={`px-2 py-0.5 rounded-full text-[9px] font-bold uppercase border ${colors[statusVal] || 'bg-slate-50 text-slate-500'}`}>{statusVal}</span>;
     }
     return val;
   };
