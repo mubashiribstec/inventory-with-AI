@@ -34,7 +34,7 @@ const MaintenanceList: React.FC<MaintenanceProps> = ({ logs, items, onUpdate, on
             onClick={onAdd}
             className="px-4 py-2 bg-indigo-600 text-white rounded-xl text-xs font-bold hover:bg-indigo-700 transition"
           >
-            <i className="fas fa-plus mr-2"></i>New Ticket
+            <i className="fas fa-plus mr-2"></i>Report Issue / New Ticket
           </button>
         </div>
         <div className="overflow-x-auto">
@@ -65,7 +65,7 @@ const MaintenanceList: React.FC<MaintenanceProps> = ({ logs, items, onUpdate, on
                     </span>
                   </td>
                   <td className="px-6 py-4 text-center">
-                    <button className="text-indigo-600 hover:underline text-[10px] font-bold">Update</button>
+                    <button className="text-indigo-600 hover:underline text-[10px] font-bold">Details</button>
                   </td>
                 </tr>
               ))}

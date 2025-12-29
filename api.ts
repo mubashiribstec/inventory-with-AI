@@ -1,5 +1,5 @@
 
-import { InventoryItem, Movement, Supplier, LocationRecord, MaintenanceLog, License, Category, Employee, Department, AssetRequest, User, UserLog } from './types.ts';
+import { InventoryItem, Movement, Supplier, LocationRecord, MaintenanceLog, License, Category, Employee, Department, AssetRequest, User, UserLog, AttendanceRecord, LeaveRequest } from './types.ts';
 import { dbService } from './db.ts';
 
 const BASE_URL = '/api';
@@ -64,7 +64,7 @@ export const apiService = {
     return handleRequest<void>(`${BASE_URL}/${endpoint}/${id}`, { method: 'DELETE' });
   },
 
-  // Specific Entity Methods (matching current App pattern)
+  // Specific Entity Methods
   async getAllItems(): Promise<InventoryItem[]> { return handleRequest<InventoryItem[]>(`${BASE_URL}/items`, {}, () => dbService.getAllItems()); },
   async saveItem(item: InventoryItem): Promise<void> { return this.genericSave('items', item); },
   async updateItem(id: string, item: Partial<InventoryItem>): Promise<void> { return this.genericSave('items', { ...item, id }); },
@@ -97,5 +97,17 @@ export const apiService = {
   async getAllMovements(): Promise<Movement[]> { return handleRequest<Movement[]>(`${BASE_URL}/movements`, {}, () => dbService.getAllMovements()); },
   async saveMovement(movement: Movement): Promise<void> { return this.genericSave('movements', movement); },
   async getAllSuppliers(): Promise<Supplier[]> { return handleRequest<Supplier[]>(`${BASE_URL}/suppliers`, {}, () => dbService.getAllSuppliers()); },
-  async getAllLocations(): Promise<LocationRecord[]> { return handleRequest<LocationRecord[]>(`${BASE_URL}/locations`, {}, () => dbService.getAllLocations()); }
+  async getAllLocations(): Promise<LocationRecord[]> { return handleRequest<LocationRecord[]>(`${BASE_URL}/locations`, {}, () => dbService.getAllLocations()); },
+
+  // Attendance & Leaves & Users
+  async getAttendance(): Promise<AttendanceRecord[]> { return handleRequest<AttendanceRecord[]>(`${BASE_URL}/attendance`); },
+  async saveAttendance(record: AttendanceRecord): Promise<void> { return this.genericSave('attendance', record); },
+  
+  async getLeaveRequests(): Promise<LeaveRequest[]> { return handleRequest<LeaveRequest[]>(`${BASE_URL}/leave_requests`); },
+  async saveLeaveRequest(record: LeaveRequest): Promise<void> { return this.genericSave('leave_requests', record); },
+  async deleteLeaveRequest(id: string): Promise<void> { return this.genericDelete('leave_requests', id); },
+
+  async getUsers(): Promise<User[]> { return handleRequest<User[]>(`${BASE_URL}/users`); },
+  async saveUser(user: User): Promise<void> { return this.genericSave('users', user); },
+  async deleteUser(id: string): Promise<void> { return this.genericDelete('users', id); }
 };

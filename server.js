@@ -106,6 +106,26 @@ app.post('/api/init-db', async (req, res) => {
         details TEXT,
         timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP
       )`,
+      `CREATE TABLE IF NOT EXISTS attendance (
+        id VARCHAR(100) PRIMARY KEY,
+        user_id VARCHAR(50),
+        username VARCHAR(50),
+        date DATE,
+        check_in DATETIME,
+        check_out DATETIME,
+        status VARCHAR(20),
+        location VARCHAR(255)
+      )`,
+      `CREATE TABLE IF NOT EXISTS leave_requests (
+        id VARCHAR(100) PRIMARY KEY,
+        user_id VARCHAR(50),
+        username VARCHAR(50),
+        start_date DATE,
+        end_date DATE,
+        leave_type VARCHAR(20),
+        reason TEXT,
+        status VARCHAR(20)
+      )`,
       `CREATE TABLE IF NOT EXISTS items (
         id VARCHAR(50) PRIMARY KEY,
         name VARCHAR(255) NOT NULL,
@@ -135,6 +155,60 @@ app.post('/api/init-db', async (req, res) => {
         head VARCHAR(255),
         budget DECIMAL(15, 2) DEFAULT 0,
         budget_month VARCHAR(20)
+      )`,
+      `CREATE TABLE IF NOT EXISTS employees (
+        id VARCHAR(50) PRIMARY KEY,
+        name VARCHAR(255) NOT NULL,
+        email VARCHAR(255),
+        department VARCHAR(100),
+        role VARCHAR(100)
+      )`,
+      `CREATE TABLE IF NOT EXISTS suppliers (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        name VARCHAR(255) NOT NULL,
+        contact_person VARCHAR(255),
+        email VARCHAR(255),
+        rating INT DEFAULT 0
+      )`,
+      `CREATE TABLE IF NOT EXISTS locations (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        building VARCHAR(100),
+        floor VARCHAR(50),
+        room VARCHAR(50),
+        manager VARCHAR(255)
+      )`,
+      `CREATE TABLE IF NOT EXISTS maintenance_logs (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        item_id VARCHAR(50),
+        issue_type VARCHAR(100),
+        description TEXT,
+        status VARCHAR(50),
+        cost DECIMAL(10, 2),
+        start_date DATE
+      )`,
+      `CREATE TABLE IF NOT EXISTS licenses (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        software_name VARCHAR(255) NOT NULL,
+        product_key VARCHAR(255),
+        total_seats INT,
+        assigned_seats INT,
+        expiration_date DATE,
+        supplier_id INT
+      )`,
+      `CREATE TABLE IF NOT EXISTS categories (
+        id VARCHAR(50) PRIMARY KEY,
+        name VARCHAR(100) NOT NULL,
+        icon VARCHAR(50)
+      )`,
+      `CREATE TABLE IF NOT EXISTS requests (
+        id VARCHAR(50) PRIMARY KEY,
+        item VARCHAR(255),
+        employee VARCHAR(255),
+        department VARCHAR(100),
+        urgency VARCHAR(50),
+        status VARCHAR(50),
+        request_date DATE,
+        notes TEXT
       )`
     ];
 
@@ -227,7 +301,7 @@ const handleCRUD = (tableName) => {
   });
 };
 
-const modules = ['items', 'movements', 'suppliers', 'locations', 'maintenance_logs', 'categories', 'employees', 'departments', 'licenses', 'requests'];
+const modules = ['items', 'movements', 'suppliers', 'locations', 'maintenance_logs', 'categories', 'employees', 'departments', 'licenses', 'requests', 'attendance', 'users', 'leave_requests'];
 modules.forEach(handleCRUD);
 
 const staticPath = path.join(__dirname, 'dist');

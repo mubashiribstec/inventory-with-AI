@@ -8,9 +8,10 @@ interface DashboardProps {
   movements: Movement[];
   items: InventoryItem[];
   onFullAudit: () => void;
+  onCheckIn: () => void;
 }
 
-const Dashboard: React.FC<DashboardProps> = ({ stats, movements, items, onFullAudit }) => {
+const Dashboard: React.FC<DashboardProps> = ({ stats, movements, items, onFullAudit, onCheckIn }) => {
   const [aiInsight, setAiInsight] = useState<string | null>(null);
   const [isAiLoading, setIsAiLoading] = useState(false);
 
@@ -75,6 +76,25 @@ const Dashboard: React.FC<DashboardProps> = ({ stats, movements, items, onFullAu
 
   return (
     <div className="space-y-8 animate-fadeIn">
+      {/* Attendance Quick Access */}
+      <div className="bg-white p-6 rounded-3xl border border-indigo-100 shadow-sm border-l-4 border-l-indigo-600 flex items-center justify-between">
+         <div className="flex items-center gap-4">
+            <div className="w-12 h-12 bg-indigo-50 rounded-2xl flex items-center justify-center text-indigo-600 border border-indigo-100">
+               <i className="fas fa-user-clock text-xl"></i>
+            </div>
+            <div>
+               <h4 className="font-bold text-slate-800 poppins">Daily Attendance</h4>
+               <p className="text-xs text-slate-500">Don't forget to check in for your shift today!</p>
+            </div>
+         </div>
+         <button 
+          onClick={onCheckIn}
+          className="px-6 py-2.5 bg-indigo-600 text-white rounded-xl font-bold text-xs hover:bg-indigo-700 transition shadow-lg shadow-indigo-100"
+         >
+            Check Status
+         </button>
+      </div>
+
       <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-6">
         {statCards.map((card, idx) => (
           <div key={idx} className="bg-white p-6 rounded-2xl border border-slate-100 shadow-sm hover:shadow-md transition-shadow flex items-center gap-5">

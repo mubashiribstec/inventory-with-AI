@@ -10,6 +10,9 @@ import ItemDetails from './components/ItemDetails.tsx';
 import EmployeeDetails from './components/EmployeeDetails.tsx';
 import BudgetBreakdown from './components/BudgetBreakdown.tsx';
 import GenericListView from './components/GenericListView.tsx';
+import AttendanceModule from './components/AttendanceModule.tsx';
+import LeaveModule from './components/LeaveModule.tsx';
+import UserManagement from './components/UserManagement.tsx';
 import Login from './components/Login.tsx';
 import { ItemStatus, UserRole, User, UserLog, InventoryItem, Movement, Supplier, LocationRecord, MaintenanceLog, Category, Employee, Department, License, AssetRequest } from './types.ts';
 import Modal from './components/Modal.tsx';
@@ -23,7 +26,7 @@ import Chatbot from './components/Chatbot.tsx';
 import { apiService } from './api.ts';
 import { dbService } from './db.ts';
 
-type AppTab = 'dashboard' | 'inventory' | 'maintenance' | 'suppliers' | 'locations' | 'licenses' | 'categories' | 'employees' | 'departments' | 'purchase-history' | 'requests' | 'faulty-reports' | 'budgets' | 'audit-trail' | 'system-logs';
+type AppTab = 'dashboard' | 'inventory' | 'maintenance' | 'suppliers' | 'locations' | 'licenses' | 'categories' | 'employees' | 'departments' | 'purchase-history' | 'requests' | 'faulty-reports' | 'budgets' | 'audit-trail' | 'system-logs' | 'attendance' | 'leaves' | 'user-mgmt';
 
 const App: React.FC = () => {
   const [currentUser, setCurrentUser] = useState<User | null>(null);
@@ -158,16 +161,20 @@ const App: React.FC = () => {
     } catch (err) { alert(err); }
   };
 
+  const isStaff = currentUser?.role === UserRole.STAFF;
   const canEdit = currentUser?.role !== UserRole.STAFF;
-  const isAdmin = currentUser?.role === UserRole.ADMIN;
+  const isAdmin = currentUser?.role === UserRole.ADMIN || currentUser?.role === UserRole.MANAGER;
 
   const renderContent = () => {
     if (!currentUser) return null;
     
     switch (activeTab) {
-      case 'dashboard': return <Dashboard stats={stats} movements={movements} items={items} onFullAudit={() => setActiveTab('audit-trail')} />;
+      case 'dashboard': return <Dashboard stats={stats} movements={movements} items={items} onFullAudit={() => setActiveTab('audit-trail')} onCheckIn={() => setActiveTab('attendance')} />;
+      case 'attendance': return <AttendanceModule currentUser={currentUser} />;
+      case 'leaves': return <LeaveModule currentUser={currentUser} />;
+      case 'user-mgmt': return isAdmin ? <UserManagement /> : null;
       case 'inventory': return <InventoryTable items={items} onUpdate={fetchData} onEdit={canEdit ? setEditingItem : undefined} onView={setViewingItem} />;
-      case 'maintenance': return <MaintenanceList logs={maintenance} items={items} onUpdate={fetchData} onAdd={canEdit ? () => setIsMaintenanceModalOpen(true) : undefined} />;
+      case 'maintenance': return <MaintenanceList logs={maintenance} items={items} onUpdate={fetchData} onAdd={() => setIsMaintenanceModalOpen(true)} />;
       case 'suppliers': return <SupplierList suppliers={suppliers} />;
       case 'licenses': return <LicenseList licenses={licenses} suppliers={suppliers} onAdd={canEdit ? () => setIsLicenseModalOpen(true) : undefined} />;
       case 'categories': return <GenericListView title="Asset Categories" icon="fa-tags" items={categories} columns={['id', 'name', 'itemCount']} onAdd={canEdit ? () => setManagementModal({ isOpen: true, type: 'Category' }) : undefined} onDelete={canEdit ? (item) => handleManagementDelete(item, 'Category') : undefined} />;
@@ -179,7 +186,7 @@ const App: React.FC = () => {
       case 'budgets': return <GenericListView title="Budget Tracker" icon="fa-wallet" items={departments} columns={['name', 'budget_month', 'budget', 'spent', 'remaining', 'utilization', 'budget_status']} onAdd={isAdmin ? () => setManagementModal({ isOpen: true, type: 'Department' }) : undefined} onView={(dept) => setViewingBudgetBreakdown(dept)} />;
       case 'audit-trail': return <GenericListView title="Movement Ledger" icon="fa-history" items={movements} columns={['date', 'item', 'from', 'to', 'employee', 'department', 'status']} onDelete={isAdmin ? (item) => handleManagementDelete(item, 'Movement') : undefined} />;
       case 'system-logs': return <GenericListView title="System Audit Logs" icon="fa-shield-alt" items={systemLogs} columns={['timestamp', 'username', 'action', 'target_type', 'target_id', 'details']} />;
-      default: return <Dashboard stats={stats} movements={movements} items={items} onFullAudit={() => setActiveTab('audit-trail')} />;
+      default: return <Dashboard stats={stats} movements={movements} items={items} onFullAudit={() => setActiveTab('audit-trail')} onCheckIn={() => setActiveTab('attendance')} />;
     }
   };
 
@@ -220,6 +227,14 @@ const App: React.FC = () => {
       if (managementModal.type === 'Employee') await apiService.saveEmployee(data);
       if (managementModal.type === 'Department') await apiService.saveDepartment(data);
       setManagementModal({ isOpen: false, type: null });
+      fetchData();
+    } catch (err) { alert(err); }
+  };
+
+  const handleMaintenanceSubmit = async (log: any) => {
+    try {
+      await apiService.saveMaintenance(log);
+      setIsMaintenanceModalOpen(false);
       fetchData();
     } catch (err) { alert(err); }
   };
@@ -270,10 +285,16 @@ const App: React.FC = () => {
 
       <Chatbot items={items} stats={stats} />
 
-      {/* Modals from before - with minor role checks */}
+      {/* Modals */}
       {isPurchaseModalOpen && canEdit && (
         <Modal title="🛒 Procurement" onClose={() => setIsPurchaseModalOpen(false)}>
           <PurchaseForm onSubmit={handleSaveItem} suppliers={suppliers} locations={locations} departments={departments} />
+        </Modal>
+      )}
+
+      {isMaintenanceModalOpen && (
+        <Modal title="🔧 Maintenance Ticket" onClose={() => setIsMaintenanceModalOpen(false)}>
+          <MaintenanceForm items={items} onSubmit={handleMaintenanceSubmit} />
         </Modal>
       )}
 
@@ -293,7 +314,6 @@ const App: React.FC = () => {
           <ManagementForm type={managementModal.type!} onSubmit={handleManagementSubmit} />
         </Modal>
       )}
-      {/* ... Other modals */}
     </div>
   );
 };

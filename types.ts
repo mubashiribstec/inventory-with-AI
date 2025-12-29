@@ -18,6 +18,7 @@ export enum UserRole {
 export interface User {
   id: string;
   username: string;
+  password?: string;
   role: UserRole;
   full_name: string;
   avatar?: string;
@@ -32,6 +33,28 @@ export interface UserLog {
   target_id: string;
   details: string;
   timestamp: string;
+}
+
+export interface AttendanceRecord {
+  id: string;
+  user_id: string;
+  username: string;
+  date: string;
+  check_in: string | null;
+  check_out: string | null;
+  status: 'PRESENT' | 'LATE' | 'ON-LEAVE' | 'ABSENT';
+  location?: string;
+}
+
+export interface LeaveRequest {
+  id: string;
+  user_id: string;
+  username: string;
+  start_date: string;
+  end_date: string;
+  leave_type: 'VACATION' | 'SICK' | 'CASUAL' | 'OTHER';
+  reason: string;
+  status: 'PENDING' | 'APPROVED' | 'REJECTED';
 }
 
 export interface InventoryItem {

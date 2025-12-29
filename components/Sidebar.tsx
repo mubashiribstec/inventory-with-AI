@@ -4,7 +4,7 @@ import { UserRole } from '../types.ts';
 
 interface SidebarProps {
   userRole: UserRole;
-  activeTab: 'dashboard' | 'inventory' | 'maintenance' | 'suppliers' | 'locations' | 'licenses' | 'categories' | 'employees' | 'departments' | 'purchase-history' | 'requests' | 'faulty-reports' | 'budgets' | 'audit-trail' | 'system-logs';
+  activeTab: 'dashboard' | 'inventory' | 'maintenance' | 'suppliers' | 'locations' | 'licenses' | 'categories' | 'employees' | 'departments' | 'purchase-history' | 'requests' | 'faulty-reports' | 'budgets' | 'audit-trail' | 'system-logs' | 'attendance' | 'leaves' | 'user-mgmt';
   setActiveTab: (tab: any) => void;
   onLogout: () => void;
 }
@@ -14,6 +14,16 @@ const Sidebar: React.FC<SidebarProps> = ({ userRole, activeTab, setActiveTab, on
   const isManager = userRole === UserRole.MANAGER || isAdmin;
 
   const navGroups = [
+    {
+      title: 'Human Resources',
+      items: [
+        { id: 'attendance', icon: 'fa-user-clock', label: 'Attendance Hub' },
+        { id: 'leaves', icon: 'fa-calendar-alt', label: 'Leave Requests' },
+        { id: 'employees', icon: 'fa-users', label: 'Staff Directory' },
+        { id: 'departments', icon: 'fa-building', label: 'Departments', hide: !isAdmin },
+        { id: 'user-mgmt', icon: 'fa-user-shield', label: 'User Accounts', hide: !isManager },
+      ]
+    },
     {
       title: 'Analytics',
       items: [
@@ -43,8 +53,6 @@ const Sidebar: React.FC<SidebarProps> = ({ userRole, activeTab, setActiveTab, on
     {
       title: 'Organization',
       items: [
-        { id: 'employees', icon: 'fa-users', label: 'Staff Directory' },
-        { id: 'departments', icon: 'fa-building', label: 'Departments', hide: !isAdmin },
         { id: 'suppliers', icon: 'fa-truck', label: 'Vendor Scorecard' },
         { id: 'locations', icon: 'fa-map-marker-alt', label: 'Site Map' },
       ]
