@@ -165,11 +165,12 @@ const handleCRUD = (tableName) => {
 
       // Clean values: Convert empty strings to null for database compatibility (especially for INT/DATE columns)
       const values = Object.values(req.body).map(v => v === '' ? null : v);
+      const escapedKeys = keys.map(k => `\`${k}\``);
       const placeholders = keys.map(() => '?').join(', ');
-      const updates = keys.map(k => `${k}=VALUES(${k})`).join(', ');
+      const updates = keys.map(k => `\`${k}\`=VALUES(\`${k}\`)`).join(', ');
       
       conn = await pool.getConnection();
-      const query = `INSERT INTO ${tableName} (${keys.join(', ')}) VALUES (${placeholders}) ON DUPLICATE KEY UPDATE ${updates}`;
+      const query = `INSERT INTO ${tableName} (${escapedKeys.join(', ')}) VALUES (${placeholders}) ON DUPLICATE KEY UPDATE ${updates}`;
       await conn.query(query, values);
       
       sendJSON(res, { success: true }, 201);
