@@ -113,7 +113,8 @@ app.post('/api/init-db', async (req, res) => {
         id VARCHAR(50) PRIMARY KEY,
         name VARCHAR(100) NOT NULL,
         head VARCHAR(255),
-        budget DECIMAL(15, 2) DEFAULT 0
+        budget DECIMAL(15, 2) DEFAULT 0,
+        budget_month VARCHAR(20)
       )`,
       `CREATE TABLE IF NOT EXISTS requests (
         id VARCHAR(50) PRIMARY KEY,

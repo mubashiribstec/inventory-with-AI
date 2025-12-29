@@ -94,8 +94,10 @@ export interface Department {
   head: string;
   budget: number;
   spent: number;
+  budget_month?: string;
   remaining?: number;
   utilization?: number;
+  budget_status?: string;
 }
 
 export interface AssetRequest {

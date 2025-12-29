@@ -8,10 +8,11 @@ interface GenericListViewProps {
   columns: string[];
   onAdd?: () => void;
   onView?: (item: any) => void;
+  onEdit?: (item: any) => void;
   onDelete?: (item: any) => void;
 }
 
-const GenericListView: React.FC<GenericListViewProps> = ({ title, icon, items, columns, onAdd, onView, onDelete }) => {
+const GenericListView: React.FC<GenericListViewProps> = ({ title, icon, items, columns, onAdd, onView, onEdit, onDelete }) => {
   const formatValue = (col: string, val: any) => {
     if (col === 'budget' || col === 'spent' || col === 'cost' || col === 'remaining') {
       return <span className={`font-bold ${col === 'remaining' && val < 0 ? 'text-rose-600' : 'text-slate-800'}`}>${(Number(val) || 0).toLocaleString()}</span>;
@@ -92,20 +93,33 @@ const GenericListView: React.FC<GenericListViewProps> = ({ title, icon, items, c
                 ))}
                 <td className="px-6 py-4 text-center">
                   <div className="flex justify-center gap-2">
-                      <button 
-                        onClick={() => onView && onView(item)}
-                        className="w-8 h-8 rounded-lg bg-indigo-50 text-indigo-600 hover:bg-indigo-100 flex items-center justify-center transition" 
-                        title="Details"
-                      >
-                        <i className="fas fa-search-plus text-[10px]"></i>
-                      </button>
-                      <button 
-                        onClick={() => onDelete && onDelete(item)}
-                        className="w-8 h-8 rounded-lg bg-slate-50 text-slate-400 hover:bg-rose-50 hover:text-rose-500 flex items-center justify-center transition" 
-                        title="Delete"
-                      >
-                        <i className="fas fa-trash-alt text-[10px]"></i>
-                      </button>
+                      {onView && (
+                        <button 
+                          onClick={() => onView(item)}
+                          className="w-8 h-8 rounded-lg bg-indigo-50 text-indigo-600 hover:bg-indigo-100 flex items-center justify-center transition" 
+                          title="Details"
+                        >
+                          <i className="fas fa-search-plus text-[10px]"></i>
+                        </button>
+                      )}
+                      {onEdit && (
+                        <button 
+                          onClick={() => onEdit(item)}
+                          className="w-8 h-8 rounded-lg bg-amber-50 text-amber-600 hover:bg-amber-100 flex items-center justify-center transition" 
+                          title="Edit"
+                        >
+                          <i className="fas fa-edit text-[10px]"></i>
+                        </button>
+                      )}
+                      {onDelete && (
+                        <button 
+                          onClick={() => onDelete(item)}
+                          className="w-8 h-8 rounded-lg bg-slate-50 text-slate-400 hover:bg-rose-50 hover:text-rose-500 flex items-center justify-center transition" 
+                          title="Delete"
+                        >
+                          <i className="fas fa-trash-alt text-[10px]"></i>
+                        </button>
+                      )}
                   </div>
                 </td>
               </tr>

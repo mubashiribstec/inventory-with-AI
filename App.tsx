@@ -8,6 +8,7 @@ import SupplierList from './components/SupplierList.tsx';
 import LicenseList from './components/LicenseList.tsx';
 import ItemDetails from './components/ItemDetails.tsx';
 import EmployeeDetails from './components/EmployeeDetails.tsx';
+import BudgetBreakdown from './components/BudgetBreakdown.tsx';
 import GenericListView from './components/GenericListView.tsx';
 import { ItemStatus, InventoryItem, Movement, Supplier, LocationRecord, MaintenanceLog, Category, Employee, Department, License, AssetRequest } from './types.ts';
 import Modal from './components/Modal.tsx';
@@ -51,6 +52,7 @@ const App: React.FC = () => {
   const [editingItem, setEditingItem] = useState<InventoryItem | null>(null);
   const [viewingItem, setViewingItem] = useState<InventoryItem | null>(null);
   const [viewingEmployee, setViewingEmployee] = useState<Employee | null>(null);
+  const [viewingBudgetBreakdown, setViewingBudgetBreakdown] = useState<Department | null>(null);
 
   const fetchData = useCallback(async () => {
     try {
@@ -99,12 +101,13 @@ const App: React.FC = () => {
       // Department logic
       const rawDepts = (fDepts && fDepts.length > 0) 
         ? fDepts 
-        : ['IT', 'Marketing', 'Finance', 'Operations', 'Sales'].map((name, i) => ({
+        : ['IT Infrastructure', 'Marketing & Creative', 'Finance', 'Human Resources', 'Sales'].map((name, i) => ({
             id: `DEPT-${i}`,
             name,
             head: 'Department Lead',
             budget: 50000 + (i * 10000),
-            spent: 0
+            spent: 0,
+            budget_month: new Date().toISOString().substring(0, 7)
           }));
 
       const enrichedDepts = rawDepts.map(dept => {
@@ -221,6 +224,15 @@ const App: React.FC = () => {
     }
   };
 
+  const handleEditPurchase = (movement: Movement) => {
+    const asset = items.find(i => i.name === movement.item);
+    if (asset) {
+      setEditingItem(asset);
+    } else {
+      alert("Could not find the underlying asset record for this purchase log.");
+    }
+  };
+
   const stats = {
     purchased: items.length,
     assigned: items.filter(i => i.status === ItemStatus.ASSIGNED).length,
@@ -256,7 +268,7 @@ const App: React.FC = () => {
       );
       case 'departments': return (
         <GenericListView 
-          title="Departmental Overview" icon="fa-building" items={departments} columns={['id', 'name', 'head', 'spent', 'budget']} 
+          title="Departmental Overview" icon="fa-building" items={departments} columns={['id', 'name', 'budget_month', 'head', 'spent', 'budget']} 
           onAdd={() => setManagementModal({ isOpen: true, type: 'Department' })} 
           onDelete={(item) => handleManagementDelete(item, 'Department')}
         />
@@ -265,6 +277,8 @@ const App: React.FC = () => {
         <GenericListView 
           title="Procurement History" icon="fa-history" items={movements.filter(m => m.status === 'PURCHASED')} columns={['date', 'item', 'from', 'to']} 
           onAdd={() => setIsPurchaseModalOpen(true)} 
+          onEdit={(m) => handleEditPurchase(m)}
+          onDelete={(m) => handleManagementDelete(m, 'Movement')}
         />
       );
       case 'requests': return (
@@ -290,10 +304,10 @@ const App: React.FC = () => {
           title="Budget Tracker" 
           icon="fa-wallet" 
           items={departments} 
-          columns={['name', 'budget', 'spent', 'remaining', 'utilization', 'budget_status']} 
+          columns={['name', 'budget_month', 'budget', 'spent', 'remaining', 'utilization', 'budget_status']} 
           onAdd={() => setManagementModal({ isOpen: true, type: 'Department' })} 
           onDelete={(item) => handleManagementDelete(item, 'Department')}
-          onView={(item) => alert(`Budget Overview for ${item.name}: $${item.spent} spent of $${item.budget}. Status: ${item.budget_status}`)}
+          onView={(dept) => setViewingBudgetBreakdown(dept)}
         />
       );
       case 'audit-trail': return (
@@ -411,8 +425,8 @@ const App: React.FC = () => {
         </Modal>
       )}
 
-      {editingItem && (
-        <Modal title="✏️ Edit Asset" onClose={() => setEditingItem(null)}>
+      {(editingItem) && (
+        <Modal title="✏️ Edit Asset / Purchase" onClose={() => setEditingItem(null)}>
           <PurchaseForm 
             initialData={editingItem} 
             onSubmit={handleSaveItem} 
@@ -432,6 +446,12 @@ const App: React.FC = () => {
       {viewingEmployee && (
         <Modal title="👤 Staff Profile" onClose={() => setViewingEmployee(null)}>
           <EmployeeDetails employee={viewingEmployee} items={items} />
+        </Modal>
+      )}
+
+      {viewingBudgetBreakdown && (
+        <Modal title="💰 Spend Breakdown" onClose={() => setViewingBudgetBreakdown(null)}>
+          <BudgetBreakdown department={viewingBudgetBreakdown} items={items} />
         </Modal>
       )}
     </div>

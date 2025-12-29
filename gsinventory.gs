@@ -52,7 +52,7 @@ function setupDatabase() {
     [DB_SHEETS.MAINTENANCE]: ['id', 'item_id', 'issue_type', 'description', 'status', 'cost', 'start_date'],
     [DB_SHEETS.CATEGORIES]: ['id', 'name', 'icon'],
     [DB_SHEETS.EMPLOYEES]: ['id', 'name', 'email', 'department', 'role'],
-    [DB_SHEETS.DEPARTMENTS]: ['id', 'name', 'head', 'budget'],
+    [DB_SHEETS.DEPARTMENTS]: ['id', 'name', 'head', 'budget', 'budget_month'],
     [DB_SHEETS.REQUESTS]: ['id', 'item', 'employee', 'department', 'urgency', 'status', 'request_date', 'notes']
   };
 

@@ -8,7 +8,9 @@ interface ManagementFormProps {
 }
 
 const ManagementForm: React.FC<ManagementFormProps> = ({ type, onSubmit, initialData }) => {
-  const [formData, setFormData] = useState(initialData || {});
+  const [formData, setFormData] = useState(initialData || {
+    budget_month: new Date().toISOString().substring(0, 7) // Default to current YYYY-MM
+  });
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -69,9 +71,15 @@ const ManagementForm: React.FC<ManagementFormProps> = ({ type, onSubmit, initial
               <label className="text-xs font-bold text-slate-500 uppercase tracking-wider ml-1">Department Head</label>
               <input name="head" type="text" className="w-full px-4 py-3 bg-slate-50 border border-slate-100 rounded-xl outline-none focus:ring-2 focus:ring-indigo-500" value={formData.head || ''} onChange={handleChange} placeholder="Jane Smith" />
             </div>
-            <div className="space-y-2">
-              <label className="text-xs font-bold text-slate-500 uppercase tracking-wider ml-1">Annual Budget ($)</label>
-              <input name="budget" type="number" className="w-full px-4 py-3 bg-slate-50 border border-slate-100 rounded-xl outline-none focus:ring-2 focus:ring-indigo-500" value={formData.budget || ''} onChange={handleChange} placeholder="100000" />
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <label className="text-xs font-bold text-slate-500 uppercase tracking-wider ml-1">Annual Budget ($)</label>
+                <input name="budget" type="number" className="w-full px-4 py-3 bg-slate-50 border border-slate-100 rounded-xl outline-none focus:ring-2 focus:ring-indigo-500" value={formData.budget || ''} onChange={handleChange} placeholder="100000" />
+              </div>
+              <div className="space-y-2">
+                <label className="text-xs font-bold text-slate-500 uppercase tracking-wider ml-1">Budget Month</label>
+                <input name="budget_month" type="month" required className="w-full px-4 py-3 bg-slate-50 border border-slate-100 rounded-xl outline-none focus:ring-2 focus:ring-indigo-500 font-bold text-indigo-600" value={formData.budget_month || ''} onChange={handleChange} />
+              </div>
             </div>
           </>
         )}
