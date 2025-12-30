@@ -14,8 +14,9 @@ import AttendanceModule from './components/AttendanceModule.tsx';
 import LeaveModule from './components/LeaveModule.tsx';
 import UserManagement from './components/UserManagement.tsx';
 import RoleManagement from './components/RoleManagement.tsx';
+import NotificationCenter from './components/NotificationCenter.tsx';
 import Login from './components/Login.tsx';
-import { ItemStatus, UserRole, User, UserLog, InventoryItem, Movement, Supplier, LocationRecord, MaintenanceLog, Category, Employee, Department, License, AssetRequest } from './types.ts';
+import { ItemStatus, UserRole, User, UserLog, InventoryItem, Movement, Supplier, LocationRecord, MaintenanceLog, Category, Employee, Department, License, AssetRequest, Notification } from './types.ts';
 import Modal from './components/Modal.tsx';
 import PurchaseForm from './components/PurchaseForm.tsx';
 import AssignmentForm from './components/AssignmentForm.tsx';
@@ -26,7 +27,7 @@ import RequestForm from './components/RequestForm.tsx';
 import { apiService } from './api.ts';
 import { dbService } from './db.ts';
 
-type AppTab = 'dashboard' | 'inventory' | 'maintenance' | 'suppliers' | 'locations' | 'licenses' | 'categories' | 'employees' | 'departments' | 'purchase-history' | 'requests' | 'faulty-reports' | 'budgets' | 'audit-trail' | 'system-logs' | 'attendance' | 'leaves' | 'user-mgmt' | 'role-mgmt';
+type AppTab = 'dashboard' | 'inventory' | 'maintenance' | 'suppliers' | 'locations' | 'licenses' | 'categories' | 'employees' | 'departments' | 'purchase-history' | 'requests' | 'faulty-reports' | 'budgets' | 'audit-trail' | 'system-logs' | 'attendance' | 'leaves' | 'user-mgmt' | 'role-mgmt' | 'notifications';
 
 const App: React.FC = () => {
   const [currentUser, setCurrentUser] = useState<User | null>(null);
@@ -227,6 +228,7 @@ const App: React.FC = () => {
     switch (activeTab) {
       case 'dashboard': return isStaff ? null : <Dashboard stats={stats} movements={movements} items={items} onFullAudit={() => setActiveTab('audit-trail')} onCheckIn={() => setActiveTab('attendance')} />;
       case 'attendance': return <AttendanceModule currentUser={currentUser} />;
+      case 'notifications': return <NotificationCenter currentUser={currentUser} />;
       case 'leaves': return <LeaveModule currentUser={currentUser} />;
       case 'user-mgmt': return isManager ? <UserManagement usersOverride={visibleUsers} /> : null;
       case 'role-mgmt': return isAdmin ? <RoleManagement /> : null;

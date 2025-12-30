@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect } from 'react';
-import { LeaveRequest, User, UserRole } from '../types.ts';
+import { LeaveRequest, User, UserRole, Notification } from '../types.ts';
 import { apiService } from '../api.ts';
 
 interface LeaveModuleProps {
@@ -58,14 +58,27 @@ const LeaveModule: React.FC<LeaveModuleProps> = ({ currentUser }) => {
         end_date: '',
         leave_type: 'VACATION',
         reason: '',
-        username: currentUser.username
+        username: currentUser.full_name
       });
     }
     setIsModalOpen(true);
   };
 
+  const sendManagerNotification = async (request: LeaveRequest) => {
+    if (currentUser.manager_id) {
+      await apiService.createNotification({
+        recipient_id: currentUser.manager_id,
+        sender_name: currentUser.full_name,
+        message: `${currentUser.full_name} has applied for ${request.leave_type.toLowerCase()} from ${request.start_date} to ${request.end_date}. Review required.`,
+        type: 'LEAVE',
+        is_read: false
+      });
+    }
+  };
+
   const handleSubmitRequest = async (e: React.FormEvent) => {
     e.preventDefault();
+    const isNew = !editingLeave;
     const id = editingLeave ? editingLeave.id : `LV-${Date.now()}`;
     const request: LeaveRequest = {
       ...formData,
@@ -79,6 +92,9 @@ const LeaveModule: React.FC<LeaveModuleProps> = ({ currentUser }) => {
 
     try {
       await apiService.saveLeaveRequest(request);
+      if (isNew) {
+        await sendManagerNotification(request);
+      }
       setIsModalOpen(false);
       setEditingLeave(null);
       fetchLeaves();
@@ -95,14 +111,36 @@ const LeaveModule: React.FC<LeaveModuleProps> = ({ currentUser }) => {
         start_date: sanitizeDate(leave.start_date),
         end_date: sanitizeDate(leave.end_date)
       });
+      
+      // Notify staff member of decision
+      await apiService.createNotification({
+        recipient_id: leave.user_id,
+        sender_name: currentUser.full_name,
+        message: `Your leave request for ${sanitizeDate(leave.start_date)} has been ${status.toLowerCase()}.`,
+        type: 'LEAVE',
+        is_read: false
+      });
+
       fetchLeaves();
     } catch (err) {
       alert(err);
     }
   };
 
-  const isAdmin = currentUser.role === UserRole.ADMIN || currentUser.role === UserRole.MANAGER;
-  const filteredLeaves = isAdmin ? leaves : leaves.filter(l => l.user_id === currentUser.id);
+  const handleWithdraw = async (id: string) => {
+    if (window.confirm("Are you sure you want to withdraw this pending leave request?")) {
+      try {
+        await apiService.deleteLeaveRequest(id);
+        fetchLeaves();
+      } catch (err) {
+        alert("Error withdrawing request: " + err);
+      }
+    }
+  };
+
+  const isSuperUser = currentUser.role === UserRole.ADMIN;
+  const isManagement = currentUser.role === UserRole.ADMIN || currentUser.role === UserRole.MANAGER || currentUser.role === UserRole.HR;
+  const filteredLeaves = isManagement ? leaves : leaves.filter(l => l.user_id === currentUser.id);
 
   return (
     <div className="space-y-8 animate-fadeIn">
@@ -116,12 +154,12 @@ const LeaveModule: React.FC<LeaveModuleProps> = ({ currentUser }) => {
             <p className="text-slate-500 font-medium">Request time off or manage staff leave applications</p>
           </div>
         </div>
-        {!isAdmin && (
+        {!isManagement && (
           <button 
             onClick={() => handleOpenModal()}
             className="px-8 py-4 bg-indigo-600 text-white rounded-2xl font-bold hover:bg-indigo-700 shadow-lg shadow-indigo-100 transition"
           >
-            Request Leave
+            Apply for Leave
           </button>
         )}
       </div>
@@ -129,6 +167,7 @@ const LeaveModule: React.FC<LeaveModuleProps> = ({ currentUser }) => {
       <div className="bg-white rounded-3xl border border-slate-100 shadow-sm overflow-hidden">
         <div className="p-6 border-b border-slate-100 flex items-center justify-between">
           <h3 className="font-bold text-slate-800 poppins">Leave Ledger</h3>
+          <p className="text-[10px] text-slate-400 font-bold uppercase">Decision tracking & history</p>
         </div>
         <div className="overflow-x-auto">
           <table className="w-full text-left">
@@ -139,30 +178,34 @@ const LeaveModule: React.FC<LeaveModuleProps> = ({ currentUser }) => {
                 <th className="px-6 py-5">Type</th>
                 <th className="px-6 py-5">Reason</th>
                 <th className="px-6 py-5">Status</th>
-                {(isAdmin) && <th className="px-6 py-5 text-center">Actions</th>}
+                <th className="px-6 py-5 text-center">Actions</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-50">
-              {filteredLeaves.sort((a,b) => b.start_date.localeCompare(a.start_date)).map(leave => (
-                <tr key={leave.id} className="hover:bg-slate-50 transition">
-                  <td className="px-6 py-4 text-xs font-bold text-slate-800">{leave.username}</td>
-                  <td className="px-6 py-4 text-xs text-slate-600">{sanitizeDate(leave.start_date)} to {sanitizeDate(leave.end_date)}</td>
-                  <td className="px-6 py-4">
-                    <span className="px-2 py-0.5 rounded-lg bg-slate-100 text-slate-600 text-[10px] font-bold uppercase">{leave.leave_type}</span>
-                  </td>
-                  <td className="px-6 py-4 text-xs text-slate-500 max-w-xs truncate">{leave.reason}</td>
-                  <td className="px-6 py-4">
-                    <span className={`px-2 py-1 rounded-full text-[9px] font-bold uppercase ${
-                      leave.status === 'APPROVED' ? 'bg-emerald-50 text-emerald-600' :
-                      leave.status === 'REJECTED' ? 'bg-rose-50 text-rose-600' : 'bg-amber-50 text-amber-600'
-                    }`}>
-                      {leave.status}
-                    </span>
-                  </td>
-                  {isAdmin && (
+              {filteredLeaves.sort((a,b) => b.start_date.localeCompare(a.start_date)).map(leave => {
+                const isOwner = leave.user_id === currentUser.id;
+                const canWithdraw = isOwner && leave.status === 'PENDING';
+                const canApprove = isManagement && leave.status === 'PENDING' && !isOwner;
+
+                return (
+                  <tr key={leave.id} className="hover:bg-slate-50 transition">
+                    <td className="px-6 py-4 text-xs font-bold text-slate-800">{leave.username}</td>
+                    <td className="px-6 py-4 text-xs text-slate-600">{sanitizeDate(leave.start_date)} to {sanitizeDate(leave.end_date)}</td>
+                    <td className="px-6 py-4">
+                      <span className="px-2 py-0.5 rounded-lg bg-slate-100 text-slate-600 text-[10px] font-bold uppercase">{leave.leave_type}</span>
+                    </td>
+                    <td className="px-6 py-4 text-xs text-slate-500 max-w-xs truncate">{leave.reason}</td>
+                    <td className="px-6 py-4">
+                      <span className={`px-2 py-1 rounded-full text-[9px] font-bold uppercase border ${
+                        leave.status === 'APPROVED' ? 'bg-emerald-50 text-emerald-600 border-emerald-100' :
+                        leave.status === 'REJECTED' ? 'bg-rose-50 text-rose-600 border-rose-100' : 'bg-amber-50 text-amber-600 border-amber-100'
+                      }`}>
+                        {leave.status}
+                      </span>
+                    </td>
                     <td className="px-6 py-4 text-center">
                       <div className="flex justify-center gap-2">
-                        {leave.status === 'PENDING' && (
+                        {canApprove && (
                           <>
                             <button onClick={() => handleUpdateStatus(leave, 'APPROVED')} className="w-8 h-8 rounded-lg bg-emerald-50 text-emerald-600 hover:bg-emerald-100 flex items-center justify-center transition" title="Approve">
                               <i className="fas fa-check"></i>
@@ -172,14 +215,21 @@ const LeaveModule: React.FC<LeaveModuleProps> = ({ currentUser }) => {
                             </button>
                           </>
                         )}
-                        <button onClick={() => handleOpenModal(leave)} className="w-8 h-8 rounded-lg bg-amber-50 text-amber-600 hover:bg-amber-100 flex items-center justify-center transition" title="Edit">
-                          <i className="fas fa-edit text-xs"></i>
-                        </button>
+                        {canWithdraw && (
+                          <button onClick={() => handleWithdraw(leave.id)} className="w-8 h-8 rounded-lg bg-rose-50 text-rose-600 hover:bg-rose-600 hover:text-white flex items-center justify-center transition" title="Withdraw Request">
+                            <i className="fas fa-trash-alt"></i>
+                          </button>
+                        )}
+                        {(isSuperUser || (isManagement && !canApprove)) && (
+                          <button onClick={() => handleOpenModal(leave)} className="w-8 h-8 rounded-lg bg-amber-50 text-amber-600 hover:bg-amber-100 flex items-center justify-center transition" title="Edit">
+                            <i className="fas fa-edit text-xs"></i>
+                          </button>
+                        )}
                       </div>
                     </td>
-                  )}
-                </tr>
-              ))}
+                  </tr>
+                );
+              })}
             </tbody>
           </table>
         </div>
@@ -189,18 +239,16 @@ const LeaveModule: React.FC<LeaveModuleProps> = ({ currentUser }) => {
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm">
           <div className="bg-white w-full max-w-lg rounded-3xl p-8 animate-fadeIn">
             <div className="flex justify-between items-center mb-6">
-              <h3 className="text-xl font-bold">{editingLeave ? 'Edit Leave Record' : 'Request Time Off'}</h3>
+              <h3 className="text-xl font-bold">{editingLeave ? 'Edit Leave Record' : 'Apply for Leave'}</h3>
               <button onClick={() => setIsModalOpen(false)} className="text-slate-400 hover:text-slate-600">
                 <i className="fas fa-times"></i>
               </button>
             </div>
             <form onSubmit={handleSubmitRequest} className="space-y-4">
-              {isAdmin && editingLeave && (
-                <div className="space-y-1">
-                  <label className="text-xs font-bold text-slate-500 uppercase tracking-widest">Employee</label>
-                  <input readOnly type="text" className="w-full px-4 py-3 bg-slate-100 border border-slate-100 rounded-xl font-bold text-slate-500 cursor-not-allowed" value={formData.username} />
-                </div>
-              )}
+              <div className="space-y-1">
+                <label className="text-xs font-bold text-slate-500 uppercase tracking-widest">Employee Name</label>
+                <input readOnly type="text" className="w-full px-4 py-3 bg-slate-100 border border-slate-100 rounded-xl font-bold text-slate-500 cursor-not-allowed" value={formData.username} />
+              </div>
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-1">
                   <label className="text-xs font-bold text-slate-500 uppercase tracking-widest">Start Date</label>
@@ -227,7 +275,7 @@ const LeaveModule: React.FC<LeaveModuleProps> = ({ currentUser }) => {
               <div className="flex gap-4 pt-4">
                 <button type="button" onClick={() => setIsModalOpen(false)} className="flex-1 py-4 bg-slate-100 text-slate-600 rounded-2xl font-bold">Cancel</button>
                 <button type="submit" className="flex-1 py-4 bg-indigo-600 text-white rounded-2xl font-bold shadow-lg shadow-indigo-100 transition">
-                  {editingLeave ? 'Update Record' : 'Submit Request'}
+                  {editingLeave ? 'Update Record' : 'Submit Application'}
                 </button>
               </div>
             </form>

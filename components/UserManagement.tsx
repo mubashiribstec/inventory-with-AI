@@ -54,6 +54,8 @@ const UserManagement: React.FC<UserManagementProps> = ({ usersOverride }) => {
   }, []);
 
   const displayUsers = usersOverride || users;
+  const teamLeads = users.filter(u => u.role === UserRole.TEAM_LEAD);
+  const managers = users.filter(u => u.role === UserRole.MANAGER || u.role === UserRole.ADMIN);
 
   const handleOpenModal = (user?: User) => {
     if (user) {
@@ -108,6 +110,7 @@ const UserManagement: React.FC<UserManagementProps> = ({ usersOverride }) => {
 
       await apiService.saveUser(userToSave);
 
+      // Sync to Staff Directory
       if (!editingUser || formData.email) {
         const employeeId = editingUser ? `IBS-EMP-${userId}` : `IBS-EMP-${Math.floor(1000 + Math.random() * 9000)}`;
         const employeeToSave: Employee = {
@@ -126,6 +129,17 @@ const UserManagement: React.FC<UserManagementProps> = ({ usersOverride }) => {
       fetchData();
     } catch (err) {
       alert(err);
+    }
+  };
+
+  const handleDeleteUser = async (id: string) => {
+    if (window.confirm("Permanently delete this user account?")) {
+      try {
+        await apiService.deleteUser(id);
+        fetchData();
+      } catch (err) {
+        alert(err);
+      }
     }
   };
 
@@ -202,7 +216,8 @@ const UserManagement: React.FC<UserManagementProps> = ({ usersOverride }) => {
                     </td>
                     <td className="px-6 py-4 text-center">
                       <div className="flex justify-center gap-3">
-                        <button onClick={() => handleOpenModal(u)} className="text-amber-500 hover:text-amber-700"><i className="fas fa-edit"></i></button>
+                        <button onClick={() => handleOpenModal(u)} className="text-amber-500 hover:text-amber-700 transition"><i className="fas fa-edit"></i></button>
+                        <button onClick={() => handleDeleteUser(u.id)} className="text-rose-500 hover:text-rose-700 transition" disabled={u.username === 'admin'}><i className="fas fa-trash-alt"></i></button>
                       </div>
                     </td>
                   </tr>
@@ -217,6 +232,8 @@ const UserManagement: React.FC<UserManagementProps> = ({ usersOverride }) => {
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm">
           <div className="bg-white w-full max-w-xl rounded-3xl p-8 animate-fadeIn max-h-[90vh] overflow-y-auto custom-scrollbar">
             <h3 className="text-xl font-bold mb-1">{editingUser ? 'Edit User Profile' : 'Register User'}</h3>
+            <p className="text-xs text-slate-400 mb-6 uppercase font-bold tracking-widest">Setup access and organizational reporting</p>
+            
             <form onSubmit={handleSubmit} className="space-y-5">
               <div className="grid grid-cols-2 gap-5">
                 <div className="space-y-1">
@@ -230,13 +247,21 @@ const UserManagement: React.FC<UserManagementProps> = ({ usersOverride }) => {
                     </select>
                 </div>
               </div>
+
               <div className="grid grid-cols-2 gap-5">
                 <div className="space-y-1">
                   <label className="text-xs font-bold text-slate-500">Username</label>
                   <input required type="text" className="w-full px-4 py-3 bg-slate-50 border border-slate-100 rounded-xl" value={formData.username} onChange={e => setFormData({...formData, username: e.target.value})} readOnly={!!editingUser} />
                 </div>
                 <div className="space-y-1">
-                    <label className="text-xs font-bold text-slate-500">Role</label>
+                  <label className="text-xs font-bold text-slate-500">Password {editingUser && '(Leave blank for no change)'}</label>
+                  <input type="password" required={!editingUser} className="w-full px-4 py-3 bg-slate-50 border border-slate-100 rounded-xl" value={formData.password} onChange={e => setFormData({...formData, password: e.target.value})} />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-5">
+                <div className="space-y-1">
+                    <label className="text-xs font-bold text-slate-500">System Role</label>
                     <select className="w-full px-4 py-3 bg-slate-50 border border-slate-100 rounded-xl font-bold" value={formData.role} onChange={e => setFormData({...formData, role: e.target.value as any})}>
                         <option value={UserRole.STAFF}>STAFF</option>
                         <option value={UserRole.TEAM_LEAD}>TEAM LEAD</option>
@@ -244,7 +269,36 @@ const UserManagement: React.FC<UserManagementProps> = ({ usersOverride }) => {
                         <option value={UserRole.ADMIN}>ADMIN</option>
                     </select>
                 </div>
+                <div className="space-y-1">
+                  <label className="text-xs font-bold text-slate-500">Shift Start Time</label>
+                  <input required type="time" className="w-full px-4 py-3 bg-slate-50 border border-slate-100 rounded-xl font-bold" value={formData.shift_start_time} onChange={e => setFormData({...formData, shift_start_time: e.target.value})} />
+                </div>
               </div>
+
+              <div className="bg-indigo-50/50 p-6 rounded-2xl border border-indigo-100 space-y-4">
+                 <p className="text-[10px] font-bold text-indigo-400 uppercase tracking-widest mb-1">Hierarchy Assignment</p>
+                 <div className="grid grid-cols-2 gap-4">
+                    <div className="space-y-1">
+                        <label className="text-[10px] font-bold text-slate-500 uppercase">Reporting Team Lead</label>
+                        <select className="w-full px-4 py-3 bg-white border border-slate-200 rounded-xl text-xs font-bold" value={formData.team_lead_id} onChange={e => setFormData({...formData, team_lead_id: e.target.value})}>
+                            <option value="">No Team Lead</option>
+                            {teamLeads.filter(tl => tl.id !== editingUser?.id).map(tl => (
+                              <option key={tl.id} value={tl.id}>{tl.full_name}</option>
+                            ))}
+                        </select>
+                    </div>
+                    <div className="space-y-1">
+                        <label className="text-[10px] font-bold text-slate-500 uppercase">Department Manager</label>
+                        <select className="w-full px-4 py-3 bg-white border border-slate-200 rounded-xl text-xs font-bold" value={formData.manager_id} onChange={e => setFormData({...formData, manager_id: e.target.value})}>
+                            <option value="">No Manager</option>
+                            {managers.filter(m => m.id !== editingUser?.id).map(m => (
+                              <option key={m.id} value={m.id}>{m.full_name}</option>
+                            ))}
+                        </select>
+                    </div>
+                 </div>
+              </div>
+
               <div className="flex gap-4 pt-4">
                 <button type="button" onClick={() => setIsModalOpen(false)} className="flex-1 py-4 bg-slate-100 text-slate-600 rounded-2xl font-bold">Cancel</button>
                 <button type="submit" className="flex-1 py-4 bg-indigo-600 text-white rounded-2xl font-bold">Save Changes</button>

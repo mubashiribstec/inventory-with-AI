@@ -1,26 +1,47 @@
 
-import React from 'react';
-import { UserRole } from '../types.ts';
+import React, { useState, useEffect } from 'react';
+import { UserRole, Notification } from '../types.ts';
+import { apiService } from '../api.ts';
 
 interface SidebarProps {
   userRole: UserRole;
-  activeTab: 'dashboard' | 'inventory' | 'maintenance' | 'suppliers' | 'locations' | 'licenses' | 'categories' | 'employees' | 'departments' | 'purchase-history' | 'requests' | 'faulty-reports' | 'budgets' | 'audit-trail' | 'system-logs' | 'attendance' | 'leaves' | 'user-mgmt' | 'role-mgmt';
+  activeTab: 'dashboard' | 'inventory' | 'maintenance' | 'suppliers' | 'locations' | 'licenses' | 'categories' | 'employees' | 'departments' | 'purchase-history' | 'requests' | 'faulty-reports' | 'budgets' | 'audit-trail' | 'system-logs' | 'attendance' | 'leaves' | 'user-mgmt' | 'role-mgmt' | 'notifications';
   setActiveTab: (tab: any) => void;
   onLogout: () => void;
 }
 
 const Sidebar: React.FC<SidebarProps> = ({ userRole, activeTab, setActiveTab, onLogout }) => {
+  const [unreadCount, setUnreadCount] = useState(0);
+
   const isAdmin = userRole === UserRole.ADMIN;
   const isManager = userRole === UserRole.MANAGER || isAdmin;
   const isHR = userRole === UserRole.HR || isManager;
   const isTeamLead = userRole === UserRole.TEAM_LEAD || isHR;
   const isStaff = userRole === UserRole.STAFF;
 
+  const fetchUnread = async () => {
+    try {
+      const userStr = localStorage.getItem('smartstock_user');
+      if (userStr) {
+        const user = JSON.parse(userStr);
+        const all = await apiService.getNotifications(user.id);
+        setUnreadCount(all.filter(n => !n.is_read).length);
+      }
+    } catch (e) { console.error(e); }
+  };
+
+  useEffect(() => {
+    fetchUnread();
+    const interval = setInterval(fetchUnread, 30000); // Poll every 30s
+    return () => clearInterval(interval);
+  }, []);
+
   const navGroups = [
     {
       title: 'Human Resources',
       items: [
         { id: 'attendance', icon: 'fa-user-clock', label: 'Attendance Hub' },
+        { id: 'notifications', icon: 'fa-bell', label: 'Alerts & Activity', badge: unreadCount },
         { id: 'leaves', icon: 'fa-calendar-alt', label: 'Leave Requests' },
         { id: 'employees', icon: 'fa-users', label: 'Staff Directory', hide: isStaff && !isTeamLead },
         { id: 'departments', icon: 'fa-building', label: 'Departments', hide: !isHR },
@@ -87,14 +108,21 @@ const Sidebar: React.FC<SidebarProps> = ({ userRole, activeTab, setActiveTab, on
                   <button
                     key={item.id}
                     onClick={() => setActiveTab(item.id)}
-                    className={`w-full flex items-center gap-3 px-4 py-2.5 rounded-xl transition-all duration-200 group ${
+                    className={`w-full flex items-center justify-between px-4 py-2.5 rounded-xl transition-all duration-200 group ${
                       activeTab === item.id 
                         ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-100' 
                         : 'text-slate-500 hover:bg-slate-50'
                     }`}
                   >
-                    <i className={`fas ${item.icon} w-5 text-center ${activeTab === item.id ? 'text-white' : 'text-slate-400 group-hover:text-indigo-600'}`}></i>
-                    <span className="font-medium text-sm">{item.label}</span>
+                    <div className="flex items-center gap-3">
+                      <i className={`fas ${item.icon} w-5 text-center ${activeTab === item.id ? 'text-white' : 'text-slate-400 group-hover:text-indigo-600'}`}></i>
+                      <span className="font-medium text-sm">{item.label}</span>
+                    </div>
+                    {item.badge !== undefined && item.badge > 0 && (
+                      <span className={`px-1.5 py-0.5 rounded-full text-[10px] font-bold ${activeTab === item.id ? 'bg-white text-indigo-600' : 'bg-rose-500 text-white'}`}>
+                        {item.badge}
+                      </span>
+                    )}
                   </button>
                 ))}
               </div>

@@ -75,7 +75,9 @@ app.post('/api/init-db', async (req, res) => {
         label VARCHAR(100),
         description TEXT,
         permissions TEXT,
-        color VARCHAR(20)
+        color VARCHAR(20),
+        icon VARCHAR(50) DEFAULT 'fa-shield-alt',
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
       )`,
       `CREATE TABLE IF NOT EXISTS users (
         id VARCHAR(50) PRIMARY KEY,
@@ -88,7 +90,15 @@ app.post('/api/init-db', async (req, res) => {
         team_lead_id VARCHAR(50),
         manager_id VARCHAR(50)
       )`,
-      `ALTER TABLE users ADD COLUMN IF NOT EXISTS department VARCHAR(100) DEFAULT 'Unassigned'`,
+      `CREATE TABLE IF NOT EXISTS notifications (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        recipient_id VARCHAR(50) NOT NULL,
+        sender_name VARCHAR(100),
+        message TEXT,
+        type VARCHAR(50),
+        is_read BOOLEAN DEFAULT FALSE,
+        timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      )`,
       `CREATE TABLE IF NOT EXISTS user_logs (
         id INT AUTO_INCREMENT PRIMARY KEY,
         user_id VARCHAR(50),
@@ -211,27 +221,58 @@ app.post('/api/init-db', async (req, res) => {
       await conn.query(query);
     }
 
-    // Default Roles
+    // Default Roles with advanced permissions
     const roles = [
-      ['ADMIN', 'Administrator', 'Full system access and sensitive audit logs.', 'DB Control, User Management, Financial Access, Inventory Control, HR Management', 'rose'],
-      ['MANAGER', 'Operations Manager', 'Strategic oversight of assets, budgets, and staff of own department.', 'Inventory Management, Budget Analysis, Staff Directory, Audit Logs', 'amber'],
-      ['HR', 'HR Specialist', 'Focused on human capital. Manages attendance, leaves, and staff records.', 'Attendance Control, Leave Approval, Staff Directory, Department Config', 'emerald'],
-      ['TEAM_LEAD', 'Team Lead', 'Oversight of operational continuity for assigned staff.', 'Attendance View, Asset Requests, Team Directory', 'indigo'],
-      ['STAFF', 'General Staff', 'Standard users interacting with their own assignments.', 'Self Attendance, Asset Requests, Personal Profile', 'slate']
+      ['ADMIN', 'Administrator', 'Full system access and security policy controls.', 'inventory.view,inventory.edit,inventory.procure,hr.view,hr.attendance,hr.leaves,hr.users,analytics.view,analytics.financials,analytics.logs,system.roles,system.db', 'rose', 'fa-user-crown'],
+      ['MANAGER', 'Operations Manager', 'Departmental oversight of assets and operational logs.', 'inventory.view,inventory.edit,hr.view,hr.leaves,analytics.view,analytics.financials', 'amber', 'fa-briefcase'],
+      ['HR', 'HR Specialist', 'Manages lifecycle of staff, attendance, and leave compliance.', 'hr.view,hr.attendance,hr.leaves,analytics.view', 'emerald', 'fa-users-cog'],
+      ['TEAM_LEAD', 'Team Lead', 'Oversight of tactical continuity for assigned team members.', 'inventory.view,hr.view,hr.attendance,analytics.view', 'indigo', 'fa-user-tie'],
+      ['STAFF', 'Standard Employee', 'Personal asset tracking and basic requests.', 'inventory.view', 'slate', 'fa-user']
     ];
 
     for (const r of roles) {
-      await conn.query("REPLACE INTO roles (id, label, description, permissions, color) VALUES (?, ?, ?, ?, ?)", r);
+      await conn.query("REPLACE INTO roles (id, label, description, permissions, color, icon) VALUES (?, ?, ?, ?, ?, ?)", r);
     }
 
     await conn.query("REPLACE INTO users (id, username, password, role, full_name, shift_start_time, department) VALUES ('U-001', 'admin', 'admin123', 'ADMIN', 'System Administrator', '09:00', 'IT Infrastructure')");
 
-    sendJSON(res, { success: true, message: 'Database initialized with roles and hierarchy support.' });
+    sendJSON(res, { success: true, message: 'Database initialized with advanced role controls.' });
   } catch (err) {
     sendJSON(res, { error: err.message }, 500);
   } finally {
     if (conn) conn.release();
   }
+});
+
+// Specific routes for Notifications
+app.get('/api/notifications/:userId', async (req, res) => {
+  let conn;
+  try {
+    conn = await pool.getConnection();
+    const { userId } = req.params;
+    // Admins see all for oversight
+    let rows;
+    if (userId === 'ADMIN' || userId.startsWith('U-001')) {
+      rows = await conn.query('SELECT * FROM notifications ORDER BY timestamp DESC LIMIT 50');
+    } else {
+      rows = await conn.query('SELECT * FROM notifications WHERE recipient_id = ? ORDER BY timestamp DESC LIMIT 50', [userId]);
+    }
+    sendJSON(res, Array.from(rows));
+  } catch (err) { sendJSON(res, { error: err.message }, 500); }
+  finally { if (conn) conn.release(); }
+});
+
+app.post('/api/notifications/read', async (req, res) => {
+  let conn;
+  try {
+    conn = await pool.getConnection();
+    const { ids } = req.body;
+    if (ids && ids.length > 0) {
+      await conn.query('UPDATE notifications SET is_read = TRUE WHERE id IN (?)', [ids]);
+    }
+    sendJSON(res, { success: true });
+  } catch (err) { sendJSON(res, { error: err.message }, 500); }
+  finally { if (conn) conn.release(); }
 });
 
 const handleCRUD = (tableName) => {
@@ -289,7 +330,7 @@ const handleCRUD = (tableName) => {
   });
 };
 
-const modules = ['items', 'movements', 'suppliers', 'locations', 'maintenance_logs', 'categories', 'employees', 'departments', 'licenses', 'requests', 'attendance', 'users', 'leave_requests', 'roles'];
+const modules = ['items', 'movements', 'suppliers', 'locations', 'maintenance_logs', 'categories', 'employees', 'departments', 'licenses', 'requests', 'attendance', 'users', 'leave_requests', 'roles', 'notifications'];
 modules.forEach(handleCRUD);
 
 const staticPath = path.join(__dirname, 'dist');

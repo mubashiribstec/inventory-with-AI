@@ -18,11 +18,46 @@ export enum UserRole {
 }
 
 export interface Role {
-  id: string; // Maps to UserRole enum values
+  id: string; // Maps to UserRole enum values or custom strings
   label: string;
   description: string;
-  permissions: string; // Comma separated tags
+  permissions: string; // Comma separated tags (e.g., "inventory.view,inventory.edit")
   color: string;
+  icon?: string;
+  updated_at?: string;
+}
+
+export const PERMISSION_GROUPS = {
+  INVENTORY: [
+    { key: 'inventory.view', label: 'View Assets', desc: 'Read-only access to hardware registry' },
+    { key: 'inventory.edit', label: 'Modify Assets', desc: 'Edit details, transfer or delete assets' },
+    { key: 'inventory.procure', label: 'Procurement', desc: 'Create new purchase records' },
+  ],
+  HR: [
+    { key: 'hr.view', label: 'View Staff', desc: 'Access to staff directory and hierarchy' },
+    { key: 'hr.attendance', label: 'Manage Attendance', desc: 'Edit or delete attendance logs' },
+    { key: 'hr.leaves', label: 'Approve Leaves', desc: 'Approve or reject leave applications' },
+    { key: 'hr.users', label: 'Manage Accounts', desc: 'Create and configure user credentials' },
+  ],
+  ANALYTICS: [
+    { key: 'analytics.view', label: 'View Dashboards', desc: 'Access to high-level metric summaries' },
+    { key: 'analytics.financials', label: 'Budget Tracking', desc: 'View departmental budget spending' },
+    { key: 'analytics.logs', label: 'System Audit', desc: 'Read-only access to system activity logs' },
+  ],
+  SYSTEM: [
+    { key: 'system.roles', label: 'Role Configuration', desc: 'Modify permissions for all system roles' },
+    { key: 'system.db', label: 'Database Control', desc: 'Initialize or wipe system datasets' },
+  ]
+};
+
+export interface Notification {
+  id: number;
+  recipient_id: string;
+  sender_name: string;
+  message: string;
+  type: 'ATTENDANCE' | 'SYSTEM' | 'LEAVE' | 'REQUEST';
+  is_read: boolean;
+  timestamp: string;
 }
 
 export interface User {

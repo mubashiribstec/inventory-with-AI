@@ -1,5 +1,5 @@
 
-import { InventoryItem, Movement, Supplier, LocationRecord, MaintenanceLog, License, Category, Employee, Department, AssetRequest, User, UserLog, AttendanceRecord, LeaveRequest, Role } from './types.ts';
+import { InventoryItem, Movement, Supplier, LocationRecord, MaintenanceLog, License, Category, Employee, Department, AssetRequest, User, UserLog, AttendanceRecord, LeaveRequest, Role, Notification } from './types.ts';
 import { dbService } from './db.ts';
 
 const BASE_URL = '/api';
@@ -113,5 +113,19 @@ export const apiService = {
   async deleteUser(id: string): Promise<void> { return this.genericDelete('users', id); },
 
   // Added getRoles to expose the roles endpoint properly and resolve missing property errors
-  async getRoles(): Promise<Role[]> { return handleRequest<Role[]>(`${BASE_URL}/roles`); }
+  async getRoles(): Promise<Role[]> { return handleRequest<Role[]>(`${BASE_URL}/roles`); },
+
+  // Notifications
+  async getNotifications(userId: string): Promise<Notification[]> {
+    return handleRequest<Notification[]>(`${BASE_URL}/notifications/${userId}`);
+  },
+  async markNotificationsAsRead(ids: number[]): Promise<void> {
+    return handleRequest<void>(`${BASE_URL}/notifications/read`, {
+      method: 'POST',
+      body: JSON.stringify({ ids })
+    });
+  },
+  async createNotification(notification: Partial<Notification>): Promise<void> {
+    return this.genericSave('notifications', notification);
+  }
 };

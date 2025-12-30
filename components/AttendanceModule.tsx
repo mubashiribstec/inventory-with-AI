@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect } from 'react';
-import { AttendanceRecord, User, UserRole } from '../types.ts';
+import { AttendanceRecord, User, UserRole, Notification } from '../types.ts';
 import { apiService } from '../api.ts';
 
 interface AttendanceModuleProps {
@@ -68,6 +68,31 @@ const AttendanceModule: React.FC<AttendanceModuleProps> = ({ currentUser }) => {
     fetchRecords();
   }, [currentUser.id]);
 
+  const sendHierarchyNotifications = async (action: 'CHECKED IN' | 'CHECKED OUT') => {
+    const recipients = [];
+    
+    // Logic: 
+    // Staff -> TL & Manager
+    // Team Lead -> Manager
+    
+    if (currentUser.role === UserRole.STAFF) {
+      if (currentUser.team_lead_id) recipients.push(currentUser.team_lead_id);
+      if (currentUser.manager_id) recipients.push(currentUser.manager_id);
+    } else if (currentUser.role === UserRole.TEAM_LEAD) {
+      if (currentUser.manager_id) recipients.push(currentUser.manager_id);
+    }
+
+    const promises = recipients.map(rid => apiService.createNotification({
+      recipient_id: rid,
+      sender_name: currentUser.full_name,
+      message: `${currentUser.full_name} has successfully ${action.toLowerCase()} for their shift.`,
+      type: 'ATTENDANCE',
+      is_read: false
+    }));
+
+    await Promise.all(promises);
+  };
+
   const handleCheckIn = async () => {
     const now = new Date();
     const checkInTime = formatDateTimeForSQL(now);
@@ -83,8 +108,6 @@ const AttendanceModule: React.FC<AttendanceModuleProps> = ({ currentUser }) => {
     const currentMinutes = now.getHours() * 60 + now.getMinutes();
     
     // Employee is LATE only if check-in is > 30 minutes after shift start
-    // Note: If this is a SECOND shift (extra hours), LATE might not apply, 
-    // but we keep the logic consistent with organizational rules.
     const isLate = currentMinutes > (shiftMinutes + 30);
     
     const record: AttendanceRecord = {
@@ -100,6 +123,7 @@ const AttendanceModule: React.FC<AttendanceModuleProps> = ({ currentUser }) => {
 
     try {
       await apiService.saveAttendance(record);
+      await sendHierarchyNotifications('CHECKED IN');
       fetchRecords();
     } catch (err) {
       alert("Error checking in: " + err);
@@ -150,6 +174,7 @@ const AttendanceModule: React.FC<AttendanceModuleProps> = ({ currentUser }) => {
 
       try {
         await apiService.saveAttendance(record);
+        await sendHierarchyNotifications('CHECKED OUT');
         fetchRecords();
       } catch (err) {
         alert("Error checking out: " + err);
