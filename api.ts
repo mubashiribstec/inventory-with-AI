@@ -1,5 +1,5 @@
 
-import { InventoryItem, Movement, Supplier, LocationRecord, MaintenanceLog, License, Category, Employee, Department, AssetRequest, User, UserLog, AttendanceRecord, LeaveRequest } from './types.ts';
+import { InventoryItem, Movement, Supplier, LocationRecord, MaintenanceLog, License, Category, Employee, Department, AssetRequest, User, UserLog, AttendanceRecord, LeaveRequest, Role } from './types.ts';
 import { dbService } from './db.ts';
 
 const BASE_URL = '/api';
@@ -110,5 +110,8 @@ export const apiService = {
 
   async getUsers(): Promise<User[]> { return handleRequest<User[]>(`${BASE_URL}/users`); },
   async saveUser(user: User): Promise<void> { return this.genericSave('users', user); },
-  async deleteUser(id: string): Promise<void> { return this.genericDelete('users', id); }
+  async deleteUser(id: string): Promise<void> { return this.genericDelete('users', id); },
+
+  // Added getRoles to expose the roles endpoint properly and resolve missing property errors
+  async getRoles(): Promise<Role[]> { return handleRequest<Role[]>(`${BASE_URL}/roles`); }
 };

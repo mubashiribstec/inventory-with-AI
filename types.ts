@@ -17,14 +17,23 @@ export enum UserRole {
   STAFF = 'STAFF'
 }
 
+export interface Role {
+  id: string; // Maps to UserRole enum values
+  label: string;
+  description: string;
+  permissions: string; // Comma separated tags
+  color: string;
+}
+
 export interface User {
   id: string;
   username: string;
   password?: string;
   role: UserRole;
   full_name: string;
+  department: string;
   avatar?: string;
-  shift_start_time?: string; // Format: HH:mm
+  shift_start_time?: string; 
   team_lead_id?: string;
   manager_id?: string;
 }

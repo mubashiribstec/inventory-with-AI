@@ -1,5 +1,5 @@
 
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import Sidebar from './components/Sidebar.tsx';
 import Dashboard from './components/Dashboard.tsx';
 import InventoryTable from './components/InventoryTable.tsx';
@@ -61,26 +61,19 @@ const App: React.FC = () => {
   const [viewingEmployee, setViewingEmployee] = useState<Employee | null>(null);
   const [viewingBudgetBreakdown, setViewingBudgetBreakdown] = useState<Department | null>(null);
 
-  // Load session from localStorage
   useEffect(() => {
     const savedUserString = localStorage.getItem('smartstock_user');
     if (savedUserString) {
       const savedUser = JSON.parse(savedUserString);
       setCurrentUser(savedUser);
-      if (savedUser.role === UserRole.STAFF) {
-        setActiveTab('attendance');
-      }
+      if (savedUser.role === UserRole.STAFF) setActiveTab('attendance');
     }
   }, []);
 
   const handleLogin = (user: User) => {
     setCurrentUser(user);
     localStorage.setItem('smartstock_user', JSON.stringify(user));
-    if (user.role === UserRole.STAFF) {
-      setActiveTab('attendance');
-    } else {
-      setActiveTab('dashboard');
-    }
+    setActiveTab(user.role === UserRole.STAFF ? 'attendance' : 'dashboard');
   };
 
   const handleLogout = () => {
@@ -121,7 +114,13 @@ const App: React.FC = () => {
 
       const rawDepts = fDepts || [];
       const enrichedDepts = rawDepts.map(dept => {
-        const spent = (fItems || []).filter(item => item.department === dept.name).reduce((acc, item) => acc + (Number(item.cost) || 0), 0);
+        const spent = (fItems || []).filter(item => {
+            if (!item.department) return false;
+            const itemDept = item.department.trim().toLowerCase();
+            const targetDept = dept.name.trim().toLowerCase();
+            return itemDept === targetDept || (targetDept === 'human resources' && itemDept === 'hr');
+        }).reduce((acc, item) => acc + (Number(item.cost) || 0), 0);
+        
         const budget = Number(dept.budget) || 0;
         const utilization = budget > 0 ? (spent / budget) * 100 : 0;
         return { ...dept, spent, remaining: budget - spent, utilization, budget_status: utilization > 100 ? 'OVER BUDGET' : utilization > 85 ? 'NEAR LIMIT' : 'ON TRACK' };
@@ -132,17 +131,47 @@ const App: React.FC = () => {
         const logs = await apiService.getSystemLogs();
         setSystemLogs(logs);
       }
-
-    } catch (err) {
-      console.error("Fetch data error", err);
-    } finally {
-      setLoading(false);
-    }
+    } catch (err) { console.error("Fetch error", err); }
+    finally { setLoading(false); }
   }, [currentUser]);
 
-  useEffect(() => {
-    if (currentUser) fetchData();
-  }, [currentUser, fetchData]);
+  useEffect(() => { if (currentUser) fetchData(); }, [currentUser, fetchData]);
+
+  // HIERARCHY FILTERING LOGIC
+  const visibleUsers = useMemo(() => {
+    if (!currentUser) return [];
+    if (currentUser.role === UserRole.ADMIN || currentUser.role === UserRole.HR) return users;
+    if (currentUser.role === UserRole.MANAGER) {
+      return users.filter(u => u.department === currentUser.department);
+    }
+    if (currentUser.role === UserRole.TEAM_LEAD) {
+      return users.filter(u => u.team_lead_id === currentUser.id);
+    }
+    return users.filter(u => u.id === currentUser.id);
+  }, [users, currentUser]);
+
+  const visibleEmployees = useMemo(() => {
+    if (!currentUser) return [];
+    if (currentUser.role === UserRole.ADMIN || currentUser.role === UserRole.HR) return employees;
+    if (currentUser.role === UserRole.MANAGER) {
+      return employees.filter(e => e.department === currentUser.department);
+    }
+    if (currentUser.role === UserRole.TEAM_LEAD) {
+      return employees.filter(e => e.team_lead_id === currentUser.id);
+    }
+    return [];
+  }, [employees, currentUser]);
+
+  const stats = {
+    purchased: items.length,
+    assigned: items.filter(i => i.status === ItemStatus.ASSIGNED).length,
+    inUse: items.filter(i => i.status === ItemStatus.IN_USE).length,
+    backup: items.filter(i => i.status === ItemStatus.BACKUP).length,
+    faulty: items.filter(i => i.status === ItemStatus.FAULTY).length,
+    available: items.filter(i => i.status === ItemStatus.AVAILABLE).length,
+    licenses_total: licenses.length,
+    expiring_soon: 0
+  };
 
   const handleInitDB = async () => {
     setSyncing(true);
@@ -176,62 +205,6 @@ const App: React.FC = () => {
     } catch (err) { alert(err); }
   };
 
-  const isStaff = currentUser?.role === UserRole.STAFF;
-  const canEdit = currentUser?.role !== UserRole.STAFF;
-  const isAdmin = currentUser?.role === UserRole.ADMIN;
-  const isManager = currentUser?.role === UserRole.MANAGER || isAdmin;
-  const isHR = currentUser?.role === UserRole.HR || isManager;
-  const isTeamLead = currentUser?.role === UserRole.TEAM_LEAD || isHR;
-
-  const renderContent = () => {
-    if (!currentUser) return null;
-    
-    switch (activeTab) {
-      case 'dashboard': return isStaff ? null : <Dashboard stats={stats} movements={movements} items={items} onFullAudit={() => setActiveTab('audit-trail')} onCheckIn={() => setActiveTab('attendance')} />;
-      case 'attendance': return <AttendanceModule currentUser={currentUser} />;
-      case 'leaves': return <LeaveModule currentUser={currentUser} />;
-      case 'user-mgmt': return isManager ? <UserManagement /> : null;
-      case 'role-mgmt': return isAdmin ? <RoleManagement /> : null;
-      case 'inventory': return isStaff ? null : <InventoryTable items={items} onUpdate={fetchData} onEdit={canEdit ? setEditingItem : undefined} onView={setViewingItem} />;
-      case 'maintenance': return isStaff ? null : <MaintenanceList logs={maintenance} items={items} onUpdate={fetchData} onAdd={() => setIsMaintenanceModalOpen(true)} />;
-      case 'suppliers': return isStaff ? null : <SupplierList suppliers={suppliers} />;
-      case 'licenses': return isStaff ? null : <LicenseList licenses={licenses} suppliers={suppliers} onUpdate={fetchData} onAdd={canEdit ? () => setIsLicenseModalOpen(true) : undefined} />;
-      case 'categories': return isStaff ? null : <GenericListView title="Asset Categories" icon="fa-tags" items={categories} columns={['id', 'name', 'itemCount']} onAdd={canEdit ? () => setManagementModal({ isOpen: true, type: 'Category' }) : undefined} onDelete={canEdit ? (item) => handleManagementDelete(item, 'Category') : undefined} />;
-      case 'employees': return isStaff && !isTeamLead ? null : <GenericListView title="Staff Directory" icon="fa-users" items={employees} columns={['id', 'name', 'email', 'department', 'role']} onAdd={isAdmin ? () => setManagementModal({ isOpen: true, type: 'Employee' }) : undefined} onDelete={isAdmin ? (item) => handleManagementDelete(item, 'Employee') : undefined} onView={(emp) => setViewingEmployee(emp)} />;
-      case 'departments': return isHR ? <GenericListView title="Departmental Overview" icon="fa-building" items={departments} columns={['id', 'name', 'budget_month', 'head', 'spent', 'budget']} onAdd={isAdmin ? () => setManagementModal({ isOpen: true, type: 'Department' }) : undefined} onDelete={isAdmin ? (item) => handleManagementDelete(item, 'Department') : undefined} /> : null;
-      case 'purchase-history': return isStaff ? null : <GenericListView title="Procurement History" icon="fa-history" items={movements.filter(m => m.status === 'PURCHASED')} columns={['date', 'item', 'from', 'to']} onAdd={canEdit ? () => setIsPurchaseModalOpen(true) : undefined} onEdit={canEdit ? handleEditPurchase : undefined} onDelete={isAdmin ? (m) => handleManagementDelete(m, 'Movement') : undefined} />;
-      case 'requests': 
-        const staffRequests = isStaff ? requests.filter(r => r.employee === currentUser.full_name) : requests;
-        return <GenericListView 
-          title="Employee Asset Requests" 
-          icon="fa-clipboard-list" 
-          items={staffRequests} 
-          columns={['item', 'employee', 'urgency', 'status', 'request_date']} 
-          onAdd={() => setIsRequestModalOpen(true)} 
-          onDelete={canEdit ? (item) => handleManagementDelete(item, 'Request') : undefined} 
-          onView={(item) => alert(item.notes)} 
-        />;
-      case 'faulty-reports': return isStaff ? null : <GenericListView title="Faulty Reports" icon="fa-exclamation-circle" items={maintenance} columns={['item_id', 'issue_type', 'description', 'status']} onAdd={() => setIsMaintenanceModalOpen(true)} onView={() => !isStaff && setActiveTab('maintenance')} />;
-      case 'budgets': return isManager ? <GenericListView title="Budget Tracker" icon="fa-wallet" items={departments} columns={['name', 'budget_month', 'budget', 'spent', 'remaining', 'utilization', 'budget_status']} onAdd={isAdmin ? () => setManagementModal({ isOpen: true, type: 'Department' }) : undefined} onView={(dept) => setViewingBudgetBreakdown(dept)} /> : null;
-      case 'audit-trail': return isStaff ? null : <GenericListView title="Movement Ledger" icon="fa-history" items={movements} columns={['date', 'item', 'from', 'to', 'employee', 'department', 'status']} onDelete={isAdmin ? (item) => handleManagementDelete(item, 'Movement') : undefined} />;
-      case 'system-logs': return isAdmin ? <GenericListView title="System Audit Logs" icon="fa-shield-alt" items={systemLogs} columns={['timestamp', 'username', 'action', 'target_type', 'target_id', 'details']} /> : null;
-      default: return isStaff ? <AttendanceModule currentUser={currentUser} /> : <Dashboard stats={stats} movements={movements} items={items} onFullAudit={() => setActiveTab('audit-trail')} onCheckIn={() => setActiveTab('attendance')} />;
-    }
-  };
-
-  if (!currentUser) return <Login onLogin={handleLogin} />;
-
-  const stats = {
-    purchased: items.length,
-    assigned: items.filter(i => i.status === ItemStatus.ASSIGNED).length,
-    inUse: items.filter(i => i.status === ItemStatus.IN_USE).length,
-    backup: items.filter(i => i.status === ItemStatus.BACKUP).length,
-    faulty: items.filter(i => i.status === ItemStatus.FAULTY).length,
-    available: items.filter(i => i.status === ItemStatus.AVAILABLE).length,
-    licenses_total: licenses.length,
-    expiring_soon: 0
-  };
-
   const handleManagementDelete = async (item, type) => {
     if (window.confirm(`Permanently delete this ${type}?`)) {
       try {
@@ -245,12 +218,6 @@ const App: React.FC = () => {
     }
   };
 
-  const handleEditPurchase = (movement) => {
-    const asset = items.find(i => i.name === movement.item);
-    if (asset) setEditingItem(asset);
-    else alert("Record not found");
-  };
-
   const handleManagementSubmit = async (data: any) => {
     try {
       if (managementModal.type === 'Category') await apiService.saveCategory(data);
@@ -261,134 +228,81 @@ const App: React.FC = () => {
     } catch (err) { alert(err); }
   };
 
-  const handleMaintenanceSubmit = async (log: any) => {
-    try {
-      await apiService.saveMaintenance(log);
-      setIsMaintenanceModalOpen(false);
-      fetchData();
-    } catch (err) { alert(err); }
+  const isStaff = currentUser?.role === UserRole.STAFF;
+  const isAdmin = currentUser?.role === UserRole.ADMIN;
+  const isHR = currentUser?.role === UserRole.HR || isAdmin;
+  const isManager = currentUser?.role === UserRole.MANAGER || isAdmin;
+  const isTeamLead = currentUser?.role === UserRole.TEAM_LEAD;
+
+  const renderContent = () => {
+    if (!currentUser) return null;
+    
+    switch (activeTab) {
+      case 'dashboard': return isStaff ? null : <Dashboard stats={stats} movements={movements} items={items} onFullAudit={() => setActiveTab('audit-trail')} onCheckIn={() => setActiveTab('attendance')} />;
+      case 'attendance': return <AttendanceModule currentUser={currentUser} />;
+      case 'leaves': return <LeaveModule currentUser={currentUser} />;
+      case 'user-mgmt': return isManager ? <UserManagement usersOverride={visibleUsers} /> : null;
+      case 'role-mgmt': return isAdmin ? <RoleManagement /> : null;
+      case 'inventory': return isStaff ? null : <InventoryTable items={items} onUpdate={fetchData} onEdit={isAdmin ? setEditingItem : undefined} onView={setViewingItem} />;
+      case 'maintenance': return isStaff ? null : <MaintenanceList logs={maintenance} items={items} onUpdate={fetchData} onAdd={() => setIsMaintenanceModalOpen(true)} />;
+      case 'suppliers': return isStaff ? null : <SupplierList suppliers={suppliers} />;
+      case 'licenses': return isStaff ? null : <LicenseList licenses={licenses} suppliers={suppliers} onUpdate={fetchData} onAdd={isAdmin ? () => setIsLicenseModalOpen(true) : undefined} />;
+      case 'categories': return isStaff ? null : <GenericListView title="Asset Categories" icon="fa-tags" items={categories} columns={['id', 'name', 'itemCount']} onAdd={isAdmin ? () => setManagementModal({ isOpen: true, type: 'Category' }) : undefined} onDelete={isAdmin ? (item) => handleManagementDelete(item, 'Category') : undefined} />;
+      case 'employees': return isStaff && !isTeamLead ? null : <GenericListView title="Staff Directory" icon="fa-users" items={visibleEmployees} columns={['id', 'name', 'email', 'department', 'role']} onAdd={isAdmin ? () => setManagementModal({ isOpen: true, type: 'Employee' }) : undefined} onDelete={isAdmin ? (item) => handleManagementDelete(item, 'Employee') : undefined} onView={(emp) => setViewingEmployee(emp)} />;
+      case 'departments': return isHR ? <GenericListView title="Departmental Overview" icon="fa-building" items={departments} columns={['id', 'name', 'head', 'spent', 'budget']} onAdd={isAdmin ? () => setManagementModal({ isOpen: true, type: 'Department' }) : undefined} onDelete={isAdmin ? (item) => handleManagementDelete(item, 'Department') : undefined} /> : null;
+      case 'purchase-history': return isStaff ? null : <GenericListView title="Procurement History" icon="fa-history" items={movements.filter(m => m.status === 'PURCHASED')} columns={['date', 'item', 'from', 'to']} onAdd={isAdmin ? () => setIsPurchaseModalOpen(true) : undefined} onDelete={isAdmin ? (m) => handleManagementDelete(m, 'Movement') : undefined} />;
+      case 'requests': return <GenericListView title="Asset Requests" icon="fa-clipboard-list" items={isStaff ? requests.filter(r => r.employee === currentUser.full_name) : requests} columns={['item', 'employee', 'urgency', 'status', 'request_date']} onAdd={() => setIsRequestModalOpen(true)} onDelete={isAdmin ? (item) => handleManagementDelete(item, 'Request') : undefined} onView={(item) => alert(item.notes)} />;
+      case 'faulty-reports': return isStaff ? null : <GenericListView title="Faulty Reports" icon="fa-exclamation-circle" items={maintenance} columns={['item_id', 'issue_type', 'description', 'status']} onAdd={() => setIsMaintenanceModalOpen(true)} onView={() => setActiveTab('maintenance')} />;
+      case 'budgets': return isManager ? <GenericListView title="Budget Tracker" icon="fa-wallet" items={departments} columns={['name', 'budget', 'spent', 'remaining', 'utilization', 'budget_status']} onAdd={isAdmin ? () => setManagementModal({ isOpen: true, type: 'Department' }) : undefined} onView={(dept) => setViewingBudgetBreakdown(dept)} /> : null;
+      case 'audit-trail': return isStaff ? null : <GenericListView title="Movement Ledger" icon="fa-history" items={movements} columns={['date', 'item', 'from', 'to', 'employee', 'department', 'status']} onDelete={isAdmin ? (item) => handleManagementDelete(item, 'Movement') : undefined} />;
+      case 'system-logs': return isAdmin ? <GenericListView title="System Audit Logs" icon="fa-shield-alt" items={systemLogs} columns={['timestamp', 'username', 'action', 'target_type', 'target_id', 'details']} /> : null;
+      default: return isStaff ? <AttendanceModule currentUser={currentUser} /> : <Dashboard stats={stats} movements={movements} items={items} onFullAudit={() => setActiveTab('audit-trail')} onCheckIn={() => setActiveTab('attendance')} />;
+    }
   };
 
-  const handleMaintenanceTicketSubmit = async (log: any) => {
-    try {
-      await apiService.saveMaintenance(log);
-      setIsMaintenanceModalOpen(false);
-      fetchData();
-    } catch (err) { alert(err); }
-  };
-
-  const handleRequestSubmit = async (req: any) => {
-    try {
-      await apiService.saveRequest(req);
-      setIsRequestModalOpen(false);
-      fetchData();
-    } catch (err) { alert(err); }
-  };
+  if (!currentUser) return <Login onLogin={handleLogin} />;
 
   return (
     <div className="flex min-h-screen bg-slate-50">
-      <Sidebar 
-        userRole={currentUser.role}
-        activeTab={activeTab as any} 
-        setActiveTab={setActiveTab as any} 
-        onLogout={handleLogout}
-      />
-      
+      <Sidebar userRole={currentUser.role} activeTab={activeTab as any} setActiveTab={setActiveTab as any} onLogout={handleLogout} />
       <main className={`flex-1 lg:ml-64 p-6 lg:p-10 transition-all duration-300`}>
         <header className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-8">
           <div className="flex items-center gap-4">
-             <div className="w-12 h-12 bg-indigo-50 rounded-2xl flex items-center justify-center text-indigo-600 border border-indigo-100 lg:hidden">
-                <i className="fas fa-bars"></i>
-             </div>
+             <div className="w-12 h-12 bg-indigo-50 rounded-2xl flex items-center justify-center text-indigo-600 border border-indigo-100 lg:hidden"><i className="fas fa-bars"></i></div>
              <div>
                 <h1 className="text-3xl font-bold text-slate-800 capitalize tracking-tight">{activeTab.replace('-', ' ')}</h1>
                 <p className="text-slate-500 mt-1 flex items-center gap-2">
                    <span className="font-bold text-indigo-600">{currentUser.full_name}</span>
                    <span className="px-2 py-0.5 bg-slate-100 text-[10px] rounded-full border border-slate-200 font-bold uppercase">{currentUser.role.replace('_', ' ')}</span>
+                   {currentUser.department && <span className="text-[10px] text-slate-400 font-bold">({currentUser.department})</span>}
                 </p>
              </div>
           </div>
           <div className="flex items-center gap-3">
-            {isAdmin && (
-              <button onClick={handleInitDB} disabled={syncing} className={`px-4 py-2.5 bg-white border border-slate-200 text-slate-700 rounded-xl hover:bg-slate-50 transition font-bold text-sm shadow-sm flex items-center gap-2 ${syncing ? 'opacity-50' : ''}`}>
-                <i className={`fas fa-database ${syncing ? 'animate-spin' : ''}`}></i> Sync & Init
-              </button>
-            )}
-            {canEdit && (
-              <button onClick={() => { setEditingItem(null); setIsPurchaseModalOpen(true); }} className="px-4 py-2.5 bg-indigo-600 text-white rounded-xl hover:bg-indigo-700 transition font-bold text-sm shadow-lg shadow-indigo-100 flex items-center gap-2">
-                <i className="fas fa-plus"></i> New Asset
-              </button>
-            )}
+            {isAdmin && <button onClick={handleInitDB} disabled={syncing} className={`px-4 py-2.5 bg-white border border-slate-200 text-slate-700 rounded-xl hover:bg-slate-50 transition font-bold text-sm shadow-sm flex items-center gap-2 ${syncing ? 'opacity-50' : ''}`}><i className={`fas fa-database ${syncing ? 'animate-spin' : ''}`}></i> Sync & Init</button>}
+            {isAdmin && <button onClick={() => { setEditingItem(null); setIsPurchaseModalOpen(true); }} className="px-4 py-2.5 bg-indigo-600 text-white rounded-xl hover:bg-indigo-700 transition font-bold text-sm shadow-lg shadow-indigo-100 flex items-center gap-2"><i className="fas fa-plus"></i> New Asset</button>}
           </div>
         </header>
-
-        {loading ? (
-           <div className="flex h-64 w-full items-center justify-center">
-              <div className="animate-spin rounded-full h-10 w-10 border-4 border-indigo-600 border-t-transparent"></div>
-           </div>
-        ) : renderContent()}
+        {loading ? <div className="flex h-64 w-full items-center justify-center"><div className="animate-spin rounded-full h-10 w-10 border-4 border-indigo-600 border-t-transparent"></div></div> : renderContent()}
       </main>
-
       {!isStaff && <Chatbot items={items} stats={stats} />}
-
-      {/* Modals */}
-      {isPurchaseModalOpen && canEdit && (
+      {isPurchaseModalOpen && isAdmin && (
         <Modal title="🛒 Procurement" onClose={() => setIsPurchaseModalOpen(false)}>
           <PurchaseForm onSubmit={handleSaveItem} suppliers={suppliers} locations={locations} departments={departments} />
         </Modal>
       )}
-
-      {isMaintenanceModalOpen && (
-        <Modal title="🔧 Maintenance Ticket" onClose={() => setIsMaintenanceModalOpen(false)}>
-          <MaintenanceForm items={items} onSubmit={handleMaintenanceTicketSubmit} />
-        </Modal>
-      )}
-
-      {isAssignModalOpen && canEdit && (
-        <Modal title="👥 Asset Handover" onClose={() => setIsAssignModalOpen(false)}>
-          <AssignmentForm items={items} onSubmit={async (item) => { 
-            await apiService.saveItem(item); 
-            await apiService.saveMovement({ id: `MOV-${Date.now()}`, date: new Date().toISOString().split('T')[0], item: item.name, from: 'Central Store', to: item.assignedTo, employee: item.assignedTo, department: item.department, status: 'ASSIGNED' });
-            setIsAssignModalOpen(false); 
-            fetchData();
-          }} />
-        </Modal>
-      )}
-
-      {isRequestModalOpen && (
-        <Modal title="📝 Asset Request" onClose={() => setIsRequestModalOpen(false)}>
-          <RequestForm employees={employees} departments={departments} categories={categories} onSubmit={handleRequestSubmit} />
-        </Modal>
-      )}
-
       {managementModal.isOpen && (
         <Modal title={`➕ Add ${managementModal.type}`} onClose={() => setManagementModal({ isOpen: false, type: null })}>
           <ManagementForm type={managementModal.type!} onSubmit={handleManagementSubmit} />
         </Modal>
       )}
-
-      {viewingItem && (
-        <Modal title="Asset Profile" onClose={() => setViewingItem(null)}>
-          <ItemDetails item={viewingItem} />
-        </Modal>
-      )}
-
+      {viewingItem && <Modal title="Asset Profile" onClose={() => setViewingItem(null)}><ItemDetails item={viewingItem} /></Modal>}
       {viewingEmployee && (
         <Modal title="Staff Profile" onClose={() => setViewingEmployee(null)}>
-          <EmployeeDetails 
-            employee={viewingEmployee} 
-            items={items} 
-            linkedUser={users.find(u => u.full_name === viewingEmployee.name)}
-            allUsers={users}
-          />
+          <EmployeeDetails employee={viewingEmployee} items={items} linkedUser={users.find(u => u.full_name === viewingEmployee.name)} allUsers={users} />
         </Modal>
       )}
-
-      {viewingBudgetBreakdown && (
-        <Modal title="Financial Analysis" onClose={() => setViewingBudgetBreakdown(null)}>
-          <BudgetBreakdown department={viewingBudgetBreakdown} items={items} />
-        </Modal>
-      )}
+      {viewingBudgetBreakdown && <Modal title="Financial Analysis" onClose={() => setViewingBudgetBreakdown(null)}><BudgetBreakdown department={viewingBudgetBreakdown} items={items} /></Modal>}
     </div>
   );
 };

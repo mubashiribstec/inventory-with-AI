@@ -10,7 +10,6 @@ const port = process.env.PORT || 3000;
 app.use(cors());
 app.use(express.json());
 
-// Connection pool configuration
 const pool = mariadb.createPool({
   host: process.env.DB_HOST || 'localhost',
   user: process.env.DB_USER || 'inventory_user',
@@ -20,7 +19,6 @@ const pool = mariadb.createPool({
   connectTimeout: 15000
 });
 
-// Middleware to enforce JSON content type
 app.use('/api', (req, res, next) => {
   res.setHeader('Content-Type', 'application/json; charset=utf-8');
   next();
@@ -30,7 +28,6 @@ const sendJSON = (res, data, status = 200) => {
   return res.status(status).send(JSON.stringify(data));
 };
 
-// Helper for logging user actions
 async function logAction(userId, username, action, targetType, targetId, details) {
   let conn;
   try {
@@ -47,63 +44,51 @@ async function logAction(userId, username, action, targetType, targetId, details
   }
 }
 
-// --- API Endpoints ---
-
-/**
- * Login
- */
 app.post('/api/login', async (req, res) => {
   const { username, password } = req.body;
   let conn;
   try {
-    console.log(`Login attempt for: ${username}`);
     conn = await pool.getConnection();
     const rows = await conn.query('SELECT * FROM users WHERE username = ? AND password = ?', [username, password]);
-    
     if (rows.length > 0) {
       const user = rows[0];
-      console.log(`Login successful for: ${username} (Role: ${user.role})`);
-      // Do not return password to frontend
       const { password: _, ...userSafe } = user;
       await logAction(user.id, user.username, 'LOGIN', 'USER', user.id, 'User logged in successfully');
       sendJSON(res, userSafe);
     } else {
-      console.log(`Login failed for: ${username} - Invalid credentials`);
       sendJSON(res, { error: 'Invalid credentials' }, 401);
     }
   } catch (err) {
-    console.error('Login Error:', err);
     sendJSON(res, { error: err.message }, 500);
   } finally {
     if (conn) conn.release();
   }
 });
 
-/**
- * Initialize Database Schema
- */
 app.post('/api/init-db', async (req, res) => {
   let conn;
   try {
     conn = await pool.getConnection();
-    console.log('Starting Database Initialization...');
-    
     const queries = [
+      `CREATE TABLE IF NOT EXISTS roles (
+        id VARCHAR(50) PRIMARY KEY,
+        label VARCHAR(100),
+        description TEXT,
+        permissions TEXT,
+        color VARCHAR(20)
+      )`,
       `CREATE TABLE IF NOT EXISTS users (
         id VARCHAR(50) PRIMARY KEY,
         username VARCHAR(50) UNIQUE NOT NULL,
         password VARCHAR(100),
         role VARCHAR(20) NOT NULL,
         full_name VARCHAR(100),
+        department VARCHAR(100) DEFAULT 'Unassigned',
         shift_start_time VARCHAR(5) DEFAULT '09:00',
         team_lead_id VARCHAR(50),
         manager_id VARCHAR(50)
       )`,
-      // Migration: Ensure password can be null for partial updates
-      `ALTER TABLE users MODIFY COLUMN password VARCHAR(100) NULL`,
-      `ALTER TABLE users ADD COLUMN IF NOT EXISTS shift_start_time VARCHAR(5) DEFAULT '09:00'`,
-      `ALTER TABLE users ADD COLUMN IF NOT EXISTS team_lead_id VARCHAR(50)`,
-      `ALTER TABLE users ADD COLUMN IF NOT EXISTS manager_id VARCHAR(50)`,
+      `ALTER TABLE users ADD COLUMN IF NOT EXISTS department VARCHAR(100) DEFAULT 'Unassigned'`,
       `CREATE TABLE IF NOT EXISTS user_logs (
         id INT AUTO_INCREMENT PRIMARY KEY,
         user_id VARCHAR(50),
@@ -173,8 +158,6 @@ app.post('/api/init-db', async (req, res) => {
         team_lead_id VARCHAR(50),
         manager_id VARCHAR(50)
       )`,
-      `ALTER TABLE employees ADD COLUMN IF NOT EXISTS team_lead_id VARCHAR(50)`,
-      `ALTER TABLE employees ADD COLUMN IF NOT EXISTS manager_id VARCHAR(50)`,
       `CREATE TABLE IF NOT EXISTS suppliers (
         id INT AUTO_INCREMENT PRIMARY KEY,
         name VARCHAR(255) NOT NULL,
@@ -228,33 +211,22 @@ app.post('/api/init-db', async (req, res) => {
       await conn.query(query);
     }
 
-    // Seeding default users
-    console.log('Seeding default system users...');
-    await conn.query("REPLACE INTO users (id, username, password, role, full_name, shift_start_time) VALUES ('U-001', 'admin', 'admin123', 'ADMIN', 'System Administrator', '09:00')");
-    await conn.query("REPLACE INTO users (id, username, password, role, full_name, shift_start_time) VALUES ('U-002', 'manager', 'manager123', 'MANAGER', 'Operations Manager', '09:00')");
-    await conn.query("REPLACE INTO users (id, username, password, role, full_name, shift_start_time) VALUES ('U-003', 'staff', 'staff123', 'STAFF', 'Basic Staff', '08:30')");
-    await conn.query("REPLACE INTO users (id, username, password, role, full_name, shift_start_time) VALUES ('U-004', 'hr', 'hr123', 'HR', 'HR Specialist', '09:00')");
-    await conn.query("REPLACE INTO users (id, username, password, role, full_name, shift_start_time) VALUES ('U-005', 'lead', 'lead123', 'TEAM_LEAD', 'Team Lead', '09:00')");
+    // Default Roles
+    const roles = [
+      ['ADMIN', 'Administrator', 'Full system access and sensitive audit logs.', 'DB Control, User Management, Financial Access, Inventory Control, HR Management', 'rose'],
+      ['MANAGER', 'Operations Manager', 'Strategic oversight of assets, budgets, and staff of own department.', 'Inventory Management, Budget Analysis, Staff Directory, Audit Logs', 'amber'],
+      ['HR', 'HR Specialist', 'Focused on human capital. Manages attendance, leaves, and staff records.', 'Attendance Control, Leave Approval, Staff Directory, Department Config', 'emerald'],
+      ['TEAM_LEAD', 'Team Lead', 'Oversight of operational continuity for assigned staff.', 'Attendance View, Asset Requests, Team Directory', 'indigo'],
+      ['STAFF', 'General Staff', 'Standard users interacting with their own assignments.', 'Self Attendance, Asset Requests, Personal Profile', 'slate']
+    ];
 
-    console.log('Database initialization complete.');
-    sendJSON(res, { success: true, message: 'Database successfully initialized. Default accounts are ready.' });
-  } catch (err) {
-    console.error('Init DB Error:', err);
-    sendJSON(res, { error: err.message }, 500);
-  } finally {
-    if (conn) conn.release();
-  }
-});
+    for (const r of roles) {
+      await conn.query("REPLACE INTO roles (id, label, description, permissions, color) VALUES (?, ?, ?, ?, ?)", r);
+    }
 
-/**
- * System Logs API
- */
-app.get('/api/system-logs', async (req, res) => {
-  let conn;
-  try {
-    conn = await pool.getConnection();
-    const rows = await conn.query('SELECT * FROM user_logs ORDER BY timestamp DESC LIMIT 200');
-    sendJSON(res, Array.from(rows));
+    await conn.query("REPLACE INTO users (id, username, password, role, full_name, shift_start_time, department) VALUES ('U-001', 'admin', 'admin123', 'ADMIN', 'System Administrator', '09:00', 'IT Infrastructure')");
+
+    sendJSON(res, { success: true, message: 'Database initialized with roles and hierarchy support.' });
   } catch (err) {
     sendJSON(res, { error: err.message }, 500);
   } finally {
@@ -262,7 +234,6 @@ app.get('/api/system-logs', async (req, res) => {
   }
 });
 
-// Generic CRUD handlers
 const handleCRUD = (tableName) => {
   app.get(`/api/${tableName}`, async (req, res) => {
     let conn;
@@ -277,45 +248,30 @@ const handleCRUD = (tableName) => {
   app.post(`/api/${tableName}`, async (req, res) => {
     const userId = req.headers['x-user-id'] || 'SYSTEM';
     const username = req.headers['x-username'] || 'SYSTEM';
-    
     let conn;
     try {
       conn = await pool.getConnection();
       const keys = Object.keys(req.body);
       const values = Object.values(req.body).map(v => v === '' ? null : v);
-      
       const id = req.body.id;
       let isUpdate = false;
-
-      // For existing IDs, check if record exists to perform a clean UPDATE instead of UPSERT
-      // This solves constraint issues on mandatory fields not included in partial updates (like password)
       if (id) {
         const existing = await conn.query(`SELECT 1 FROM ${tableName} WHERE id = ?`, [id]);
         if (existing.length > 0) isUpdate = true;
       }
-
-      let result;
       if (isUpdate) {
-        // Run a clean partial UPDATE
         const setClause = keys.filter(k => k !== 'id').map(k => `\`${k}\` = ?`).join(', ');
         const updateValues = keys.filter(k => k !== 'id').map(k => req.body[k] === '' ? null : req.body[k]);
         updateValues.push(id);
-        result = await conn.query(`UPDATE ${tableName} SET ${setClause} WHERE id = ?`, updateValues);
+        await conn.query(`UPDATE ${tableName} SET ${setClause} WHERE id = ?`, updateValues);
       } else {
-        // Run a standard INSERT
         const escapedKeys = keys.map(k => `\`${k}\``);
         const placeholders = keys.map(() => '?').join(', ');
-        result = await conn.query(`INSERT INTO ${tableName} (${escapedKeys.join(', ')}) VALUES (${placeholders})`, values);
+        await conn.query(`INSERT INTO ${tableName} (${escapedKeys.join(', ')}) VALUES (${placeholders})`, values);
       }
-      
-      // LOG ACTION
       await logAction(userId, username, isUpdate ? 'UPDATE' : 'CREATE', tableName.toUpperCase(), id || 'NEW', req.body);
-      
-      sendJSON(res, { success: true }, isUpdate ? 200 : 201);
-    } catch (err) { 
-      console.error(`CRUD Error [${tableName}]:`, err);
-      sendJSON(res, { error: err.message }, 500); 
-    }
+      sendJSON(res, { success: true });
+    } catch (err) { sendJSON(res, { error: err.message }, 500); }
     finally { if (conn) conn.release(); }
   });
 
@@ -326,17 +282,14 @@ const handleCRUD = (tableName) => {
     try {
       conn = await pool.getConnection();
       await conn.query(`DELETE FROM ${tableName} WHERE id = ?`, [req.params.id]);
-      
-      // LOG ACTION
       await logAction(userId, username, 'DELETE', tableName.toUpperCase(), req.params.id, { id: req.params.id });
-      
       sendJSON(res, { success: true });
     } catch (err) { sendJSON(res, { error: err.message }, 500); }
     finally { if (conn) conn.release(); }
   });
 };
 
-const modules = ['items', 'movements', 'suppliers', 'locations', 'maintenance_logs', 'categories', 'employees', 'departments', 'licenses', 'requests', 'attendance', 'users', 'leave_requests'];
+const modules = ['items', 'movements', 'suppliers', 'locations', 'maintenance_logs', 'categories', 'employees', 'departments', 'licenses', 'requests', 'attendance', 'users', 'leave_requests', 'roles'];
 modules.forEach(handleCRUD);
 
 const staticPath = path.join(__dirname, 'dist');

@@ -1,45 +1,59 @@
 
-import React from 'react';
-import { UserRole } from '../types.ts';
+import React, { useState, useEffect } from 'react';
+import { UserRole, Role } from '../types.ts';
+import { apiService } from '../api.ts';
 
 const RoleManagement: React.FC = () => {
-  const roles = [
-    {
-      id: UserRole.ADMIN,
-      label: 'Administrator',
-      color: 'rose',
-      desc: 'Full system access, database maintenance, user management, and sensitive audit logs.',
-      permissions: ['DB Control', 'User Management', 'Financial Access', 'Inventory Control', 'HR Management']
-    },
-    {
-      id: UserRole.MANAGER,
-      label: 'Operations Manager',
-      color: 'amber',
-      desc: 'Strategic oversight of assets, budgets, and staff. Can manage most resources but not system settings.',
-      permissions: ['Inventory Management', 'Budget Analysis', 'Staff Directory', 'Audit Logs']
-    },
-    {
-      id: UserRole.HR,
-      label: 'HR / Personnel',
-      color: 'emerald',
-      desc: 'Focused on human capital. Manages attendance, leaves, staff records, and departments.',
-      permissions: ['Attendance Control', 'Leave Approval', 'Staff Directory', 'Department Config']
-    },
-    {
-      id: UserRole.TEAM_LEAD,
-      label: 'Team Lead',
-      color: 'indigo',
-      desc: 'Middle management focused on operational continuity and team resource health.',
-      permissions: ['Attendance View', 'Asset Requests', 'Team Directory']
-    },
-    {
-      id: UserRole.STAFF,
-      label: 'General Staff',
-      color: 'slate',
-      desc: 'Standard users interacting with their own assignments and basic operational tools.',
-      permissions: ['Self Attendance', 'Asset Requests', 'Personal Profile']
+  const [roles, setRoles] = useState<Role[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [editingRole, setEditingRole] = useState<Role | null>(null);
+  const [formData, setFormData] = useState({
+    label: '',
+    description: '',
+    permissions: ''
+  });
+
+  const fetchRoles = async () => {
+    setLoading(true);
+    try {
+      // Fix: Use the exported getRoles method from apiService instead of the internal handleRequest
+      const data = await apiService.getRoles();
+      setRoles(data || []);
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setLoading(false);
     }
-  ];
+  };
+
+  useEffect(() => {
+    fetchRoles();
+  }, []);
+
+  const handleEdit = (role: Role) => {
+    setEditingRole(role);
+    setFormData({
+      label: role.label,
+      description: role.description,
+      permissions: role.permissions
+    });
+  };
+
+  const handleSave = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editingRole) return;
+
+    try {
+      await apiService.genericSave('roles', {
+        ...editingRole,
+        ...formData
+      });
+      setEditingRole(null);
+      fetchRoles();
+    } catch (err) {
+      alert(err);
+    }
+  };
 
   return (
     <div className="space-y-8 animate-fadeIn">
@@ -50,7 +64,7 @@ const RoleManagement: React.FC = () => {
           </div>
           <div>
             <h3 className="text-xl font-bold text-slate-800 poppins">Role Configuration</h3>
-            <p className="text-slate-500 font-medium">Define and customize organizational access levels and permissions</p>
+            <p className="text-slate-500 font-medium">Customize access levels and permissions dynamically</p>
           </div>
         </div>
       </div>
@@ -68,33 +82,55 @@ const RoleManagement: React.FC = () => {
             </div>
             
             <p className="text-sm font-bold text-slate-800 mb-2">Role Scope</p>
-            <p className="text-xs text-slate-500 leading-relaxed mb-6 flex-1">{role.desc}</p>
+            <p className="text-xs text-slate-500 leading-relaxed mb-6 flex-1">{role.description}</p>
             
             <div className="space-y-3 pt-6 border-t border-slate-50">
-               <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Core Capabilities</p>
+               <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Capabilities</p>
                <div className="flex flex-wrap gap-2">
-                 {role.permissions.map(p => (
+                 {role.permissions.split(',').map(p => (
                    <span key={p} className="px-2 py-1 bg-slate-50 text-slate-500 rounded-lg text-[9px] font-bold border border-slate-100">
-                     {p}
+                     {p.trim()}
                    </span>
                  ))}
                </div>
             </div>
 
-            <button className="mt-6 w-full py-3 bg-indigo-50 text-indigo-600 rounded-xl text-xs font-bold hover:bg-indigo-100 transition">
-              Customize Permissions
+            <button 
+              onClick={() => handleEdit(role)}
+              className="mt-6 w-full py-3 bg-indigo-50 text-indigo-600 rounded-xl text-xs font-bold hover:bg-indigo-100 transition"
+            >
+              Modify Permissions
             </button>
           </div>
         ))}
       </div>
 
-      <div className="bg-amber-50 p-6 rounded-3xl border border-amber-100 flex items-center gap-4">
-        <i className="fas fa-info-circle text-amber-500 text-2xl"></i>
-        <div>
-           <p className="text-sm font-bold text-amber-800">Dynamic Access Control</p>
-           <p className="text-xs text-amber-700">Changing role configurations will immediately reflect in the navigation bar and module access for all users assigned to those roles.</p>
+      {editingRole && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm">
+          <div className="bg-white w-full max-w-lg rounded-3xl p-8 animate-fadeIn">
+            <h3 className="text-xl font-bold mb-1">Edit {editingRole.id} Role</h3>
+            <p className="text-xs text-slate-400 mb-6 uppercase font-bold">Adjust global permissions for this role</p>
+            <form onSubmit={handleSave} className="space-y-5">
+              <div className="space-y-1">
+                <label className="text-xs font-bold text-slate-500">Display Label</label>
+                <input required type="text" className="w-full px-4 py-3 bg-slate-50 border border-slate-100 rounded-xl" value={formData.label} onChange={e => setFormData({...formData, label: e.target.value})} />
+              </div>
+              <div className="space-y-1">
+                <label className="text-xs font-bold text-slate-500">Scope Description</label>
+                <textarea rows={3} className="w-full px-4 py-3 bg-slate-50 border border-slate-100 rounded-xl text-sm" value={formData.description} onChange={e => setFormData({...formData, description: e.target.value})} />
+              </div>
+              <div className="space-y-1">
+                <label className="text-xs font-bold text-slate-500">Permissions (Comma Separated)</label>
+                <input type="text" className="w-full px-4 py-3 bg-slate-50 border border-slate-100 rounded-xl font-mono text-[10px]" value={formData.permissions} onChange={e => setFormData({...formData, permissions: e.target.value})} />
+              </div>
+              <div className="flex gap-4 pt-4">
+                <button type="button" onClick={() => setEditingRole(null)} className="flex-1 py-4 bg-slate-100 text-slate-600 rounded-2xl font-bold">Cancel</button>
+                <button type="submit" className="flex-1 py-4 bg-indigo-600 text-white rounded-2xl font-bold shadow-lg shadow-indigo-100">Save Role</button>
+              </div>
+            </form>
+          </div>
         </div>
-      </div>
+      )}
     </div>
   );
 };
