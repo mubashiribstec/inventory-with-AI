@@ -5,19 +5,21 @@ import { apiService } from '../api.ts';
 
 interface SidebarProps {
   userRole: UserRole;
-  activeTab: 'dashboard' | 'inventory' | 'maintenance' | 'suppliers' | 'locations' | 'licenses' | 'categories' | 'employees' | 'departments' | 'purchase-history' | 'requests' | 'faulty-reports' | 'budgets' | 'audit-trail' | 'system-logs' | 'attendance' | 'leaves' | 'user-mgmt' | 'role-mgmt' | 'notifications';
+  activeTab: string;
   setActiveTab: (tab: any) => void;
   onLogout: () => void;
+  permissions: string[];
 }
 
-const Sidebar: React.FC<SidebarProps> = ({ userRole, activeTab, setActiveTab, onLogout }) => {
+const Sidebar: React.FC<SidebarProps> = ({ userRole, activeTab, setActiveTab, onLogout, permissions }) => {
   const [unreadCount, setUnreadCount] = useState(0);
 
   const isAdmin = userRole === UserRole.ADMIN;
-  const isManager = userRole === UserRole.MANAGER || isAdmin;
-  const isHR = userRole === UserRole.HR || isManager;
-  const isTeamLead = userRole === UserRole.TEAM_LEAD || isHR;
-  const isStaff = userRole === UserRole.STAFF;
+  
+  const hasPermission = (key: string) => {
+    if (isAdmin) return true;
+    return permissions.includes(key);
+  };
 
   const fetchUnread = async () => {
     try {
@@ -43,41 +45,41 @@ const Sidebar: React.FC<SidebarProps> = ({ userRole, activeTab, setActiveTab, on
         { id: 'attendance', icon: 'fa-user-clock', label: 'Attendance Hub' },
         { id: 'notifications', icon: 'fa-bell', label: 'Alerts & Activity', badge: unreadCount },
         { id: 'leaves', icon: 'fa-calendar-alt', label: 'Leave Requests' },
-        { id: 'employees', icon: 'fa-users', label: 'Staff Directory', hide: isStaff && !isTeamLead },
-        { id: 'departments', icon: 'fa-building', label: 'Departments', hide: !isHR },
-        { id: 'user-mgmt', icon: 'fa-user-shield', label: 'User Accounts', hide: !isManager },
+        { id: 'employees', icon: 'fa-users', label: 'Staff Directory', permission: 'hr.view' },
+        { id: 'departments', icon: 'fa-building', label: 'Departments', permission: 'hr.view' },
+        { id: 'user-mgmt', icon: 'fa-user-shield', label: 'User Accounts', permission: 'hr.users' },
       ]
     },
     {
       title: 'Analytics',
       items: [
-        { id: 'dashboard', icon: 'fa-chart-line', label: 'Overview', hide: isStaff },
-        { id: 'budgets', icon: 'fa-wallet', label: 'Budget Tracker', hide: !isManager },
-        { id: 'audit-trail', icon: 'fa-history', label: 'Movement Ledger', hide: isStaff },
+        { id: 'dashboard', icon: 'fa-chart-line', label: 'Overview', permission: 'analytics.view' },
+        { id: 'budgets', icon: 'fa-wallet', label: 'Budget Tracker', permission: 'analytics.financials' },
+        { id: 'audit-trail', icon: 'fa-history', label: 'Movement Ledger', permission: 'analytics.logs' },
       ]
     },
     {
       title: 'Inventory Control',
       items: [
-        { id: 'inventory', icon: 'fa-boxes', label: 'Hardware Registry', hide: isStaff },
-        { id: 'categories', icon: 'fa-tags', label: 'Asset Categories', hide: isStaff },
-        { id: 'licenses', icon: 'fa-key', label: 'License Compliance', hide: isStaff },
+        { id: 'inventory', icon: 'fa-boxes', label: 'Hardware Registry', permission: 'inventory.view' },
+        { id: 'categories', icon: 'fa-tags', label: 'Asset Categories', permission: 'inventory.view' },
+        { id: 'licenses', icon: 'fa-key', label: 'License Compliance', permission: 'inventory.view' },
       ]
     },
     {
       title: 'Procurement & Ops',
       items: [
-        { id: 'purchase-history', icon: 'fa-history', label: 'Purchase Ledger', hide: isStaff },
+        { id: 'purchase-history', icon: 'fa-history', label: 'Purchase Ledger', permission: 'inventory.procure' },
         { id: 'requests', icon: 'fa-clipboard-list', label: 'Employee Requests' },
-        { id: 'maintenance', icon: 'fa-tools', label: 'Maintenance Hub', hide: isStaff },
-        { id: 'faulty-reports', icon: 'fa-exclamation-triangle', label: 'Faulty Reports', hide: isStaff },
+        { id: 'maintenance', icon: 'fa-tools', label: 'Maintenance Hub', permission: 'inventory.edit' },
+        { id: 'faulty-reports', icon: 'fa-exclamation-triangle', label: 'Faulty Reports', permission: 'inventory.view' },
       ]
     },
     {
       title: 'Organization',
       items: [
-        { id: 'suppliers', icon: 'fa-truck', label: 'Vendor Scorecard', hide: isStaff },
-        { id: 'locations', icon: 'fa-map-marker-alt', label: 'Site Map', hide: isStaff },
+        { id: 'suppliers', icon: 'fa-truck', label: 'Vendor Scorecard', permission: 'inventory.view' },
+        { id: 'locations', icon: 'fa-map-marker-alt', label: 'Site Map', permission: 'inventory.view' },
       ]
     }
   ];
@@ -97,7 +99,11 @@ const Sidebar: React.FC<SidebarProps> = ({ userRole, activeTab, setActiveTab, on
 
       <div className="px-4 pb-6 space-y-6 flex-1">
         {navGroups.map((group, groupIdx) => {
-          const visibleItems = group.items.filter(i => !i.hide);
+          const visibleItems = group.items.filter(i => {
+            // Staff/Anyone can see basic items. Specific items check permissions.
+            if (!i.permission) return true;
+            return hasPermission(i.permission);
+          });
           if (visibleItems.length === 0) return null;
           
           return (
