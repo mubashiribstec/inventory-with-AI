@@ -56,15 +56,12 @@ const App: React.FC = () => {
   const [departments, setDepartments] = useState<Department[]>([]);
 
   const [loading, setLoading] = useState(true);
+  const [dataLoading, setDataLoading] = useState(false);
   const [syncing, setSyncing] = useState(false);
   const [toasts, setToasts] = useState<Toast[]>([]);
   const [lastNotificationId, setLastNotificationId] = useState<number | null>(null);
   
   const [isPurchaseModalOpen, setIsPurchaseModalOpen] = useState(false);
-  const [isAssignModalOpen, setIsAssignModalOpen] = useState(false);
-  const [isMaintenanceModalOpen, setIsMaintenanceModalOpen] = useState(false);
-  const [isLicenseModalOpen, setIsLicenseModalOpen] = useState(false);
-  const [isRequestModalOpen, setIsRequestModalOpen] = useState(false);
   const [managementModal, setManagementModal] = useState<{ isOpen: boolean, type: 'Category' | 'Employee' | 'Department' | null }>({ isOpen: false, type: null });
   
   const [editingItem, setEditingItem] = useState<InventoryItem | null>(null);
@@ -132,6 +129,8 @@ const App: React.FC = () => {
       }
     } catch (e) {
       console.error("Error fetching role info", e);
+    } finally {
+      setLoading(false);
     }
   }, [getLandingTab]);
 
@@ -139,22 +138,30 @@ const App: React.FC = () => {
     try {
       const s = await apiService.getSettings();
       if (s && s.software_name) setSettings(s);
-    } catch (e) { console.error(e); }
+    } catch (e) { 
+      console.error("Settings fetch failed", e); 
+    }
   }, []);
 
   useEffect(() => {
-    const savedUserString = localStorage.getItem('smartstock_user');
-    fetchSettings();
-    if (savedUserString) {
-      try {
-        const savedUser = JSON.parse(savedUserString);
-        setCurrentUser(savedUser);
-        fetchRoleData(savedUser.role, savedUser);
-      } catch (e) {
-        console.error("Failed to parse saved user", e);
-        localStorage.removeItem('smartstock_user');
+    const initApp = async () => {
+      const savedUserString = localStorage.getItem('smartstock_user');
+      await fetchSettings();
+      if (savedUserString) {
+        try {
+          const savedUser = JSON.parse(savedUserString);
+          setCurrentUser(savedUser);
+          await fetchRoleData(savedUser.role, savedUser);
+        } catch (e) {
+          console.error("Failed to parse saved user", e);
+          localStorage.removeItem('smartstock_user');
+          setLoading(false);
+        }
+      } else {
+        setLoading(false);
       }
-    }
+    };
+    initApp();
   }, [fetchRoleData, fetchSettings]);
 
   useEffect(() => {
@@ -178,6 +185,7 @@ const App: React.FC = () => {
   };
 
   const handleLogin = (user: User) => {
+    setLoading(true);
     setCurrentUser(user);
     localStorage.setItem('smartstock_user', JSON.stringify(user));
     const landing = getLandingTab(user);
@@ -194,7 +202,7 @@ const App: React.FC = () => {
   const fetchData = useCallback(async () => {
     if (!currentUser) return;
     try {
-      setLoading(true);
+      setDataLoading(true);
       await dbService.init(); 
       
       const [fItems, fMovements, fSuppliers, fLocations, fMaintenance, fLicenses, fCats, fEmps, fDepts, fRequests, fUsers] = await Promise.all([
@@ -228,9 +236,9 @@ const App: React.FC = () => {
         setSystemLogs(logs);
       }
     } catch (err) { 
-      console.error("Fetch error", err); 
+      console.error("Data fetch error", err); 
     } finally { 
-      setLoading(false); 
+      setDataLoading(false); 
     }
   }, [currentUser]);
 
@@ -324,8 +332,6 @@ const App: React.FC = () => {
     } catch (err) { alert(err); }
   };
 
-  const isAdmin = currentUser?.role === UserRole.ADMIN;
-
   const renderContent = () => {
     if (!currentUser) return null;
     
@@ -338,22 +344,33 @@ const App: React.FC = () => {
       case 'role-mgmt': return hasPermission('system.roles') ? <RoleManagement /> : null;
       case 'settings': return hasPermission('system.settings') ? <SettingsModule settings={settings} onUpdate={setSettings} /> : null;
       case 'inventory': return !hasPermission('inventory.view') ? null : <InventoryTable items={items} onUpdate={fetchData} onEdit={hasPermission('inventory.edit') ? setEditingItem : undefined} onView={setViewingItem} />;
-      case 'maintenance': return !hasPermission('inventory.edit') ? null : <MaintenanceList logs={maintenance} items={items} onUpdate={fetchData} onAdd={() => setIsMaintenanceModalOpen(true)} />;
+      case 'maintenance': return !hasPermission('inventory.edit') ? null : <MaintenanceList logs={maintenance} items={items} onUpdate={fetchData} onAdd={() => setActiveTab('requests')} />;
       case 'suppliers': return !hasPermission('inventory.view') ? null : <SupplierList suppliers={suppliers} />;
       case 'locations': return !hasPermission('inventory.view') ? null : <GenericListView title="Physical Sites" icon="fa-map-marker-alt" items={locations} columns={['id', 'building', 'floor', 'room', 'manager']} />;
-      case 'licenses': return !hasPermission('inventory.view') ? null : <LicenseList licenses={licenses} suppliers={suppliers} onUpdate={fetchData} onAdd={hasPermission('inventory.procure') ? () => setIsLicenseModalOpen(true) : undefined} />;
+      case 'licenses': return !hasPermission('inventory.view') ? null : <LicenseList licenses={licenses} suppliers={suppliers} onUpdate={fetchData} onAdd={() => fetchData()} />;
       case 'categories': return !hasPermission('inventory.view') ? null : <GenericListView title="Asset Categories" icon="fa-tags" items={categories} columns={['id', 'name', 'itemCount']} onAdd={hasPermission('inventory.edit') ? () => setManagementModal({ isOpen: true, type: 'Category' }) : undefined} onDelete={hasPermission('inventory.edit') ? (item) => handleManagementDelete(item, 'Category') : undefined} />;
       case 'employees': return !hasPermission('hr.view') ? null : <GenericListView title="Staff Directory" icon="fa-users" items={visibleEmployees} columns={['id', 'name', 'email', 'department', 'role']} onAdd={hasPermission('hr.users') ? () => setManagementModal({ isOpen: true, type: 'Employee' }) : undefined} onDelete={hasPermission('hr.users') ? (item) => handleManagementDelete(item, 'Employee') : undefined} onView={(emp) => setViewingEmployee(emp)} />;
       case 'departments': return !hasPermission('hr.view') ? null : <GenericListView title="Departmental Overview" icon="fa-building" items={departments} columns={['id', 'name', 'head']} onAdd={hasPermission('hr.users') ? () => setManagementModal({ isOpen: true, type: 'Department' }) : undefined} onDelete={hasPermission('hr.users') ? (item) => handleManagementDelete(item, 'Department') : undefined} /> ;
-      case 'purchase-history': return !hasPermission('inventory.procure') ? null : <GenericListView title="Procurement History" icon="fa-history" items={movements.filter(m => m.status === 'PURCHASED')} columns={['date', 'item', 'from', 'to']} onAdd={hasPermission('inventory.procure') ? () => setIsPurchaseModalOpen(true) : undefined} onDelete={isAdmin ? (m) => handleManagementDelete(m, 'Movement') : undefined} />;
-      case 'requests': return <GenericListView title="Asset Requests" icon="fa-clipboard-list" items={currentUser.role === UserRole.STAFF ? requests.filter(r => r.employee === currentUser.full_name) : requests} columns={['item', 'employee', 'urgency', 'status', 'request_date']} onAdd={() => setIsRequestModalOpen(true)} onDelete={isAdmin ? (item) => handleManagementDelete(item, 'Request') : undefined} onView={(item) => alert(item.notes)} />;
-      case 'faulty-reports': return !hasPermission('inventory.view') ? null : <GenericListView title="Faulty Reports" icon="fa-exclamation-circle" items={maintenance} columns={['item_id', 'issue_type', 'description', 'status']} onAdd={() => setIsMaintenanceModalOpen(true)} onView={() => setActiveTab('maintenance')} />;
-      case 'budgets': return !hasPermission('analytics.financials') ? null : <GenericListView title="Department Asset Analytics" icon="fa-wallet" items={departments} columns={['id', 'name', 'head']} onAdd={isAdmin ? () => setManagementModal({ isOpen: true, type: 'Department' }) : undefined} onView={(dept) => setViewingBudgetBreakdown(dept)} />;
-      case 'audit-trail': return !hasPermission('analytics.logs') ? null : <GenericListView title="Movement Ledger" icon="fa-history" items={movements} columns={['date', 'item', 'from', 'to', 'employee', 'department', 'status']} onDelete={isAdmin ? (item) => handleManagementDelete(item, 'Movement') : undefined} />;
-      case 'system-logs': return hasPermission('analytics.logs') && isAdmin ? <GenericListView title="System Audit Logs" icon="fa-shield-alt" items={systemLogs} columns={['timestamp', 'username', 'action', 'target_type', 'target_id', 'details']} /> : null;
+      case 'purchase-history': return !hasPermission('inventory.procure') ? null : <GenericListView title="Procurement History" icon="fa-history" items={movements.filter(m => m.status === 'PURCHASED')} columns={['date', 'item', 'from', 'to']} onAdd={hasPermission('inventory.procure') ? () => setIsPurchaseModalOpen(true) : undefined} onDelete={currentUser.role === UserRole.ADMIN ? (m) => handleManagementDelete(m, 'Movement') : undefined} />;
+      case 'requests': return <GenericListView title="Asset Requests" icon="fa-clipboard-list" items={currentUser.role === UserRole.STAFF ? requests.filter(r => r.employee === currentUser.full_name) : requests} columns={['item', 'employee', 'urgency', 'status', 'request_date']} onDelete={currentUser.role === UserRole.ADMIN ? (item) => handleManagementDelete(item, 'Request') : undefined} onView={(item) => alert(item.notes)} />;
+      case 'faulty-reports': return !hasPermission('inventory.view') ? null : <GenericListView title="Faulty Reports" icon="fa-exclamation-circle" items={maintenance} columns={['item_id', 'issue_type', 'description', 'status']} onView={() => setActiveTab('maintenance')} />;
+      case 'budgets': return !hasPermission('analytics.financials') ? null : <GenericListView title="Department Asset Analytics" icon="fa-wallet" items={departments} columns={['id', 'name', 'head']} onView={(dept) => setViewingBudgetBreakdown(dept)} />;
+      case 'audit-trail': return !hasPermission('analytics.logs') ? null : <GenericListView title="Movement Ledger" icon="fa-history" items={movements} columns={['date', 'item', 'from', 'to', 'employee', 'department', 'status']} onDelete={currentUser.role === UserRole.ADMIN ? (item) => handleManagementDelete(item, 'Movement') : undefined} />;
+      case 'system-logs': return hasPermission('analytics.logs') && currentUser.role === UserRole.ADMIN ? <GenericListView title="System Audit Logs" icon="fa-shield-alt" items={systemLogs} columns={['timestamp', 'username', 'action', 'target_type', 'target_id', 'details']} /> : null;
       default: return <AttendanceModule currentUser={currentUser} />;
     }
   };
+
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-slate-50 dark:bg-slate-950 flex items-center justify-center">
+        <div className="flex flex-col items-center gap-4">
+          <div className="w-12 h-12 border-4 border-indigo-600 border-t-transparent rounded-full animate-spin"></div>
+          <p className="text-slate-400 font-bold uppercase tracking-widest text-[10px]">Synchronizing SmartStock...</p>
+        </div>
+      </div>
+    );
+  }
 
   if (!currentUser) return <Login onLogin={handleLogin} />;
 
@@ -396,12 +413,10 @@ const App: React.FC = () => {
                    <span className={`px-2 py-0.5 text-[10px] rounded-full border font-bold uppercase ${currentRole ? `bg-${currentRole.color}-50 dark:bg-${currentRole.color}-900/20 text-${currentRole.color}-600 dark:text-${currentRole.color}-400 border-${currentRole.color}-100 dark:border-${currentRole.color}-800` : 'bg-slate-100 text-slate-500 border-slate-200 dark:bg-slate-800 dark:text-slate-400 dark:border-slate-700'}`}>
                     {currentRole?.label || currentUser.role.replace('_', ' ')}
                    </span>
-                   {currentUser.department && <span className="text-[10px] text-slate-400 font-bold">({currentUser.department})</span>}
                 </p>
              </div>
           </div>
           <div className="flex items-center gap-3">
-            {/* Dark Mode Icon Button - Prominent for all roles */}
             <button 
               onClick={toggleDarkMode}
               className="w-10 h-10 flex items-center justify-center rounded-xl bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-500 dark:text-amber-400 hover:bg-slate-50 dark:hover:bg-slate-700 transition-all shadow-sm group"
@@ -415,7 +430,7 @@ const App: React.FC = () => {
           </div>
         </header>
         
-        {loading && !currentRole ? (
+        {dataLoading ? (
           <div className="flex h-64 w-full items-center justify-center">
             <div className={`animate-spin rounded-full h-10 w-10 border-4 border-${settings.primary_color}-600 border-t-transparent`}></div>
           </div>
