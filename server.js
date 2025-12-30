@@ -79,8 +79,6 @@ app.post('/api/init-db', async (req, res) => {
         icon VARCHAR(50) DEFAULT 'fa-shield-alt',
         updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
       )`,
-      // Ensure 'icon' column exists if table was created previously without it
-      `ALTER TABLE roles ADD COLUMN IF NOT EXISTS icon VARCHAR(50) DEFAULT 'fa-shield-alt'`,
       `CREATE TABLE IF NOT EXISTS users (
         id VARCHAR(50) PRIMARY KEY,
         username VARCHAR(50) UNIQUE NOT NULL,
@@ -92,10 +90,12 @@ app.post('/api/init-db', async (req, res) => {
         team_lead_id VARCHAR(50),
         manager_id VARCHAR(50)
       )`,
-      `ALTER TABLE users ADD COLUMN IF NOT EXISTS department VARCHAR(100) DEFAULT 'Unassigned'`,
-      `ALTER TABLE users ADD COLUMN IF NOT EXISTS shift_start_time VARCHAR(5) DEFAULT '09:00'`,
-      `ALTER TABLE users ADD COLUMN IF NOT EXISTS team_lead_id VARCHAR(50)`,
-      `ALTER TABLE users ADD COLUMN IF NOT EXISTS manager_id VARCHAR(50)`,
+      `CREATE TABLE IF NOT EXISTS settings (
+        id VARCHAR(50) PRIMARY KEY,
+        software_name VARCHAR(255),
+        primary_color VARCHAR(50),
+        dark_mode BOOLEAN DEFAULT FALSE
+      )`,
       `CREATE TABLE IF NOT EXISTS notifications (
         id INT AUTO_INCREMENT PRIMARY KEY,
         recipient_id VARCHAR(50) NOT NULL,
@@ -227,9 +227,12 @@ app.post('/api/init-db', async (req, res) => {
       await conn.query(query);
     }
 
-    // Default Roles with advanced permissions
+    // Default Settings
+    await conn.query("REPLACE INTO settings (id, software_name, primary_color, dark_mode) VALUES ('GLOBAL', 'SmartStock Pro', 'indigo', FALSE)");
+
+    // Default Roles
     const roles = [
-      ['ADMIN', 'Administrator', 'Full system access and security policy controls.', 'inventory.view,inventory.edit,inventory.procure,hr.view,hr.attendance,hr.leaves,hr.users,analytics.view,analytics.financials,analytics.logs,system.roles,system.db', 'rose', 'fa-user-crown'],
+      ['ADMIN', 'Administrator', 'Full system access and security policy controls.', 'inventory.view,inventory.edit,inventory.procure,hr.view,hr.attendance,hr.leaves,hr.users,analytics.view,analytics.financials,analytics.logs,system.roles,system.db,system.settings', 'rose', 'fa-user-crown'],
       ['MANAGER', 'Operations Manager', 'Departmental oversight of assets and operational logs.', 'inventory.view,inventory.edit,hr.view,hr.leaves,analytics.view,analytics.financials', 'amber', 'fa-briefcase'],
       ['HR', 'HR Specialist', 'Manages lifecycle of staff, attendance, and leave compliance.', 'hr.view,hr.attendance,hr.leaves,analytics.view', 'emerald', 'fa-users-cog'],
       ['TEAM_LEAD', 'Team Lead', 'Oversight of tactical continuity for assigned team members.', 'inventory.view,hr.view,hr.attendance,analytics.view', 'indigo', 'fa-user-tie'],
@@ -242,12 +245,47 @@ app.post('/api/init-db', async (req, res) => {
 
     await conn.query("REPLACE INTO users (id, username, password, role, full_name, shift_start_time, department) VALUES ('U-001', 'admin', 'admin123', 'ADMIN', 'System Administrator', '09:00', 'IT Infrastructure')");
 
-    sendJSON(res, { success: true, message: 'Database initialized with advanced role controls.' });
+    sendJSON(res, { success: true, message: 'Database initialized with system settings and advanced role controls.' });
   } catch (err) {
     sendJSON(res, { error: err.message }, 500);
   } finally {
     if (conn) conn.release();
   }
+});
+
+app.get('/api/settings', async (req, res) => {
+  let conn;
+  try {
+    conn = await pool.getConnection();
+    const rows = await conn.query('SELECT * FROM settings WHERE id = ?', ['GLOBAL']);
+    sendJSON(res, rows[0] || {});
+  } catch (err) { sendJSON(res, { error: err.message }, 500); }
+  finally { if (conn) conn.release(); }
+});
+
+app.post('/api/settings', async (req, res) => {
+  let conn;
+  try {
+    conn = await pool.getConnection();
+    const { software_name, primary_color, dark_mode } = req.body;
+    await conn.query(
+      'REPLACE INTO settings (id, software_name, primary_color, dark_mode) VALUES (?, ?, ?, ?)',
+      ['GLOBAL', software_name, primary_color, dark_mode]
+    );
+    sendJSON(res, { success: true });
+  } catch (err) { sendJSON(res, { error: err.message }, 500); }
+  finally { if (conn) conn.release(); }
+});
+
+// System Logs Endpoint (Missing Endpoint causing 404)
+app.get('/api/system-logs', async (req, res) => {
+  let conn;
+  try {
+    conn = await pool.getConnection();
+    const rows = await conn.query('SELECT * FROM user_logs ORDER BY timestamp DESC LIMIT 500');
+    sendJSON(res, Array.from(rows));
+  } catch (err) { sendJSON(res, { error: err.message }, 500); }
+  finally { if (conn) conn.release(); }
 });
 
 // Specific routes for Notifications
@@ -256,7 +294,6 @@ app.get('/api/notifications/:userId', async (req, res) => {
   try {
     conn = await pool.getConnection();
     const { userId } = req.params;
-    // Admins see all for oversight
     let rows;
     if (userId === 'ADMIN' || userId.startsWith('U-001')) {
       rows = await conn.query('SELECT * FROM notifications ORDER BY timestamp DESC LIMIT 50');
@@ -336,13 +373,20 @@ const handleCRUD = (tableName) => {
   });
 };
 
-const modules = ['items', 'movements', 'suppliers', 'locations', 'maintenance_logs', 'categories', 'employees', 'departments', 'licenses', 'requests', 'attendance', 'users', 'leave_requests', 'roles', 'notifications'];
+// CRUD handlers for all tables
+const modules = ['items', 'movements', 'suppliers', 'locations', 'maintenance_logs', 'categories', 'employees', 'departments', 'licenses', 'requests', 'attendance', 'users', 'leave_requests', 'roles', 'notifications', 'user_logs'];
 modules.forEach(handleCRUD);
 
 const staticPath = path.join(__dirname, 'dist');
 app.use(express.static(staticPath));
+
+// API Catch-all 404 (prevents returning index.html for failed API calls)
+app.use('/api', (req, res) => {
+  res.status(404).send(JSON.stringify({ error: 'Endpoint not found' }));
+});
+
+// Client Catch-all
 app.get('*', (req, res) => {
-  if (req.path.startsWith('/api/')) return res.status(404).send(JSON.stringify({ error: 'Not found' }));
   res.sendFile(path.join(staticPath, 'index.html'));
 });
 

@@ -1,13 +1,14 @@
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { LeaveRequest, User, UserRole, Notification } from '../types.ts';
 import { apiService } from '../api.ts';
 
 interface LeaveModuleProps {
   currentUser: User;
+  allUsers?: User[];
 }
 
-const LeaveModule: React.FC<LeaveModuleProps> = ({ currentUser }) => {
+const LeaveModule: React.FC<LeaveModuleProps> = ({ currentUser, allUsers = [] }) => {
   const [leaves, setLeaves] = useState<LeaveRequest[]>([]);
   const [loading, setLoading] = useState(false);
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -74,6 +75,16 @@ const LeaveModule: React.FC<LeaveModuleProps> = ({ currentUser }) => {
         is_read: false
       });
     }
+    // Also notify Team Lead if user is staff
+    if (currentUser.role === UserRole.STAFF && currentUser.team_lead_id) {
+        await apiService.createNotification({
+          recipient_id: currentUser.team_lead_id,
+          sender_name: currentUser.full_name,
+          message: `${currentUser.full_name} has applied for ${request.leave_type.toLowerCase()}. Review required.`,
+          type: 'LEAVE',
+          is_read: false
+        });
+    }
   };
 
   const handleSubmitRequest = async (e: React.FormEvent) => {
@@ -112,7 +123,6 @@ const LeaveModule: React.FC<LeaveModuleProps> = ({ currentUser }) => {
         end_date: sanitizeDate(leave.end_date)
       });
       
-      // Notify staff member of decision
       await apiService.createNotification({
         recipient_id: leave.user_id,
         sender_name: currentUser.full_name,
@@ -138,9 +148,22 @@ const LeaveModule: React.FC<LeaveModuleProps> = ({ currentUser }) => {
     }
   };
 
-  const isSuperUser = currentUser.role === UserRole.ADMIN;
-  const isManagement = currentUser.role === UserRole.ADMIN || currentUser.role === UserRole.MANAGER || currentUser.role === UserRole.HR;
-  const filteredLeaves = isManagement ? leaves : leaves.filter(l => l.user_id === currentUser.id);
+  const isManagement = currentUser.role === UserRole.ADMIN || currentUser.role === UserRole.MANAGER || currentUser.role === UserRole.HR || currentUser.role === UserRole.TEAM_LEAD;
+
+  const filteredLeaves = useMemo(() => {
+    if (currentUser.role === UserRole.ADMIN || currentUser.role === UserRole.HR) return leaves;
+    if (currentUser.role === UserRole.MANAGER) {
+        // Find users in manager's department
+        const subordinateUserIds = allUsers.filter(u => u.department === currentUser.department).map(u => u.id);
+        return leaves.filter(l => subordinateUserIds.includes(l.user_id) || l.user_id === currentUser.id);
+    }
+    if (currentUser.role === UserRole.TEAM_LEAD) {
+        // Find users reporting to this TL
+        const subordinateUserIds = allUsers.filter(u => u.team_lead_id === currentUser.id).map(u => u.id);
+        return leaves.filter(l => subordinateUserIds.includes(l.user_id) || l.user_id === currentUser.id);
+    }
+    return leaves.filter(l => l.user_id === currentUser.id);
+  }, [leaves, currentUser, allUsers]);
 
   return (
     <div className="space-y-8 animate-fadeIn">
@@ -220,7 +243,7 @@ const LeaveModule: React.FC<LeaveModuleProps> = ({ currentUser }) => {
                             <i className="fas fa-trash-alt"></i>
                           </button>
                         )}
-                        {(isSuperUser || (isManagement && !canApprove)) && (
+                        {(currentUser.role === UserRole.ADMIN || (isManagement && !canApprove)) && (
                           <button onClick={() => handleOpenModal(leave)} className="w-8 h-8 rounded-lg bg-amber-50 text-amber-600 hover:bg-amber-100 flex items-center justify-center transition" title="Edit">
                             <i className="fas fa-edit text-xs"></i>
                           </button>

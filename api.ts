@@ -1,5 +1,5 @@
 
-import { InventoryItem, Movement, Supplier, LocationRecord, MaintenanceLog, License, Category, Employee, Department, AssetRequest, User, UserLog, AttendanceRecord, LeaveRequest, Role, Notification } from './types.ts';
+import { InventoryItem, Movement, Supplier, LocationRecord, MaintenanceLog, License, Category, Employee, Department, AssetRequest, User, UserLog, AttendanceRecord, LeaveRequest, Role, Notification, SystemSettings } from './types.ts';
 import { dbService } from './db.ts';
 
 const BASE_URL = '/api';
@@ -50,6 +50,17 @@ export const apiService = {
 
   async getSystemLogs(): Promise<UserLog[]> {
     return handleRequest<UserLog[]>(`${BASE_URL}/system-logs`);
+  },
+
+  async getSettings(): Promise<SystemSettings> {
+    return handleRequest<SystemSettings>(`${BASE_URL}/settings`);
+  },
+
+  async updateSettings(settings: Partial<SystemSettings>): Promise<void> {
+    return handleRequest<void>(`${BASE_URL}/settings`, {
+      method: 'POST',
+      body: JSON.stringify(settings)
+    });
   },
 
   // Generic Save Helper

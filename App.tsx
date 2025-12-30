@@ -15,8 +15,9 @@ import LeaveModule from './components/LeaveModule.tsx';
 import UserManagement from './components/UserManagement.tsx';
 import RoleManagement from './components/RoleManagement.tsx';
 import NotificationCenter from './components/NotificationCenter.tsx';
+import SettingsModule from './components/SettingsModule.tsx';
 import Login from './components/Login.tsx';
-import { ItemStatus, UserRole, User, UserLog, InventoryItem, Movement, Supplier, LocationRecord, MaintenanceLog, Category, Employee, Department, License, AssetRequest, Notification, Role } from './types.ts';
+import { ItemStatus, UserRole, User, UserLog, InventoryItem, Movement, Supplier, LocationRecord, MaintenanceLog, Category, Employee, Department, License, AssetRequest, Notification, Role, SystemSettings } from './types.ts';
 import Modal from './components/Modal.tsx';
 import PurchaseForm from './components/PurchaseForm.tsx';
 import AssignmentForm from './components/AssignmentForm.tsx';
@@ -27,7 +28,7 @@ import RequestForm from './components/RequestForm.tsx';
 import { apiService } from './api.ts';
 import { dbService } from './db.ts';
 
-type AppTab = 'dashboard' | 'inventory' | 'maintenance' | 'suppliers' | 'locations' | 'licenses' | 'categories' | 'employees' | 'departments' | 'purchase-history' | 'requests' | 'faulty-reports' | 'budgets' | 'audit-trail' | 'system-logs' | 'attendance' | 'leaves' | 'user-mgmt' | 'role-mgmt' | 'notifications';
+type AppTab = 'dashboard' | 'inventory' | 'maintenance' | 'suppliers' | 'locations' | 'licenses' | 'categories' | 'employees' | 'departments' | 'purchase-history' | 'requests' | 'faulty-reports' | 'budgets' | 'audit-trail' | 'system-logs' | 'attendance' | 'leaves' | 'user-mgmt' | 'role-mgmt' | 'notifications' | 'settings';
 
 interface Toast {
   id: string;
@@ -39,6 +40,7 @@ interface Toast {
 const App: React.FC = () => {
   const [currentUser, setCurrentUser] = useState<User | null>(null);
   const [currentRole, setCurrentRole] = useState<Role | null>(null);
+  const [settings, setSettings] = useState<SystemSettings>({ id: 'GLOBAL', software_name: 'SmartStock Pro', primary_color: 'indigo', dark_mode: false });
   const [activeTab, setActiveTab] = useState<AppTab>('dashboard');
   const [items, setItems] = useState<InventoryItem[]>([]);
   const [movements, setMovements] = useState<Movement[]>([]);
@@ -127,9 +129,7 @@ const App: React.FC = () => {
       const role = allRoles.find(r => r.id === roleId);
       if (role) {
         setCurrentRole(role);
-        // Ensure landing page respects permissions
         const landing = getLandingTab(user);
-        // Only set active tab if not already on a valid tab (e.g. initial load)
         setActiveTab(prev => (prev === 'dashboard' || prev === 'attendance') ? landing : prev);
       }
     } catch (e) {
@@ -137,14 +137,31 @@ const App: React.FC = () => {
     }
   }, [getLandingTab]);
 
+  const fetchSettings = useCallback(async () => {
+    try {
+      const s = await apiService.getSettings();
+      if (s && s.software_name) setSettings(s);
+    } catch (e) { console.error(e); }
+  }, []);
+
   useEffect(() => {
     const savedUserString = localStorage.getItem('smartstock_user');
+    fetchSettings();
     if (savedUserString) {
       const savedUser = JSON.parse(savedUserString);
       setCurrentUser(savedUser);
       fetchRoleData(savedUser.role, savedUser);
     }
-  }, [fetchRoleData]);
+  }, [fetchRoleData, fetchSettings]);
+
+  // Dark Mode Apply
+  useEffect(() => {
+    if (settings.dark_mode) {
+      document.documentElement.classList.add('dark');
+    } else {
+      document.documentElement.classList.remove('dark');
+    }
+  }, [settings.dark_mode]);
 
   const handleLogin = (user: User) => {
     setCurrentUser(user);
@@ -204,7 +221,7 @@ const App: React.FC = () => {
 
   const visibleUsers = useMemo(() => {
     if (!currentUser) return [];
-    if (currentUser.role === UserRole.ADMIN || hasPermission('hr.users')) return users;
+    if (currentUser.role === UserRole.ADMIN) return users;
     if (currentUser.role === UserRole.MANAGER) {
       return users.filter(u => u.department === currentUser.department);
     }
@@ -212,19 +229,17 @@ const App: React.FC = () => {
       return users.filter(u => u.team_lead_id === currentUser.id);
     }
     return users.filter(u => u.id === currentUser.id);
-  }, [users, currentUser, hasPermission]);
+  }, [users, currentUser]);
 
   const visibleEmployees = useMemo(() => {
     if (!currentUser) return [];
-    if (currentUser.role === UserRole.ADMIN || hasPermission('hr.view')) return employees;
-    if (currentUser.role === UserRole.MANAGER) {
-      return employees.filter(e => e.department === currentUser.department);
-    }
-    if (currentUser.role === UserRole.TEAM_LEAD) {
-      return employees.filter(e => e.team_lead_id === currentUser.id);
+    if (currentUser.role === UserRole.ADMIN) return employees;
+    const subordinateNames = visibleUsers.map(u => u.full_name);
+    if (currentUser.role === UserRole.MANAGER || currentUser.role === UserRole.TEAM_LEAD) {
+        return employees.filter(e => subordinateNames.includes(e.name));
     }
     return [];
-  }, [employees, currentUser, hasPermission]);
+  }, [employees, currentUser, visibleUsers]);
 
   const stats = {
     purchased: items.length,
@@ -301,9 +316,10 @@ const App: React.FC = () => {
       case 'dashboard': return !hasPermission('analytics.view') ? <AttendanceModule currentUser={currentUser} /> : <Dashboard stats={stats} movements={movements} items={items} onFullAudit={() => setActiveTab('audit-trail')} onCheckIn={() => setActiveTab('attendance')} />;
       case 'attendance': return <AttendanceModule currentUser={currentUser} />;
       case 'notifications': return <NotificationCenter currentUser={currentUser} />;
-      case 'leaves': return !hasPermission('hr.leaves') && currentUser.role === UserRole.STAFF ? <LeaveModule currentUser={currentUser} /> : (hasPermission('hr.leaves') ? <LeaveModule currentUser={currentUser} /> : null);
+      case 'leaves': return !hasPermission('hr.leaves') && currentUser.role === UserRole.STAFF ? <LeaveModule currentUser={currentUser} allUsers={users} /> : (hasPermission('hr.leaves') ? <LeaveModule currentUser={currentUser} allUsers={users} /> : null);
       case 'user-mgmt': return hasPermission('hr.users') ? <UserManagement usersOverride={visibleUsers} /> : null;
       case 'role-mgmt': return hasPermission('system.roles') ? <RoleManagement /> : null;
+      case 'settings': return hasPermission('system.settings') ? <SettingsModule settings={settings} onUpdate={setSettings} /> : null;
       case 'inventory': return !hasPermission('inventory.view') ? null : <InventoryTable items={items} onUpdate={fetchData} onEdit={hasPermission('inventory.edit') ? setEditingItem : undefined} onView={setViewingItem} />;
       case 'maintenance': return !hasPermission('inventory.edit') ? null : <MaintenanceList logs={maintenance} items={items} onUpdate={fetchData} onAdd={() => setIsMaintenanceModalOpen(true)} />;
       case 'suppliers': return !hasPermission('inventory.view') ? null : <SupplierList suppliers={suppliers} />;
@@ -325,17 +341,16 @@ const App: React.FC = () => {
   if (!currentUser) return <Login onLogin={handleLogin} />;
 
   return (
-    <div className="flex min-h-screen bg-slate-50">
-      {/* Toast Popups */}
+    <div className="flex min-h-screen bg-slate-50 dark:bg-slate-900 transition-colors duration-300">
       <div className="fixed top-6 right-6 z-[100] flex flex-col gap-3">
         {toasts.map(toast => (
-          <div key={toast.id} className="bg-white border border-slate-100 shadow-2xl rounded-2xl p-4 flex items-start gap-4 min-w-[320px] animate-toastIn">
-            <div className={`w-10 h-10 rounded-xl flex items-center justify-center text-white shrink-0 ${toast.type === 'ATTENDANCE' ? 'bg-indigo-500' : 'bg-rose-500'}`}>
+          <div key={toast.id} className="bg-white dark:bg-slate-800 border border-slate-100 dark:border-slate-700 shadow-2xl rounded-2xl p-4 flex items-start gap-4 min-w-[320px] animate-toastIn">
+            <div className={`w-10 h-10 rounded-xl flex items-center justify-center text-white shrink-0 bg-${settings.primary_color}-500`}>
               <i className={`fas ${toast.type === 'ATTENDANCE' ? 'fa-clock' : 'fa-bell'}`}></i>
             </div>
             <div className="flex-1 min-w-0">
               <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">{toast.sender}</p>
-              <p className="text-sm font-bold text-slate-800 leading-snug mt-0.5">{toast.message}</p>
+              <p className="text-sm font-bold text-slate-800 dark:text-white leading-snug mt-0.5">{toast.message}</p>
             </div>
             <button onClick={() => setToasts(prev => prev.filter(t => t.id !== toast.id))} className="text-slate-300 hover:text-slate-500">
               <i className="fas fa-times"></i>
@@ -350,16 +365,18 @@ const App: React.FC = () => {
         setActiveTab={setActiveTab as any} 
         onLogout={handleLogout}
         permissions={currentRole?.permissions?.split(',').map(p => p.trim()) || []}
+        appName={settings.software_name}
+        themeColor={settings.primary_color}
       />
       <main className={`flex-1 lg:ml-64 p-6 lg:p-10 transition-all duration-300`}>
         <header className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-8">
           <div className="flex items-center gap-4">
-             <div className="w-12 h-12 bg-indigo-50 rounded-2xl flex items-center justify-center text-indigo-600 border border-indigo-100 lg:hidden"><i className="fas fa-bars"></i></div>
+             <div className={`w-12 h-12 bg-${settings.primary_color}-50 dark:bg-${settings.primary_color}-900/20 rounded-2xl flex items-center justify-center text-${settings.primary_color}-600 dark:text-${settings.primary_color}-400 border border-${settings.primary_color}-100 dark:border-${settings.primary_color}-800 lg:hidden`}><i className="fas fa-bars"></i></div>
              <div>
-                <h1 className="text-3xl font-bold text-slate-800 capitalize tracking-tight">{activeTab.replace('-', ' ')}</h1>
-                <p className="text-slate-500 mt-1 flex items-center gap-2">
-                   <span className="font-bold text-indigo-600">{currentUser.full_name}</span>
-                   <span className={`px-2 py-0.5 text-[10px] rounded-full border font-bold uppercase ${currentRole ? `bg-${currentRole.color}-50 text-${currentRole.color}-600 border-${currentRole.color}-100` : 'bg-slate-100 text-slate-500 border-slate-200'}`}>
+                <h1 className="text-3xl font-bold text-slate-800 dark:text-white capitalize tracking-tight">{activeTab.replace('-', ' ')}</h1>
+                <p className="text-slate-500 dark:text-slate-400 mt-1 flex items-center gap-2">
+                   <span className={`font-bold text-${settings.primary_color}-600 dark:text-${settings.primary_color}-400`}>{currentUser.full_name}</span>
+                   <span className={`px-2 py-0.5 text-[10px] rounded-full border font-bold uppercase ${currentRole ? `bg-${currentRole.color}-50 dark:bg-${currentRole.color}-900/20 text-${currentRole.color}-600 dark:text-${currentRole.color}-400 border-${currentRole.color}-100 dark:border-${currentRole.color}-800` : 'bg-slate-100 text-slate-500 border-slate-200'}`}>
                     {currentRole?.label || currentUser.role.replace('_', ' ')}
                    </span>
                    {currentUser.department && <span className="text-[10px] text-slate-400 font-bold">({currentUser.department})</span>}
@@ -367,11 +384,11 @@ const App: React.FC = () => {
              </div>
           </div>
           <div className="flex items-center gap-3">
-            {hasPermission('system.db') && <button onClick={handleInitDB} disabled={syncing} className={`px-4 py-2.5 bg-white border border-slate-200 text-slate-700 rounded-xl hover:bg-slate-50 transition font-bold text-sm shadow-sm flex items-center gap-2 ${syncing ? 'opacity-50' : ''}`}><i className={`fas fa-database ${syncing ? 'animate-spin' : ''}`}></i> Sync & Init</button>}
-            {hasPermission('inventory.procure') && <button onClick={() => { setEditingItem(null); setIsPurchaseModalOpen(true); }} className="px-4 py-2.5 bg-indigo-600 text-white rounded-xl hover:bg-indigo-700 transition font-bold text-sm shadow-lg shadow-indigo-100 flex items-center gap-2"><i className="fas fa-plus"></i> New Asset</button>}
+            {hasPermission('system.db') && <button onClick={handleInitDB} disabled={syncing} className={`px-4 py-2.5 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300 rounded-xl hover:bg-slate-50 dark:hover:bg-slate-700 transition font-bold text-sm shadow-sm flex items-center gap-2 ${syncing ? 'opacity-50' : ''}`}><i className={`fas fa-database ${syncing ? 'animate-spin' : ''}`}></i> Sync & Init</button>}
+            {hasPermission('inventory.procure') && <button onClick={() => { setEditingItem(null); setIsPurchaseModalOpen(true); }} className={`px-4 py-2.5 bg-${settings.primary_color}-600 text-white rounded-xl hover:bg-${settings.primary_color}-700 transition font-bold text-sm shadow-lg shadow-${settings.primary_color}-100 dark:shadow-none flex items-center gap-2`}><i className="fas fa-plus"></i> New Asset</button>}
           </div>
         </header>
-        {loading && !currentRole ? <div className="flex h-64 w-full items-center justify-center"><div className="animate-spin rounded-full h-10 w-10 border-4 border-indigo-600 border-t-transparent"></div></div> : renderContent()}
+        {loading && !currentRole ? <div className="flex h-64 w-full items-center justify-center"><div className={`animate-spin rounded-full h-10 w-10 border-4 border-${settings.primary_color}-600 border-t-transparent`}></div></div> : renderContent()}
       </main>
       {isPurchaseModalOpen && hasPermission('inventory.procure') && (
         <Modal title="🛒 Procurement" onClose={() => setIsPurchaseModalOpen(false)}>

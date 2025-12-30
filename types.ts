@@ -17,6 +17,13 @@ export enum UserRole {
   STAFF = 'STAFF'
 }
 
+export interface SystemSettings {
+  id: string;
+  software_name: string;
+  primary_color: string;
+  dark_mode: boolean;
+}
+
 export interface Role {
   id: string; // Maps to UserRole enum values or custom strings
   label: string;
@@ -47,6 +54,7 @@ export const PERMISSION_GROUPS = {
   SYSTEM: [
     { key: 'system.roles', label: 'Role Configuration', desc: 'Modify permissions for all system roles' },
     { key: 'system.db', label: 'Database Control', desc: 'Initialize or wipe system datasets' },
+    { key: 'system.settings', label: 'System Settings', desc: 'Modify software name and visual themes' },
   ]
 };
 
