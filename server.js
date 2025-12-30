@@ -92,14 +92,15 @@ app.post('/api/init-db', async (req, res) => {
       `CREATE TABLE IF NOT EXISTS users (
         id VARCHAR(50) PRIMARY KEY,
         username VARCHAR(50) UNIQUE NOT NULL,
-        password VARCHAR(100) NOT NULL,
+        password VARCHAR(100),
         role VARCHAR(20) NOT NULL,
         full_name VARCHAR(100),
         shift_start_time VARCHAR(5) DEFAULT '09:00',
         team_lead_id VARCHAR(50),
         manager_id VARCHAR(50)
       )`,
-      // Migration: Ensure columns exist if table was already created
+      // Migration: Ensure password can be null for partial updates
+      `ALTER TABLE users MODIFY COLUMN password VARCHAR(100) NULL`,
       `ALTER TABLE users ADD COLUMN IF NOT EXISTS shift_start_time VARCHAR(5) DEFAULT '09:00'`,
       `ALTER TABLE users ADD COLUMN IF NOT EXISTS team_lead_id VARCHAR(50)`,
       `ALTER TABLE users ADD COLUMN IF NOT EXISTS manager_id VARCHAR(50)`,
@@ -279,21 +280,42 @@ const handleCRUD = (tableName) => {
     
     let conn;
     try {
+      conn = await pool.getConnection();
       const keys = Object.keys(req.body);
       const values = Object.values(req.body).map(v => v === '' ? null : v);
-      const escapedKeys = keys.map(k => `\`${k}\``);
-      const placeholders = keys.map(() => '?').join(', ');
-      const updates = keys.map(k => `\`${k}\`=VALUES(\`${k}\`)`).join(', ');
       
-      conn = await pool.getConnection();
-      const query = `INSERT INTO ${tableName} (${escapedKeys.join(', ')}) VALUES (${placeholders}) ON DUPLICATE KEY UPDATE ${updates}`;
-      const result = await conn.query(query, values);
+      const id = req.body.id;
+      let isUpdate = false;
+
+      // For existing IDs, check if record exists to perform a clean UPDATE instead of UPSERT
+      // This solves constraint issues on mandatory fields not included in partial updates (like password)
+      if (id) {
+        const existing = await conn.query(`SELECT 1 FROM ${tableName} WHERE id = ?`, [id]);
+        if (existing.length > 0) isUpdate = true;
+      }
+
+      let result;
+      if (isUpdate) {
+        // Run a clean partial UPDATE
+        const setClause = keys.filter(k => k !== 'id').map(k => `\`${k}\` = ?`).join(', ');
+        const updateValues = keys.filter(k => k !== 'id').map(k => req.body[k] === '' ? null : req.body[k]);
+        updateValues.push(id);
+        result = await conn.query(`UPDATE ${tableName} SET ${setClause} WHERE id = ?`, updateValues);
+      } else {
+        // Run a standard INSERT
+        const escapedKeys = keys.map(k => `\`${k}\``);
+        const placeholders = keys.map(() => '?').join(', ');
+        result = await conn.query(`INSERT INTO ${tableName} (${escapedKeys.join(', ')}) VALUES (${placeholders})`, values);
+      }
       
       // LOG ACTION
-      await logAction(userId, username, result.affectedRows > 1 ? 'UPDATE' : 'CREATE', tableName.toUpperCase(), req.body.id || 'NEW', req.body);
+      await logAction(userId, username, isUpdate ? 'UPDATE' : 'CREATE', tableName.toUpperCase(), id || 'NEW', req.body);
       
-      sendJSON(res, { success: true }, 201);
-    } catch (err) { sendJSON(res, { error: err.message }, 500); }
+      sendJSON(res, { success: true }, isUpdate ? 200 : 201);
+    } catch (err) { 
+      console.error(`CRUD Error [${tableName}]:`, err);
+      sendJSON(res, { error: err.message }, 500); 
+    }
     finally { if (conn) conn.release(); }
   });
 
