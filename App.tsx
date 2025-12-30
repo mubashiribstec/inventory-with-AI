@@ -146,17 +146,23 @@ const App: React.FC = () => {
     const savedUserString = localStorage.getItem('smartstock_user');
     fetchSettings();
     if (savedUserString) {
-      const savedUser = JSON.parse(savedUserString);
-      setCurrentUser(savedUser);
-      fetchRoleData(savedUser.role, savedUser);
+      try {
+        const savedUser = JSON.parse(savedUserString);
+        setCurrentUser(savedUser);
+        fetchRoleData(savedUser.role, savedUser);
+      } catch (e) {
+        console.error("Failed to parse saved user", e);
+        localStorage.removeItem('smartstock_user');
+      }
     }
   }, [fetchRoleData, fetchSettings]);
 
   useEffect(() => {
+    const root = window.document.documentElement;
     if (settings.dark_mode) {
-      document.documentElement.classList.add('dark');
+      root.classList.add('dark');
     } else {
-      document.documentElement.classList.remove('dark');
+      root.classList.remove('dark');
     }
   }, [settings.dark_mode]);
 
@@ -221,8 +227,11 @@ const App: React.FC = () => {
         const logs = await apiService.getSystemLogs();
         setSystemLogs(logs);
       }
-    } catch (err) { console.error("Fetch error", err); }
-    finally { setLoading(false); }
+    } catch (err) { 
+      console.error("Fetch error", err); 
+    } finally { 
+      setLoading(false); 
+    }
   }, [currentUser]);
 
   useEffect(() => { if (currentUser) fetchData(); }, [currentUser, fetchData]);
@@ -349,7 +358,7 @@ const App: React.FC = () => {
   if (!currentUser) return <Login onLogin={handleLogin} />;
 
   return (
-    <div className="flex min-h-screen bg-slate-50 dark:bg-slate-900 transition-colors duration-300">
+    <div className="flex min-h-screen bg-slate-50 dark:bg-slate-950 transition-colors duration-300">
       <div className="fixed top-6 right-6 z-[100] flex flex-col gap-3">
         {toasts.map(toast => (
           <div key={toast.id} className="bg-white dark:bg-slate-800 border border-slate-100 dark:border-slate-700 shadow-2xl rounded-2xl p-4 flex items-start gap-4 min-w-[320px] animate-toastIn">
@@ -357,8 +366,8 @@ const App: React.FC = () => {
               <i className={`fas ${toast.type === 'ATTENDANCE' ? 'fa-clock' : 'fa-bell'}`}></i>
             </div>
             <div className="flex-1 min-w-0">
-              <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">{toast.sender}</p>
-              <p className="text-sm font-bold text-slate-800 dark:text-white leading-snug mt-0.5">{toast.message}</p>
+              <p className="text-[10px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-widest">{toast.sender}</p>
+              <p className="text-sm font-bold text-slate-800 dark:text-slate-100 leading-snug mt-0.5">{toast.message}</p>
             </div>
             <button onClick={() => setToasts(prev => prev.filter(t => t.id !== toast.id))} className="text-slate-300 hover:text-slate-500">
               <i className="fas fa-times"></i>
@@ -376,15 +385,15 @@ const App: React.FC = () => {
         appName={settings.software_name}
         themeColor={settings.primary_color}
       />
-      <main className={`flex-1 lg:ml-64 p-6 lg:p-10 transition-all duration-300`}>
+      <main className="flex-1 lg:ml-64 p-6 lg:p-10 transition-all duration-300 min-w-0">
         <header className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-8">
           <div className="flex items-center gap-4">
              <div className={`w-12 h-12 bg-${settings.primary_color}-50 dark:bg-${settings.primary_color}-900/20 rounded-2xl flex items-center justify-center text-${settings.primary_color}-600 dark:text-${settings.primary_color}-400 border border-${settings.primary_color}-100 dark:border-${settings.primary_color}-800 lg:hidden`}><i className="fas fa-bars"></i></div>
              <div>
-                <h1 className="text-3xl font-bold text-slate-800 dark:text-white capitalize tracking-tight">{activeTab.replace('-', ' ')}</h1>
+                <h1 className="text-3xl font-bold text-slate-800 dark:text-slate-50 capitalize tracking-tight">{activeTab.replace('-', ' ')}</h1>
                 <p className="text-slate-500 dark:text-slate-400 mt-1 flex items-center gap-2">
                    <span className={`font-bold text-${settings.primary_color}-600 dark:text-${settings.primary_color}-400`}>{currentUser.full_name}</span>
-                   <span className={`px-2 py-0.5 text-[10px] rounded-full border font-bold uppercase ${currentRole ? `bg-${currentRole.color}-50 dark:bg-${currentRole.color}-900/20 text-${currentRole.color}-600 dark:text-${currentRole.color}-400 border-${currentRole.color}-100 dark:border-${currentRole.color}-800` : 'bg-slate-100 text-slate-500 border-slate-200'}`}>
+                   <span className={`px-2 py-0.5 text-[10px] rounded-full border font-bold uppercase ${currentRole ? `bg-${currentRole.color}-50 dark:bg-${currentRole.color}-900/20 text-${currentRole.color}-600 dark:text-${currentRole.color}-400 border-${currentRole.color}-100 dark:border-${currentRole.color}-800` : 'bg-slate-100 text-slate-500 border-slate-200 dark:bg-slate-800 dark:text-slate-400 dark:border-slate-700'}`}>
                     {currentRole?.label || currentUser.role.replace('_', ' ')}
                    </span>
                    {currentUser.department && <span className="text-[10px] text-slate-400 font-bold">({currentUser.department})</span>}
@@ -392,21 +401,27 @@ const App: React.FC = () => {
              </div>
           </div>
           <div className="flex items-center gap-3">
-            {/* Dark Mode Icon Button */}
+            {/* Dark Mode Icon Button - Prominent for all roles */}
             <button 
               onClick={toggleDarkMode}
-              className="w-10 h-10 flex items-center justify-center rounded-xl bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-500 dark:text-amber-400 hover:bg-slate-50 dark:hover:bg-slate-700 transition-all shadow-sm"
+              className="w-10 h-10 flex items-center justify-center rounded-xl bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-500 dark:text-amber-400 hover:bg-slate-50 dark:hover:bg-slate-700 transition-all shadow-sm group"
               title={settings.dark_mode ? "Switch to Light Mode" : "Switch to Dark Mode"}
             >
-              <i className={`fas ${settings.dark_mode ? 'fa-sun' : 'fa-moon'}`}></i>
+              <i className={`fas ${settings.dark_mode ? 'fa-sun' : 'fa-moon'} group-active:scale-90 transition-transform`}></i>
             </button>
             
-            {hasPermission('system.db') && <button onClick={handleInitDB} disabled={syncing} className={`px-4 py-2.5 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300 rounded-xl hover:bg-slate-50 dark:hover:bg-slate-700 transition font-bold text-sm shadow-sm flex items-center gap-2 ${syncing ? 'opacity-50' : ''}`}><i className={`fas fa-database ${syncing ? 'animate-spin' : ''}`}></i> Sync & Init</button>}
+            {hasPermission('system.db') && <button onClick={handleInitDB} disabled={syncing} className="px-4 py-2.5 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300 rounded-xl hover:bg-slate-50 dark:hover:bg-slate-700 transition font-bold text-sm shadow-sm flex items-center gap-2 disabled:opacity-50"><i className={`fas fa-database ${syncing ? 'animate-spin' : ''}`}></i> Sync & Init</button>}
             {hasPermission('inventory.procure') && <button onClick={() => { setEditingItem(null); setIsPurchaseModalOpen(true); }} className={`px-4 py-2.5 bg-${settings.primary_color}-600 text-white rounded-xl hover:bg-${settings.primary_color}-700 transition font-bold text-sm shadow-lg shadow-${settings.primary_color}-100 dark:shadow-none flex items-center gap-2`}><i className="fas fa-plus"></i> New Asset</button>}
           </div>
         </header>
-        {loading && !currentRole ? <div className="flex h-64 w-full items-center justify-center"><div className={`animate-spin rounded-full h-10 w-10 border-4 border-${settings.primary_color}-600 border-t-transparent`}></div></div> : renderContent()}
+        
+        {loading && !currentRole ? (
+          <div className="flex h-64 w-full items-center justify-center">
+            <div className={`animate-spin rounded-full h-10 w-10 border-4 border-${settings.primary_color}-600 border-t-transparent`}></div>
+          </div>
+        ) : renderContent()}
       </main>
+      
       {isPurchaseModalOpen && hasPermission('inventory.procure') && (
         <Modal title="🛒 Procurement" onClose={() => setIsPurchaseModalOpen(false)}>
           <PurchaseForm onSubmit={handleSaveItem} suppliers={suppliers} locations={locations} departments={departments} />
