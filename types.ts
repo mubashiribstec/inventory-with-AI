@@ -21,6 +21,7 @@ export interface SystemSettings {
   id: string;
   software_name: string;
   primary_color: string;
+  dark_mode: boolean;
 }
 
 export interface Role {
