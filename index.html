@@ -8,6 +8,29 @@
   <script src="https://cdn.tailwindcss.com"></script>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Poppins:wght@400;500;600;700&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+  <script>
+    tailwind.config = {
+      darkMode: 'class',
+      theme: {
+        extend: {
+          fontFamily: {
+            sans: ['Inter', 'sans-serif'],
+            poppins: ['Poppins', 'sans-serif'],
+          }
+        }
+      },
+      safelist: [
+        {
+          pattern: /(bg|text|border|shadow|ring)-(indigo|rose|amber|emerald|blue|violet|cyan|slate)-(50|100|200|300|400|500|600|700|800|900)/,
+          variants: ['dark', 'hover', 'focus', 'group-hover'],
+        },
+        {
+          pattern: /(bg|text|border|shadow|ring)-(indigo|rose|amber|emerald|blue|violet|cyan|slate)-(50|100|200|300|400|500|600|700|800|900)\/(10|20|30|40|50)/,
+          variants: ['dark', 'hover', 'focus'],
+        }
+      ]
+    }
+  </script>
   <style>
     body {
       font-family: 'Inter', sans-serif;
@@ -37,43 +60,6 @@
       from { opacity: 0; transform: translateY(10px); }
       to { opacity: 1; transform: translateY(0); }
     }
-
-    /* Support for dynamic Tailwind classes from Role config */
-    .bg-indigo-500 { background-color: #6366f1; }
-    .bg-rose-500 { background-color: #f43f5e; }
-    .bg-amber-500 { background-color: #f59e0b; }
-    .bg-emerald-500 { background-color: #10b981; }
-    .bg-blue-500 { background-color: #3b82f6; }
-    .bg-violet-500 { background-color: #8b5cf6; }
-    .bg-cyan-500 { background-color: #06b6d4; }
-    .bg-slate-500 { background-color: #64748b; }
-
-    .text-indigo-500 { color: #6366f1; }
-    .text-rose-500 { color: #f43f5e; }
-    .text-amber-500 { color: #f59e0b; }
-    .text-emerald-500 { color: #10b981; }
-    .text-blue-500 { color: #3b82f6; }
-    .text-violet-500 { color: #8b5cf6; }
-    .text-cyan-500 { color: #06b6d4; }
-    .text-slate-500 { color: #64748b; }
-
-    .bg-indigo-50 { background-color: #eef2ff; }
-    .bg-rose-50 { background-color: #fff1f2; }
-    .bg-amber-50 { background-color: #fffbeb; }
-    .bg-emerald-50 { background-color: #ecfdf5; }
-    .bg-blue-50 { background-color: #eff6ff; }
-    .bg-violet-50 { background-color: #f5f3ff; }
-    .bg-cyan-50 { background-color: #ecfeff; }
-    .bg-slate-50 { background-color: #f8fafc; }
-
-    .border-indigo-100 { border-color: #e0e7ff; }
-    .border-rose-100 { border-color: #ffe4e6; }
-    .border-amber-100 { border-color: #fef3c7; }
-    .border-emerald-100 { border-color: #d1fae5; }
-    .border-blue-100 { border-color: #dbeafe; }
-    .border-violet-100 { border-color: #ede9fe; }
-    .border-cyan-100 { border-color: #cffafe; }
-    .border-slate-100 { border-color: #f1f5f9; }
   </style>
 <script type="importmap">
 {
@@ -88,7 +74,7 @@
 }
 </script>
 </head>
-<body class="bg-slate-50 text-slate-900">
+<body class="bg-slate-50 text-slate-900 transition-colors duration-300">
   <div id="root"></div>
   <script type="module" src="/index.tsx"></script>
 </body>

@@ -72,13 +72,11 @@ const App: React.FC = () => {
   const [viewingEmployee, setViewingEmployee] = useState<Employee | null>(null);
   const [viewingBudgetBreakdown, setViewingBudgetBreakdown] = useState<Department | null>(null);
 
-  // Helper to determine landing page
   const getLandingTab = useCallback((user: User): AppTab => {
     if (user.role === UserRole.ADMIN || user.role === UserRole.MANAGER) return 'dashboard';
     return 'attendance';
   }, []);
 
-  // Permission helper
   const hasPermission = useCallback((perm: string) => {
     if (currentUser?.role === UserRole.ADMIN) return true;
     if (!currentRole?.permissions) return false;
@@ -154,7 +152,6 @@ const App: React.FC = () => {
     }
   }, [fetchRoleData, fetchSettings]);
 
-  // Dark Mode Apply
   useEffect(() => {
     if (settings.dark_mode) {
       document.documentElement.classList.add('dark');
@@ -162,6 +159,17 @@ const App: React.FC = () => {
       document.documentElement.classList.remove('dark');
     }
   }, [settings.dark_mode]);
+
+  const toggleDarkMode = async () => {
+    const newDarkMode = !settings.dark_mode;
+    const newSettings = { ...settings, dark_mode: newDarkMode };
+    setSettings(newSettings);
+    try {
+      await apiService.updateSettings(newSettings);
+    } catch (e) {
+      console.error("Failed to persist theme preference", e);
+    }
+  };
 
   const handleLogin = (user: User) => {
     setCurrentUser(user);
@@ -384,6 +392,15 @@ const App: React.FC = () => {
              </div>
           </div>
           <div className="flex items-center gap-3">
+            {/* Dark Mode Icon Button */}
+            <button 
+              onClick={toggleDarkMode}
+              className="w-10 h-10 flex items-center justify-center rounded-xl bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-500 dark:text-amber-400 hover:bg-slate-50 dark:hover:bg-slate-700 transition-all shadow-sm"
+              title={settings.dark_mode ? "Switch to Light Mode" : "Switch to Dark Mode"}
+            >
+              <i className={`fas ${settings.dark_mode ? 'fa-sun' : 'fa-moon'}`}></i>
+            </button>
+            
             {hasPermission('system.db') && <button onClick={handleInitDB} disabled={syncing} className={`px-4 py-2.5 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300 rounded-xl hover:bg-slate-50 dark:hover:bg-slate-700 transition font-bold text-sm shadow-sm flex items-center gap-2 ${syncing ? 'opacity-50' : ''}`}><i className={`fas fa-database ${syncing ? 'animate-spin' : ''}`}></i> Sync & Init</button>}
             {hasPermission('inventory.procure') && <button onClick={() => { setEditingItem(null); setIsPurchaseModalOpen(true); }} className={`px-4 py-2.5 bg-${settings.primary_color}-600 text-white rounded-xl hover:bg-${settings.primary_color}-700 transition font-bold text-sm shadow-lg shadow-${settings.primary_color}-100 dark:shadow-none flex items-center gap-2`}><i className="fas fa-plus"></i> New Asset</button>}
           </div>
