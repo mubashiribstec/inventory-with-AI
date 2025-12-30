@@ -1,7 +1,6 @@
 
-import React, { useState, useEffect } from 'react';
+import React from 'react';
 import { DashboardStats, Movement, InventoryItem } from '../types.ts';
-import { GoogleGenAI } from "@google/genai";
 
 interface DashboardProps {
   stats: DashboardStats;
@@ -12,47 +11,6 @@ interface DashboardProps {
 }
 
 const Dashboard: React.FC<DashboardProps> = ({ stats, movements, items, onFullAudit, onCheckIn }) => {
-  const [aiInsight, setAiInsight] = useState<string | null>(null);
-  const [isAiLoading, setIsAiLoading] = useState(false);
-
-  const getAiInsight = async () => {
-    const apiKey = process.env.API_KEY;
-    if (!apiKey) {
-      setAiInsight("AI Analysis unavailable: No API Key found.");
-      return;
-    }
-
-    setIsAiLoading(true);
-    try {
-      const ai = new GoogleGenAI({ apiKey });
-      const inventorySummary = items.map(i => ({
-        name: i.name,
-        status: i.status,
-        warranty: i.warranty,
-        dept: i.department
-      })).slice(0, 50);
-
-      const response = await ai.models.generateContent({
-        model: "gemini-3-flash-preview",
-        contents: `Analyze this inventory data: ${JSON.stringify(inventorySummary)}. Provide one high-impact, short, professional actionable insight for the dashboard. Focus on warranty risks, idle stock, or faulty rates.`,
-        config: {
-            systemInstruction: "You are a senior inventory intelligence analyst. Your tone is professional, concise, and helpful."
-        }
-      });
-      
-      setAiInsight(response.text || "No insights found.");
-    } catch (err) {
-      console.error("Gemini failed", err);
-      setAiInsight("Unable to load AI insights. Check connection.");
-    } finally {
-      setIsAiLoading(false);
-    }
-  };
-
-  useEffect(() => {
-    getAiInsight();
-  }, [items.length]);
-
   const statCards = [
     { label: 'Purchased Stock', value: stats.purchased, icon: 'fa-shopping-cart', color: 'indigo', trend: '+12%' },
     { label: 'Assigned Items', value: stats.assigned, icon: 'fa-user-check', color: 'blue', trend: '+8%' },
@@ -188,34 +146,6 @@ const Dashboard: React.FC<DashboardProps> = ({ stats, movements, items, onFullAu
         </div>
 
         <div className="flex flex-col gap-6">
-            <div className="bg-indigo-600 p-8 rounded-3xl text-white shadow-xl shadow-indigo-100 flex flex-col justify-between h-full">
-                <div>
-                    <div className="w-12 h-12 bg-white/20 rounded-2xl flex items-center justify-center mb-6 backdrop-blur-md">
-                    <i className="fas fa-magic text-xl"></i>
-                    </div>
-                    <h3 className="text-xl font-bold mb-3 poppins">Gemini Intelligence</h3>
-                    {isAiLoading ? (
-                        <div className="space-y-3">
-                            <div className="h-4 bg-white/10 rounded-full w-full animate-pulse"></div>
-                            <div className="h-4 bg-white/10 rounded-full w-5/6 animate-pulse"></div>
-                            <div className="h-4 bg-white/10 rounded-full w-2/3 animate-pulse"></div>
-                        </div>
-                    ) : (
-                        <p className="text-indigo-100 text-sm leading-relaxed mb-6 font-medium">
-                            {aiInsight || "No active insights. Everything looks stable."}
-                        </p>
-                    )}
-                </div>
-                <button 
-                    onClick={getAiInsight}
-                    disabled={isAiLoading}
-                    className="w-full py-4 bg-white text-indigo-700 rounded-2xl font-bold text-sm hover:bg-indigo-50 transition shadow-lg flex items-center justify-center gap-2"
-                >
-                    <i className={`fas fa-sync ${isAiLoading ? 'animate-spin' : ''}`}></i>
-                    Refresh Analysis
-                </button>
-            </div>
-
             <div className="bg-white p-6 rounded-3xl border border-slate-100 shadow-sm border-l-4 border-l-amber-400">
                 <h4 className="font-bold text-slate-800 mb-2 flex items-center gap-2">
                     <i className="fas fa-clock text-amber-500"></i>

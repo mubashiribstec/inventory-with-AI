@@ -1,48 +1,12 @@
 
-import React, { useState, useEffect } from 'react';
+import React from 'react';
 import { InventoryItem, ItemStatus } from '../types';
-import { GoogleGenAI } from "@google/genai";
 
 interface ItemDetailsProps {
   item: InventoryItem;
 }
 
 const ItemDetails: React.FC<ItemDetailsProps> = ({ item }) => {
-  const [specs, setSpecs] = useState<string | null>(null);
-  const [isLoading, setIsLoading] = useState(false);
-
-  useEffect(() => {
-    const fetchSpecs = async () => {
-      const apiKey = process.env.API_KEY;
-      if (!apiKey) return;
-
-      setIsLoading(true);
-      try {
-        const ai = new GoogleGenAI({ apiKey });
-        const prompt = `Provide common technical specifications for this hardware model: "${item.name}". 
-        Include Processor, RAM options, Storage type, and Display size if applicable. 
-        Format as a clean markdown list with bold labels. Be professional and concise.`;
-
-        const response = await ai.models.generateContent({
-          model: 'gemini-3-flash-preview',
-          contents: prompt,
-          config: {
-            systemInstruction: "You are a hardware expert. Provide realistic technical specs for common hardware models."
-          }
-        });
-
-        setSpecs(response.text || "Specifications unavailable for this model.");
-      } catch (err) {
-        console.error("Gemini Specs Error", err);
-        setSpecs("Unable to load specifications.");
-      } finally {
-        setIsLoading(false);
-      }
-    };
-
-    fetchSpecs();
-  }, [item.name]);
-
   const getStatusBadge = (status: ItemStatus) => {
     switch (status) {
       case ItemStatus.IN_USE: return 'bg-emerald-50 text-emerald-600 border-emerald-100';
@@ -109,33 +73,7 @@ const ItemDetails: React.FC<ItemDetailsProps> = ({ item }) => {
         </div>
       </div>
 
-      {/* AI Intelligence Specs */}
-      <div className="border-t border-slate-100 pt-8">
-        <div className="flex items-center gap-3 mb-4">
-          <div className="w-8 h-8 bg-indigo-600 rounded-xl flex items-center justify-center text-white text-xs">
-            <i className="fas fa-brain"></i>
-          </div>
-          <h4 className="font-bold text-slate-800 poppins">Technical Specifications <span className="text-[10px] text-indigo-400 uppercase ml-2">AI Generated</span></h4>
-        </div>
-        
-        {isLoading ? (
-          <div className="space-y-3 px-4">
-            <div className="h-4 bg-slate-100 rounded-full w-full animate-pulse"></div>
-            <div className="h-4 bg-slate-100 rounded-full w-5/6 animate-pulse"></div>
-            <div className="h-4 bg-slate-100 rounded-full w-2/3 animate-pulse"></div>
-          </div>
-        ) : (
-          <div className="prose prose-sm max-w-none text-slate-600 px-4 bg-white border border-slate-100 p-5 rounded-2xl shadow-sm">
-             {specs ? (
-               <div className="whitespace-pre-wrap leading-relaxed">{specs}</div>
-             ) : (
-               <p className="italic text-slate-400">Configure your Gemini API key to see AI-generated hardware specs.</p>
-             )}
-          </div>
-        )}
-      </div>
-
-      <div className="flex gap-4">
+      <div className="flex gap-4 border-t border-slate-100 pt-8">
           <button className="flex-1 py-3 bg-white border border-slate-200 text-slate-600 rounded-2xl font-bold text-sm hover:bg-slate-50 transition flex items-center justify-center gap-2">
             <i className="fas fa-history"></i> Life Cycle History
           </button>

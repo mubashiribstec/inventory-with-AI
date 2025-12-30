@@ -23,7 +23,6 @@ import ManagementForm from './components/ManagementForm.tsx';
 import MaintenanceForm from './components/MaintenanceForm.tsx';
 import LicenseForm from './components/LicenseForm.tsx';
 import RequestForm from './components/RequestForm.tsx';
-import Chatbot from './components/Chatbot.tsx';
 import { apiService } from './api.ts';
 import { dbService } from './db.ts';
 
@@ -273,7 +272,6 @@ const App: React.FC = () => {
         </header>
         {loading ? <div className="flex h-64 w-full items-center justify-center"><div className="animate-spin rounded-full h-10 w-10 border-4 border-indigo-600 border-t-transparent"></div></div> : renderContent()}
       </main>
-      {!isStaff && <Chatbot items={items} stats={stats} />}
       {isPurchaseModalOpen && isAdmin && (
         <Modal title="🛒 Procurement" onClose={() => setIsPurchaseModalOpen(false)}>
           <PurchaseForm onSubmit={handleSaveItem} suppliers={suppliers} locations={locations} departments={departments} />
