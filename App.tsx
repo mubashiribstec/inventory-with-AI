@@ -70,6 +70,12 @@ const App: React.FC = () => {
   const [viewingEmployee, setViewingEmployee] = useState<Employee | null>(null);
   const [viewingBudgetBreakdown, setViewingBudgetBreakdown] = useState<Department | null>(null);
 
+  // Helper to determine landing page
+  const getLandingTab = useCallback((user: User): AppTab => {
+    if (user.role === UserRole.ADMIN || user.role === UserRole.MANAGER) return 'dashboard';
+    return 'attendance';
+  }, []);
+
   // Permission helper
   const hasPermission = useCallback((perm: string) => {
     if (currentUser?.role === UserRole.ADMIN) return true;
@@ -110,36 +116,42 @@ const App: React.FC = () => {
 
   useEffect(() => {
     if (currentUser) {
-      const interval = setInterval(pollNotifications, 10000); // Check every 10s
+      const interval = setInterval(pollNotifications, 10000); 
       return () => clearInterval(interval);
     }
   }, [currentUser, pollNotifications]);
 
-  const fetchRoleData = useCallback(async (roleId: string) => {
+  const fetchRoleData = useCallback(async (roleId: string, user: User) => {
     try {
       const allRoles = await apiService.getRoles();
       const role = allRoles.find(r => r.id === roleId);
-      if (role) setCurrentRole(role);
+      if (role) {
+        setCurrentRole(role);
+        // Ensure landing page respects permissions
+        const landing = getLandingTab(user);
+        // Only set active tab if not already on a valid tab (e.g. initial load)
+        setActiveTab(prev => (prev === 'dashboard' || prev === 'attendance') ? landing : prev);
+      }
     } catch (e) {
       console.error("Error fetching role info", e);
     }
-  }, []);
+  }, [getLandingTab]);
 
   useEffect(() => {
     const savedUserString = localStorage.getItem('smartstock_user');
     if (savedUserString) {
       const savedUser = JSON.parse(savedUserString);
       setCurrentUser(savedUser);
-      fetchRoleData(savedUser.role);
-      if (savedUser.role === UserRole.STAFF) setActiveTab('attendance');
+      fetchRoleData(savedUser.role, savedUser);
     }
   }, [fetchRoleData]);
 
   const handleLogin = (user: User) => {
     setCurrentUser(user);
-    fetchRoleData(user.role);
     localStorage.setItem('smartstock_user', JSON.stringify(user));
-    setActiveTab(user.role === UserRole.STAFF ? 'attendance' : 'dashboard');
+    const landing = getLandingTab(user);
+    setActiveTab(landing);
+    fetchRoleData(user.role, user);
   };
 
   const handleLogout = () => {
@@ -286,12 +298,12 @@ const App: React.FC = () => {
     if (!currentUser) return null;
     
     switch (activeTab) {
-      case 'dashboard': return !hasPermission('analytics.view') ? null : <Dashboard stats={stats} movements={movements} items={items} onFullAudit={() => setActiveTab('audit-trail')} onCheckIn={() => setActiveTab('attendance')} />;
+      case 'dashboard': return !hasPermission('analytics.view') ? <AttendanceModule currentUser={currentUser} /> : <Dashboard stats={stats} movements={movements} items={items} onFullAudit={() => setActiveTab('audit-trail')} onCheckIn={() => setActiveTab('attendance')} />;
       case 'attendance': return <AttendanceModule currentUser={currentUser} />;
       case 'notifications': return <NotificationCenter currentUser={currentUser} />;
-      case 'leaves': return !hasPermission('hr.leaves') && currentUser.role !== UserRole.STAFF ? null : <LeaveModule currentUser={currentUser} />;
+      case 'leaves': return !hasPermission('hr.leaves') && currentUser.role === UserRole.STAFF ? <LeaveModule currentUser={currentUser} /> : (hasPermission('hr.leaves') ? <LeaveModule currentUser={currentUser} /> : null);
       case 'user-mgmt': return hasPermission('hr.users') ? <UserManagement usersOverride={visibleUsers} /> : null;
-      case 'role-mgmt': return isAdmin ? <RoleManagement /> : null;
+      case 'role-mgmt': return hasPermission('system.roles') ? <RoleManagement /> : null;
       case 'inventory': return !hasPermission('inventory.view') ? null : <InventoryTable items={items} onUpdate={fetchData} onEdit={hasPermission('inventory.edit') ? setEditingItem : undefined} onView={setViewingItem} />;
       case 'maintenance': return !hasPermission('inventory.edit') ? null : <MaintenanceList logs={maintenance} items={items} onUpdate={fetchData} onAdd={() => setIsMaintenanceModalOpen(true)} />;
       case 'suppliers': return !hasPermission('inventory.view') ? null : <SupplierList suppliers={suppliers} />;
@@ -305,7 +317,7 @@ const App: React.FC = () => {
       case 'faulty-reports': return !hasPermission('inventory.view') ? null : <GenericListView title="Faulty Reports" icon="fa-exclamation-circle" items={maintenance} columns={['item_id', 'issue_type', 'description', 'status']} onAdd={() => setIsMaintenanceModalOpen(true)} onView={() => setActiveTab('maintenance')} />;
       case 'budgets': return !hasPermission('analytics.financials') ? null : <GenericListView title="Department Asset Analytics" icon="fa-wallet" items={departments} columns={['id', 'name', 'head']} onAdd={isAdmin ? () => setManagementModal({ isOpen: true, type: 'Department' }) : undefined} onView={(dept) => setViewingBudgetBreakdown(dept)} />;
       case 'audit-trail': return !hasPermission('analytics.logs') ? null : <GenericListView title="Movement Ledger" icon="fa-history" items={movements} columns={['date', 'item', 'from', 'to', 'employee', 'department', 'status']} onDelete={isAdmin ? (item) => handleManagementDelete(item, 'Movement') : undefined} />;
-      case 'system-logs': return isAdmin ? <GenericListView title="System Audit Logs" icon="fa-shield-alt" items={systemLogs} columns={['timestamp', 'username', 'action', 'target_type', 'target_id', 'details']} /> : null;
+      case 'system-logs': return hasPermission('analytics.logs') && isAdmin ? <GenericListView title="System Audit Logs" icon="fa-shield-alt" items={systemLogs} columns={['timestamp', 'username', 'action', 'target_type', 'target_id', 'details']} /> : null;
       default: return <AttendanceModule currentUser={currentUser} />;
     }
   };
@@ -332,14 +344,6 @@ const App: React.FC = () => {
         ))}
       </div>
 
-      <style>{`
-        @keyframes toastIn {
-          from { transform: translateX(100%); opacity: 0; }
-          to { transform: translateX(0); opacity: 1; }
-        }
-        .animate-toastIn { animation: toastIn 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards; }
-      `}</style>
-
       <Sidebar 
         userRole={currentUser.role} 
         activeTab={activeTab as any} 
@@ -363,7 +367,7 @@ const App: React.FC = () => {
              </div>
           </div>
           <div className="flex items-center gap-3">
-            {isAdmin && <button onClick={handleInitDB} disabled={syncing} className={`px-4 py-2.5 bg-white border border-slate-200 text-slate-700 rounded-xl hover:bg-slate-50 transition font-bold text-sm shadow-sm flex items-center gap-2 ${syncing ? 'opacity-50' : ''}`}><i className={`fas fa-database ${syncing ? 'animate-spin' : ''}`}></i> Sync & Init</button>}
+            {hasPermission('system.db') && <button onClick={handleInitDB} disabled={syncing} className={`px-4 py-2.5 bg-white border border-slate-200 text-slate-700 rounded-xl hover:bg-slate-50 transition font-bold text-sm shadow-sm flex items-center gap-2 ${syncing ? 'opacity-50' : ''}`}><i className={`fas fa-database ${syncing ? 'animate-spin' : ''}`}></i> Sync & Init</button>}
             {hasPermission('inventory.procure') && <button onClick={() => { setEditingItem(null); setIsPurchaseModalOpen(true); }} className="px-4 py-2.5 bg-indigo-600 text-white rounded-xl hover:bg-indigo-700 transition font-bold text-sm shadow-lg shadow-indigo-100 flex items-center gap-2"><i className="fas fa-plus"></i> New Asset</button>}
           </div>
         </header>

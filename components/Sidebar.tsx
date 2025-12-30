@@ -34,7 +34,7 @@ const Sidebar: React.FC<SidebarProps> = ({ userRole, activeTab, setActiveTab, on
 
   useEffect(() => {
     fetchUnread();
-    const interval = setInterval(fetchUnread, 30000); // Poll every 30s
+    const interval = setInterval(fetchUnread, 30000); 
     return () => clearInterval(interval);
   }, []);
 
@@ -100,7 +100,6 @@ const Sidebar: React.FC<SidebarProps> = ({ userRole, activeTab, setActiveTab, on
       <div className="px-4 pb-6 space-y-6 flex-1">
         {navGroups.map((group, groupIdx) => {
           const visibleItems = group.items.filter(i => {
-            // Staff/Anyone can see basic items. Specific items check permissions.
             if (!i.permission) return true;
             return hasPermission(i.permission);
           });
@@ -138,15 +137,19 @@ const Sidebar: React.FC<SidebarProps> = ({ userRole, activeTab, setActiveTab, on
       </div>
 
       <div className="mt-auto p-4 space-y-3">
-        {isAdmin && (
+        {(isAdmin || hasPermission('system.roles') || hasPermission('analytics.logs')) && (
            <div className="bg-slate-50 p-4 rounded-2xl border border-slate-100 space-y-2">
               <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-2">Admin Panel</p>
-              <button onClick={() => setActiveTab('system-logs')} className={`w-full py-2 bg-white border border-slate-200 text-slate-600 rounded-xl text-xs font-bold hover:bg-slate-50 transition ${activeTab === 'system-logs' ? 'ring-2 ring-indigo-500' : ''}`}>
-                 <i className="fas fa-shield-alt mr-2"></i> Audit Logs
-              </button>
-              <button onClick={() => setActiveTab('role-mgmt')} className={`w-full py-2 bg-white border border-slate-200 text-slate-600 rounded-xl text-xs font-bold hover:bg-slate-50 transition ${activeTab === 'role-mgmt' ? 'ring-2 ring-indigo-500' : ''}`}>
-                 <i className="fas fa-user-tag mr-2"></i> Role Config
-              </button>
+              {hasPermission('analytics.logs') && (
+                <button onClick={() => setActiveTab('system-logs')} className={`w-full py-2 bg-white border border-slate-200 text-slate-600 rounded-xl text-xs font-bold hover:bg-slate-50 transition ${activeTab === 'system-logs' ? 'ring-2 ring-indigo-500' : ''}`}>
+                   <i className="fas fa-shield-alt mr-2"></i> Audit Logs
+                </button>
+              )}
+              {hasPermission('system.roles') && (
+                <button onClick={() => setActiveTab('role-mgmt')} className={`w-full py-2 bg-white border border-slate-200 text-slate-600 rounded-xl text-xs font-bold hover:bg-slate-50 transition ${activeTab === 'role-mgmt' ? 'ring-2 ring-indigo-500' : ''}`}>
+                   <i className="fas fa-user-tag mr-2"></i> Role Config
+                </button>
+              )}
            </div>
         )}
         <button 
