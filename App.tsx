@@ -13,6 +13,7 @@ import GenericListView from './components/GenericListView.tsx';
 import AttendanceModule from './components/AttendanceModule.tsx';
 import LeaveModule from './components/LeaveModule.tsx';
 import UserManagement from './components/UserManagement.tsx';
+import RoleManagement from './components/RoleManagement.tsx';
 import Login from './components/Login.tsx';
 import { ItemStatus, UserRole, User, UserLog, InventoryItem, Movement, Supplier, LocationRecord, MaintenanceLog, Category, Employee, Department, License, AssetRequest } from './types.ts';
 import Modal from './components/Modal.tsx';
@@ -26,7 +27,7 @@ import Chatbot from './components/Chatbot.tsx';
 import { apiService } from './api.ts';
 import { dbService } from './db.ts';
 
-type AppTab = 'dashboard' | 'inventory' | 'maintenance' | 'suppliers' | 'locations' | 'licenses' | 'categories' | 'employees' | 'departments' | 'purchase-history' | 'requests' | 'faulty-reports' | 'budgets' | 'audit-trail' | 'system-logs' | 'attendance' | 'leaves' | 'user-mgmt';
+type AppTab = 'dashboard' | 'inventory' | 'maintenance' | 'suppliers' | 'locations' | 'licenses' | 'categories' | 'employees' | 'departments' | 'purchase-history' | 'requests' | 'faulty-reports' | 'budgets' | 'audit-trail' | 'system-logs' | 'attendance' | 'leaves' | 'user-mgmt' | 'role-mgmt';
 
 const App: React.FC = () => {
   const [currentUser, setCurrentUser] = useState<User | null>(null);
@@ -39,6 +40,7 @@ const App: React.FC = () => {
   const [licenses, setLicenses] = useState<License[]>([]);
   const [requests, setRequests] = useState<AssetRequest[]>([]);
   const [systemLogs, setSystemLogs] = useState<UserLog[]>([]);
+  const [users, setUsers] = useState<User[]>([]);
   
   const [categories, setCategories] = useState<Category[]>([]);
   const [employees, setEmployees] = useState<Employee[]>([]);
@@ -92,7 +94,7 @@ const App: React.FC = () => {
       setLoading(true);
       await dbService.init(); 
       
-      const [fItems, fMovements, fSuppliers, fLocations, fMaintenance, fLicenses, fCats, fEmps, fDepts, fRequests] = await Promise.all([
+      const [fItems, fMovements, fSuppliers, fLocations, fMaintenance, fLicenses, fCats, fEmps, fDepts, fRequests, fUsers] = await Promise.all([
         apiService.getAllItems(),
         apiService.getAllMovements(),
         apiService.getAllSuppliers(),
@@ -102,7 +104,8 @@ const App: React.FC = () => {
         apiService.getCategories(),
         apiService.getEmployees(),
         apiService.getDepartments(),
-        apiService.getAllRequests()
+        apiService.getAllRequests(),
+        apiService.getUsers()
       ]);
       
       setItems(fItems || []);
@@ -114,6 +117,7 @@ const App: React.FC = () => {
       setRequests(fRequests || []);
       setCategories(fCats || []);
       setEmployees(fEmps || []);
+      setUsers(fUsers || []);
 
       const rawDepts = fDepts || [];
       const enrichedDepts = rawDepts.map(dept => {
@@ -174,7 +178,10 @@ const App: React.FC = () => {
 
   const isStaff = currentUser?.role === UserRole.STAFF;
   const canEdit = currentUser?.role !== UserRole.STAFF;
-  const isAdmin = currentUser?.role === UserRole.ADMIN || currentUser?.role === UserRole.MANAGER;
+  const isAdmin = currentUser?.role === UserRole.ADMIN;
+  const isManager = currentUser?.role === UserRole.MANAGER || isAdmin;
+  const isHR = currentUser?.role === UserRole.HR || isManager;
+  const isTeamLead = currentUser?.role === UserRole.TEAM_LEAD || isHR;
 
   const renderContent = () => {
     if (!currentUser) return null;
@@ -183,14 +190,15 @@ const App: React.FC = () => {
       case 'dashboard': return isStaff ? null : <Dashboard stats={stats} movements={movements} items={items} onFullAudit={() => setActiveTab('audit-trail')} onCheckIn={() => setActiveTab('attendance')} />;
       case 'attendance': return <AttendanceModule currentUser={currentUser} />;
       case 'leaves': return <LeaveModule currentUser={currentUser} />;
-      case 'user-mgmt': return isAdmin ? <UserManagement /> : null;
+      case 'user-mgmt': return isManager ? <UserManagement /> : null;
+      case 'role-mgmt': return isAdmin ? <RoleManagement /> : null;
       case 'inventory': return isStaff ? null : <InventoryTable items={items} onUpdate={fetchData} onEdit={canEdit ? setEditingItem : undefined} onView={setViewingItem} />;
       case 'maintenance': return isStaff ? null : <MaintenanceList logs={maintenance} items={items} onUpdate={fetchData} onAdd={() => setIsMaintenanceModalOpen(true)} />;
       case 'suppliers': return isStaff ? null : <SupplierList suppliers={suppliers} />;
       case 'licenses': return isStaff ? null : <LicenseList licenses={licenses} suppliers={suppliers} onAdd={canEdit ? () => setIsLicenseModalOpen(true) : undefined} />;
       case 'categories': return isStaff ? null : <GenericListView title="Asset Categories" icon="fa-tags" items={categories} columns={['id', 'name', 'itemCount']} onAdd={canEdit ? () => setManagementModal({ isOpen: true, type: 'Category' }) : undefined} onDelete={canEdit ? (item) => handleManagementDelete(item, 'Category') : undefined} />;
-      case 'employees': return isStaff ? null : <GenericListView title="Employee Registry" icon="fa-users" items={employees} columns={['id', 'name', 'email', 'department', 'role']} onAdd={isAdmin ? () => setManagementModal({ isOpen: true, type: 'Employee' }) : undefined} onDelete={isAdmin ? (item) => handleManagementDelete(item, 'Employee') : undefined} onView={(emp) => setViewingEmployee(emp)} />;
-      case 'departments': return isStaff ? null : <GenericListView title="Departmental Overview" icon="fa-building" items={departments} columns={['id', 'name', 'budget_month', 'head', 'spent', 'budget']} onAdd={isAdmin ? () => setManagementModal({ isOpen: true, type: 'Department' }) : undefined} onDelete={isAdmin ? (item) => handleManagementDelete(item, 'Department') : undefined} />;
+      case 'employees': return isStaff && !isTeamLead ? null : <GenericListView title="Staff Directory" icon="fa-users" items={employees} columns={['id', 'name', 'email', 'department', 'role']} onAdd={isAdmin ? () => setManagementModal({ isOpen: true, type: 'Employee' }) : undefined} onDelete={isAdmin ? (item) => handleManagementDelete(item, 'Employee') : undefined} onView={(emp) => setViewingEmployee(emp)} />;
+      case 'departments': return isHR ? <GenericListView title="Departmental Overview" icon="fa-building" items={departments} columns={['id', 'name', 'budget_month', 'head', 'spent', 'budget']} onAdd={isAdmin ? () => setManagementModal({ isOpen: true, type: 'Department' }) : undefined} onDelete={isAdmin ? (item) => handleManagementDelete(item, 'Department') : undefined} /> : null;
       case 'purchase-history': return isStaff ? null : <GenericListView title="Procurement History" icon="fa-history" items={movements.filter(m => m.status === 'PURCHASED')} columns={['date', 'item', 'from', 'to']} onAdd={canEdit ? () => setIsPurchaseModalOpen(true) : undefined} onEdit={canEdit ? handleEditPurchase : undefined} onDelete={isAdmin ? (m) => handleManagementDelete(m, 'Movement') : undefined} />;
       case 'requests': 
         const staffRequests = isStaff ? requests.filter(r => r.employee === currentUser.full_name) : requests;
@@ -203,8 +211,8 @@ const App: React.FC = () => {
           onDelete={canEdit ? (item) => handleManagementDelete(item, 'Request') : undefined} 
           onView={(item) => alert(item.notes)} 
         />;
-      case 'faulty-reports': return <GenericListView title="Faulty Reports" icon="fa-exclamation-circle" items={maintenance} columns={['item_id', 'issue_type', 'description', 'status']} onAdd={() => setIsMaintenanceModalOpen(true)} onView={() => !isStaff && setActiveTab('maintenance')} />;
-      case 'budgets': return isStaff ? null : <GenericListView title="Budget Tracker" icon="fa-wallet" items={departments} columns={['name', 'budget_month', 'budget', 'spent', 'remaining', 'utilization', 'budget_status']} onAdd={isAdmin ? () => setManagementModal({ isOpen: true, type: 'Department' }) : undefined} onView={(dept) => setViewingBudgetBreakdown(dept)} />;
+      case 'faulty-reports': return isStaff ? null : <GenericListView title="Faulty Reports" icon="fa-exclamation-circle" items={maintenance} columns={['item_id', 'issue_type', 'description', 'status']} onAdd={() => setIsMaintenanceModalOpen(true)} onView={() => !isStaff && setActiveTab('maintenance')} />;
+      case 'budgets': return isManager ? <GenericListView title="Budget Tracker" icon="fa-wallet" items={departments} columns={['name', 'budget_month', 'budget', 'spent', 'remaining', 'utilization', 'budget_status']} onAdd={isAdmin ? () => setManagementModal({ isOpen: true, type: 'Department' }) : undefined} onView={(dept) => setViewingBudgetBreakdown(dept)} /> : null;
       case 'audit-trail': return isStaff ? null : <GenericListView title="Movement Ledger" icon="fa-history" items={movements} columns={['date', 'item', 'from', 'to', 'employee', 'department', 'status']} onDelete={isAdmin ? (item) => handleManagementDelete(item, 'Movement') : undefined} />;
       case 'system-logs': return isAdmin ? <GenericListView title="System Audit Logs" icon="fa-shield-alt" items={systemLogs} columns={['timestamp', 'username', 'action', 'target_type', 'target_id', 'details']} /> : null;
       default: return isStaff ? <AttendanceModule currentUser={currentUser} /> : <Dashboard stats={stats} movements={movements} items={items} onFullAudit={() => setActiveTab('audit-trail')} onCheckIn={() => setActiveTab('attendance')} />;
@@ -278,7 +286,7 @@ const App: React.FC = () => {
         onLogout={handleLogout}
       />
       
-      <main className={`flex-1 ${isStaff ? 'lg:ml-64' : 'lg:ml-64'} p-6 lg:p-10 transition-all duration-300`}>
+      <main className={`flex-1 lg:ml-64 p-6 lg:p-10 transition-all duration-300`}>
         <header className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-8">
           <div className="flex items-center gap-4">
              <div className="w-12 h-12 bg-indigo-50 rounded-2xl flex items-center justify-center text-indigo-600 border border-indigo-100 lg:hidden">
@@ -288,7 +296,7 @@ const App: React.FC = () => {
                 <h1 className="text-3xl font-bold text-slate-800 capitalize tracking-tight">{activeTab.replace('-', ' ')}</h1>
                 <p className="text-slate-500 mt-1 flex items-center gap-2">
                    <span className="font-bold text-indigo-600">{currentUser.full_name}</span>
-                   <span className="px-2 py-0.5 bg-slate-100 text-[10px] rounded-full border border-slate-200 font-bold uppercase">{currentUser.role}</span>
+                   <span className="px-2 py-0.5 bg-slate-100 text-[10px] rounded-full border border-slate-200 font-bold uppercase">{currentUser.role.replace('_', ' ')}</span>
                 </p>
              </div>
           </div>
@@ -348,6 +356,28 @@ const App: React.FC = () => {
       {managementModal.isOpen && (
         <Modal title={`➕ Add ${managementModal.type}`} onClose={() => setManagementModal({ isOpen: false, type: null })}>
           <ManagementForm type={managementModal.type!} onSubmit={handleManagementSubmit} />
+        </Modal>
+      )}
+
+      {viewingItem && (
+        <Modal title="Asset Profile" onClose={() => setViewingItem(null)}>
+          <ItemDetails item={viewingItem} />
+        </Modal>
+      )}
+
+      {viewingEmployee && (
+        <Modal title="Staff Profile" onClose={() => setViewingEmployee(null)}>
+          <EmployeeDetails 
+            employee={viewingEmployee} 
+            items={items} 
+            linkedUser={users.find(u => u.full_name === viewingEmployee.name)}
+          />
+        </Modal>
+      )}
+
+      {viewingBudgetBreakdown && (
+        <Modal title="Financial Analysis" onClose={() => setViewingBudgetBreakdown(null)}>
+          <BudgetBreakdown department={viewingBudgetBreakdown} items={items} />
         </Modal>
       )}
     </div>

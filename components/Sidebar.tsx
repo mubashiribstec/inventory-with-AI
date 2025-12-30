@@ -4,7 +4,7 @@ import { UserRole } from '../types.ts';
 
 interface SidebarProps {
   userRole: UserRole;
-  activeTab: 'dashboard' | 'inventory' | 'maintenance' | 'suppliers' | 'locations' | 'licenses' | 'categories' | 'employees' | 'departments' | 'purchase-history' | 'requests' | 'faulty-reports' | 'budgets' | 'audit-trail' | 'system-logs' | 'attendance' | 'leaves' | 'user-mgmt';
+  activeTab: 'dashboard' | 'inventory' | 'maintenance' | 'suppliers' | 'locations' | 'licenses' | 'categories' | 'employees' | 'departments' | 'purchase-history' | 'requests' | 'faulty-reports' | 'budgets' | 'audit-trail' | 'system-logs' | 'attendance' | 'leaves' | 'user-mgmt' | 'role-mgmt';
   setActiveTab: (tab: any) => void;
   onLogout: () => void;
 }
@@ -12,6 +12,8 @@ interface SidebarProps {
 const Sidebar: React.FC<SidebarProps> = ({ userRole, activeTab, setActiveTab, onLogout }) => {
   const isAdmin = userRole === UserRole.ADMIN;
   const isManager = userRole === UserRole.MANAGER || isAdmin;
+  const isHR = userRole === UserRole.HR || isManager;
+  const isTeamLead = userRole === UserRole.TEAM_LEAD || isHR;
   const isStaff = userRole === UserRole.STAFF;
 
   const navGroups = [
@@ -20,8 +22,8 @@ const Sidebar: React.FC<SidebarProps> = ({ userRole, activeTab, setActiveTab, on
       items: [
         { id: 'attendance', icon: 'fa-user-clock', label: 'Attendance Hub' },
         { id: 'leaves', icon: 'fa-calendar-alt', label: 'Leave Requests' },
-        { id: 'employees', icon: 'fa-users', label: 'Staff Directory', hide: isStaff },
-        { id: 'departments', icon: 'fa-building', label: 'Departments', hide: !isAdmin },
+        { id: 'employees', icon: 'fa-users', label: 'Staff Directory', hide: isStaff && !isTeamLead },
+        { id: 'departments', icon: 'fa-building', label: 'Departments', hide: !isHR },
         { id: 'user-mgmt', icon: 'fa-user-shield', label: 'User Accounts', hide: !isManager },
       ]
     },
@@ -31,7 +33,6 @@ const Sidebar: React.FC<SidebarProps> = ({ userRole, activeTab, setActiveTab, on
         { id: 'dashboard', icon: 'fa-chart-line', label: 'Overview', hide: isStaff },
         { id: 'budgets', icon: 'fa-wallet', label: 'Budget Tracker', hide: !isManager },
         { id: 'audit-trail', icon: 'fa-history', label: 'Movement Ledger', hide: isStaff },
-        { id: 'system-logs', icon: 'fa-shield-alt', label: 'System Logs', hide: !isAdmin },
       ]
     },
     {
@@ -48,7 +49,7 @@ const Sidebar: React.FC<SidebarProps> = ({ userRole, activeTab, setActiveTab, on
         { id: 'purchase-history', icon: 'fa-history', label: 'Purchase Ledger', hide: isStaff },
         { id: 'requests', icon: 'fa-clipboard-list', label: 'Employee Requests' },
         { id: 'maintenance', icon: 'fa-tools', label: 'Maintenance Hub', hide: isStaff },
-        { id: 'faulty-reports', icon: 'fa-exclamation-triangle', label: 'Faulty Reports' },
+        { id: 'faulty-reports', icon: 'fa-exclamation-triangle', label: 'Faulty Reports', hide: isStaff },
       ]
     },
     {
@@ -104,10 +105,13 @@ const Sidebar: React.FC<SidebarProps> = ({ userRole, activeTab, setActiveTab, on
 
       <div className="mt-auto p-4 space-y-3">
         {isAdmin && (
-           <div className="bg-slate-50 p-4 rounded-2xl border border-slate-100">
+           <div className="bg-slate-50 p-4 rounded-2xl border border-slate-100 space-y-2">
               <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-2">Admin Panel</p>
-              <button onClick={() => setActiveTab('system-logs')} className="w-full py-2 bg-white border border-slate-200 text-slate-600 rounded-xl text-xs font-bold hover:bg-slate-50 transition">
+              <button onClick={() => setActiveTab('system-logs')} className={`w-full py-2 bg-white border border-slate-200 text-slate-600 rounded-xl text-xs font-bold hover:bg-slate-50 transition ${activeTab === 'system-logs' ? 'ring-2 ring-indigo-500' : ''}`}>
                  <i className="fas fa-shield-alt mr-2"></i> Audit Logs
+              </button>
+              <button onClick={() => setActiveTab('role-mgmt')} className={`w-full py-2 bg-white border border-slate-200 text-slate-600 rounded-xl text-xs font-bold hover:bg-slate-50 transition ${activeTab === 'role-mgmt' ? 'ring-2 ring-indigo-500' : ''}`}>
+                 <i className="fas fa-user-tag mr-2"></i> Role Config
               </button>
            </div>
         )}

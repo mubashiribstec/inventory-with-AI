@@ -12,6 +12,8 @@ export enum ItemStatus {
 export enum UserRole {
   ADMIN = 'ADMIN',
   MANAGER = 'MANAGER',
+  TEAM_LEAD = 'TEAM_LEAD',
+  HR = 'HR',
   STAFF = 'STAFF'
 }
 

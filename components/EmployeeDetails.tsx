@@ -1,13 +1,14 @@
 
 import React from 'react';
-import { Employee, InventoryItem, ItemStatus } from '../types.ts';
+import { Employee, InventoryItem, ItemStatus, User } from '../types.ts';
 
 interface EmployeeDetailsProps {
   employee: Employee;
   items: InventoryItem[];
+  linkedUser?: User;
 }
 
-const EmployeeDetails: React.FC<EmployeeDetailsProps> = ({ employee, items }) => {
+const EmployeeDetails: React.FC<EmployeeDetailsProps> = ({ employee, items, linkedUser }) => {
   const assignedItems = items.filter(item => item.assignedTo === employee.name);
 
   const getStatusBadge = (status: ItemStatus) => {
@@ -44,6 +45,28 @@ const EmployeeDetails: React.FC<EmployeeDetailsProps> = ({ employee, items }) =>
               {employee.role}
             </span>
           </div>
+        </div>
+      </div>
+
+      {/* System info if linked */}
+      <div className="grid grid-cols-2 gap-4">
+        <div className="p-5 bg-slate-50 rounded-2xl border border-slate-100 flex items-center justify-between">
+           <div>
+              <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Shift Schedule</p>
+              <p className="text-lg font-bold text-slate-800">{linkedUser?.shift_start_time || 'Not Configured'}</p>
+           </div>
+           <div className="w-10 h-10 bg-indigo-50 text-indigo-600 rounded-xl flex items-center justify-center">
+              <i className="fas fa-clock"></i>
+           </div>
+        </div>
+        <div className="p-5 bg-slate-50 rounded-2xl border border-slate-100 flex items-center justify-between">
+           <div>
+              <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">System Access</p>
+              <p className="text-lg font-bold text-slate-800 uppercase">{linkedUser?.role || 'No Account'}</p>
+           </div>
+           <div className="w-10 h-10 bg-indigo-50 text-indigo-600 rounded-xl flex items-center justify-center">
+              <i className="fas fa-user-shield"></i>
+           </div>
         </div>
       </div>
 

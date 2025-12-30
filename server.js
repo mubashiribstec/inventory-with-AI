@@ -224,6 +224,8 @@ app.post('/api/init-db', async (req, res) => {
     await conn.query("REPLACE INTO users (id, username, password, role, full_name, shift_start_time) VALUES ('U-001', 'admin', 'admin123', 'ADMIN', 'System Administrator', '09:00')");
     await conn.query("REPLACE INTO users (id, username, password, role, full_name, shift_start_time) VALUES ('U-002', 'manager', 'manager123', 'MANAGER', 'Operations Manager', '09:00')");
     await conn.query("REPLACE INTO users (id, username, password, role, full_name, shift_start_time) VALUES ('U-003', 'staff', 'staff123', 'STAFF', 'Basic Staff', '08:30')");
+    await conn.query("REPLACE INTO users (id, username, password, role, full_name, shift_start_time) VALUES ('U-004', 'hr', 'hr123', 'HR', 'HR Specialist', '09:00')");
+    await conn.query("REPLACE INTO users (id, username, password, role, full_name, shift_start_time) VALUES ('U-005', 'lead', 'lead123', 'TEAM_LEAD', 'Team Lead', '09:00')");
 
     console.log('Database initialization complete.');
     sendJSON(res, { success: true, message: 'Database successfully initialized. Default accounts are ready.' });

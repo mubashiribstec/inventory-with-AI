@@ -10,7 +10,7 @@ interface AttendanceModuleProps {
 const AttendanceModule: React.FC<AttendanceModuleProps> = ({ currentUser }) => {
   const [records, setRecords] = useState<AttendanceRecord[]>([]);
   const [loading, setLoading] = useState(false);
-  const [todayRecord, setTodayRecord] = useState<AttendanceRecord | null>(null);
+  const [activeSession, setActiveSession] = useState<AttendanceRecord | null>(null);
   const [editingRecord, setEditingRecord] = useState<AttendanceRecord | null>(null);
 
   // Use a stable reference for today's date string
@@ -47,8 +47,16 @@ const AttendanceModule: React.FC<AttendanceModuleProps> = ({ currentUser }) => {
       const all = await apiService.getAttendance();
       setRecords(all);
       
-      const mine = all.find(r => r.user_id === currentUser.id && sanitizeDateForSQL(r.date) === todayStr);
-      setTodayRecord(mine || null);
+      // Find the LATEST active session (no check-out) for the current user
+      const active = all
+        .filter(r => r.user_id === currentUser.id && r.check_out === null)
+        .sort((a, b) => {
+          const timeA = a.check_in ? new Date(a.check_in).getTime() : 0;
+          const timeB = b.check_in ? new Date(b.check_in).getTime() : 0;
+          return timeB - timeA;
+        })[0];
+        
+      setActiveSession(active || null);
     } catch (err) {
       console.error("Fetch attendance error", err);
     } finally {
@@ -64,6 +72,9 @@ const AttendanceModule: React.FC<AttendanceModuleProps> = ({ currentUser }) => {
     const now = new Date();
     const checkInTime = formatDateTimeForSQL(now);
     
+    // We use a unique ID that includes a timestamp to allow multiple check-ins per day
+    const uniqueId = `ATT-${currentUser.id}-${Date.now()}`;
+    
     const shiftStart = currentUser.shift_start_time || '09:00';
     const [shiftH, shiftM] = shiftStart.split(':').map(Number);
     
@@ -72,10 +83,12 @@ const AttendanceModule: React.FC<AttendanceModuleProps> = ({ currentUser }) => {
     const currentMinutes = now.getHours() * 60 + now.getMinutes();
     
     // Employee is LATE only if check-in is > 30 minutes after shift start
+    // Note: If this is a SECOND shift (extra hours), LATE might not apply, 
+    // but we keep the logic consistent with organizational rules.
     const isLate = currentMinutes > (shiftMinutes + 30);
     
     const record: AttendanceRecord = {
-      id: `ATT-${todayStr}-${currentUser.id}`,
+      id: uniqueId,
       user_id: currentUser.id,
       username: currentUser.username,
       date: todayStr,
@@ -94,7 +107,7 @@ const AttendanceModule: React.FC<AttendanceModuleProps> = ({ currentUser }) => {
   };
 
   const handleCheckOut = async () => {
-    if (!todayRecord) return;
+    if (!activeSession) return;
     
     const now = new Date();
     const checkOutTime = formatDateTimeForSQL(now);
@@ -108,29 +121,39 @@ const AttendanceModule: React.FC<AttendanceModuleProps> = ({ currentUser }) => {
       return isNaN(d.getTime()) ? null : d;
     };
 
-    const checkIn = parseDate(todayRecord.check_in);
-    let finalStatus = todayRecord.status;
-
+    const checkIn = parseDate(activeSession.check_in);
+    
     if (checkIn) {
-      const durationHours = (now.getTime() - checkIn.getTime()) / (1000 * 60 * 60);
+      const durationMs = now.getTime() - checkIn.getTime();
+      const durationHours = durationMs / (1000 * 60 * 60);
+      
+      // Mandatory 1-hour minimum stay
+      if (durationHours < 1) {
+        const remainingMinutes = Math.ceil(60 - (durationMs / (1000 * 60)));
+        alert(`Safety Protocol: You cannot check out within 1 hour of checking in. Please try again in ${remainingMinutes} minutes.`);
+        return;
+      }
+
+      let finalStatus = activeSession.status;
+      // Mark as half-day if less than 5 hours (adjust as per company policy for extra shifts)
       if (durationHours < 5) {
         finalStatus = 'HALF-DAY';
       }
-    }
 
-    const record: AttendanceRecord = {
-      ...todayRecord,
-      date: sanitizeDateForSQL(todayRecord.date),
-      check_in: formatDateTimeForSQL(todayRecord.check_in),
-      check_out: checkOutTime,
-      status: finalStatus as any
-    };
+      const record: AttendanceRecord = {
+        ...activeSession,
+        date: sanitizeDateForSQL(activeSession.date),
+        check_in: formatDateTimeForSQL(activeSession.check_in),
+        check_out: checkOutTime,
+        status: finalStatus as any
+      };
 
-    try {
-      await apiService.saveAttendance(record);
-      fetchRecords();
-    } catch (err) {
-      alert("Error checking out: " + err);
+      try {
+        await apiService.saveAttendance(record);
+        fetchRecords();
+      } catch (err) {
+        alert("Error checking out: " + err);
+      }
     }
   };
 
@@ -190,46 +213,36 @@ const AttendanceModule: React.FC<AttendanceModuleProps> = ({ currentUser }) => {
             <i className="fas fa-clock"></i>
           </div>
           <div>
-            <h3 className="text-xl font-bold text-slate-800 poppins">Daily Attendance</h3>
+            <h3 className="text-xl font-bold text-slate-800 poppins">Shift Control</h3>
             <p className="text-slate-500 font-medium">
-               Your Shift: <span className="font-bold text-indigo-600">{currentUser.shift_start_time || '09:00'}</span>
+               Assigned Shift: <span className="font-bold text-indigo-600">{currentUser.shift_start_time || '09:00'}</span>
             </p>
+            <p className="text-[10px] text-slate-400 mt-1 uppercase font-bold tracking-widest">Supports flexible hours & double shifts</p>
           </div>
         </div>
 
         <div className="flex gap-4 w-full md:w-auto">
-          {!todayRecord?.check_in ? (
+          {!activeSession ? (
             <button 
               onClick={handleCheckIn}
               className="flex-1 md:flex-none px-8 py-4 bg-indigo-600 text-white rounded-2xl font-bold hover:bg-indigo-700 shadow-lg shadow-indigo-100 transition flex items-center justify-center gap-2"
             >
               <i className="fas fa-sign-in-alt"></i>
-              Check In
+              Start New Shift
             </button>
-          ) : !todayRecord.check_out ? (
+          ) : (
             <div className="flex flex-col md:flex-row gap-4 w-full">
               <div className="px-6 py-4 bg-emerald-50 border border-emerald-100 rounded-2xl flex flex-col justify-center">
-                 <span className="text-[10px] text-emerald-600 font-bold uppercase">Checked In At</span>
-                 <span className="text-emerald-800 font-bold">{displayTime(todayRecord.check_in)}</span>
+                 <span className="text-[10px] text-emerald-600 font-bold uppercase">Shift Started At</span>
+                 <span className="text-emerald-800 font-bold">{displayTime(activeSession.check_in)}</span>
               </div>
               <button 
                 onClick={handleCheckOut}
                 className="px-8 py-4 bg-rose-600 text-white rounded-2xl font-bold hover:bg-rose-700 shadow-lg shadow-rose-100 transition flex items-center justify-center gap-2"
               >
                 <i className="fas fa-sign-out-alt"></i>
-                Check Out
+                End Shift Session
               </button>
-            </div>
-          ) : (
-            <div className="flex gap-4">
-              <div className="px-6 py-4 bg-slate-100 border border-slate-200 rounded-2xl flex flex-col justify-center">
-                 <span className="text-[10px] text-slate-500 font-bold uppercase">Shift Completed</span>
-                 <span className="text-slate-800 font-bold">Shift Ended</span>
-              </div>
-              <div className="px-6 py-4 bg-indigo-50 border border-indigo-100 rounded-2xl flex flex-col justify-center text-center">
-                 <span className="text-[10px] text-indigo-600 font-bold uppercase">Status</span>
-                 <span className="text-indigo-800 font-bold">{todayRecord.status}</span>
-              </div>
             </div>
           )}
         </div>
@@ -238,7 +251,8 @@ const AttendanceModule: React.FC<AttendanceModuleProps> = ({ currentUser }) => {
       {/* History Table */}
       <div className="bg-white rounded-3xl border border-slate-100 shadow-sm overflow-hidden">
         <div className="p-6 border-b border-slate-100 flex items-center justify-between">
-          <h3 className="font-bold text-slate-800 poppins">Attendance Ledger</h3>
+          <h3 className="font-bold text-slate-800 poppins">Attendance & Shift Ledger</h3>
+          <p className="text-[10px] text-slate-400 font-bold uppercase">Showing all logged sessions</p>
         </div>
         <div className="overflow-x-auto">
           <table className="w-full text-left">
@@ -248,14 +262,18 @@ const AttendanceModule: React.FC<AttendanceModuleProps> = ({ currentUser }) => {
                 {isManagement && <th className="px-6 py-5">Employee</th>}
                 <th className="px-6 py-5">Check In</th>
                 <th className="px-6 py-5">Check Out</th>
-                <th className="px-6 py-5">Hours</th>
+                <th className="px-6 py-5">Duration</th>
                 <th className="px-6 py-5">Status</th>
-                <th className="px-6 py-5">Alerts</th>
+                <th className="px-6 py-5">Safety Check</th>
                 {isFullAdmin && <th className="px-6 py-5 text-center">Actions</th>}
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-50">
-              {filteredRecords.sort((a,b) => b.date.localeCompare(a.date)).map(record => {
+              {filteredRecords.sort((a,b) => {
+                 const timeA = a.check_in ? new Date(a.check_in).getTime() : 0;
+                 const timeB = b.check_in ? new Date(b.check_in).getTime() : 0;
+                 return timeB - timeA;
+              }).map(record => {
                 const parseDate = (dStr: string | null) => {
                   if (!dStr) return null;
                   let iso = dStr;
@@ -275,7 +293,7 @@ const AttendanceModule: React.FC<AttendanceModuleProps> = ({ currentUser }) => {
                     {isManagement && <td className="px-6 py-4 text-xs font-bold text-indigo-600">{record.username}</td>}
                     <td className="px-6 py-4 text-xs text-slate-600">{displayTime(record.check_in)}</td>
                     <td className="px-6 py-4 text-xs text-slate-600">{displayTime(record.check_out)}</td>
-                    <td className="px-6 py-4 text-xs font-bold text-slate-800">{diff > 0 ? `${diff.toFixed(1)} hrs` : '-'}</td>
+                    <td className="px-6 py-4 text-xs font-bold text-slate-800">{diff > 0 ? `${diff.toFixed(1)} hrs` : (record.check_out ? '-' : 'Active')}</td>
                     <td className="px-6 py-4">
                       <span className={`px-2 py-0.5 rounded-full text-[9px] font-bold uppercase border ${
                         record.status === 'PRESENT' ? 'bg-emerald-50 text-emerald-600 border-emerald-100' :
@@ -290,7 +308,13 @@ const AttendanceModule: React.FC<AttendanceModuleProps> = ({ currentUser }) => {
                       {hoursShort && (
                         <div className="flex items-center gap-1 text-rose-500 font-bold text-[9px] uppercase tracking-tighter bg-rose-50 px-2 py-1 rounded-lg border border-rose-100">
                           <i className="fas fa-exclamation-triangle"></i>
-                          Shift Hours Not Complete
+                          Sub-Optimal Duration
+                        </div>
+                      )}
+                      {!record.check_out && (
+                        <div className="flex items-center gap-1 text-indigo-500 font-bold text-[9px] uppercase tracking-tighter bg-indigo-50 px-2 py-1 rounded-lg border border-indigo-100">
+                          <i className="fas fa-spinner animate-spin"></i>
+                          Session In Progress
                         </div>
                       )}
                     </td>
@@ -326,7 +350,7 @@ const AttendanceModule: React.FC<AttendanceModuleProps> = ({ currentUser }) => {
       {isFullAdmin && editingRecord && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm">
           <div className="bg-white w-full max-w-lg rounded-3xl p-8 animate-fadeIn">
-            <h3 className="text-xl font-bold mb-2">Adjust Attendance Record</h3>
+            <h3 className="text-xl font-bold mb-2">Adjust Shift Record</h3>
             <p className="text-slate-500 text-xs mb-6 font-medium uppercase tracking-widest">
               Modifying log for: <span className="text-indigo-600 font-bold">{editingRecord.username}</span> on {sanitizeDateForSQL(editingRecord.date)}
             </p>
