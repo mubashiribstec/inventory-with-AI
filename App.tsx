@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import Sidebar from './components/Sidebar.tsx';
 import Dashboard from './components/Dashboard.tsx';
@@ -129,15 +128,13 @@ const App: React.FC = () => {
       }
     } catch (e) {
       console.error("Error fetching role info", e);
-    } finally {
-      setLoading(false);
     }
   }, [getLandingTab]);
 
   const fetchSettings = useCallback(async () => {
     try {
       const s = await apiService.getSettings();
-      if (s && s.software_name) setSettings(s);
+      if (s && s.software_name) setSettings(prev => ({ ...prev, ...s }));
     } catch (e) { 
       console.error("Settings fetch failed", e); 
     }
@@ -145,26 +142,23 @@ const App: React.FC = () => {
 
   useEffect(() => {
     const initApp = async () => {
-      const savedUserString = localStorage.getItem('smartstock_user');
-      await fetchSettings();
-      if (savedUserString) {
-        try {
+      try {
+        const savedUserString = localStorage.getItem('smartstock_user');
+        await fetchSettings();
+        if (savedUserString) {
           const savedUser = JSON.parse(savedUserString);
           setCurrentUser(savedUser);
           await fetchRoleData(savedUser.role, savedUser);
-        } catch (e) {
-          console.error("Failed to parse saved user", e);
-          localStorage.removeItem('smartstock_user');
-          setLoading(false);
         }
-      } else {
+      } catch (e) {
+        console.error("Initialization failure", e);
+      } finally {
         setLoading(false);
       }
     };
     initApp();
   }, [fetchRoleData, fetchSettings]);
 
-  // Apply dark mode to document element
   useEffect(() => {
     const root = window.document.documentElement;
     if (settings.dark_mode) {
@@ -179,7 +173,6 @@ const App: React.FC = () => {
     const newSettings = { ...settings, dark_mode: newDarkMode };
     setSettings(newSettings);
     try {
-      // Persist theme to database
       await apiService.updateSettings(newSettings);
     } catch (e) {
       console.error("Failed to persist theme preference", e);
@@ -192,7 +185,7 @@ const App: React.FC = () => {
     localStorage.setItem('smartstock_user', JSON.stringify(user));
     const landing = getLandingTab(user);
     setActiveTab(landing);
-    fetchRoleData(user.role, user);
+    fetchRoleData(user.role, user).finally(() => setLoading(false));
   };
 
   const handleLogout = () => {
@@ -368,7 +361,7 @@ const App: React.FC = () => {
       <div className="min-h-screen bg-slate-50 dark:bg-slate-950 flex items-center justify-center">
         <div className="flex flex-col items-center gap-4">
           <div className="w-12 h-12 border-4 border-indigo-600 border-t-transparent rounded-full animate-spin"></div>
-          <p className="text-slate-400 font-bold uppercase tracking-widest text-[10px] dark:text-slate-500">Synchronizing SmartStock...</p>
+          <p className="text-slate-400 font-bold uppercase tracking-widest text-[10px] dark:text-slate-500">Synchronizing SmartStock Pro...</p>
         </div>
       </div>
     );
@@ -419,13 +412,13 @@ const App: React.FC = () => {
              </div>
           </div>
           <div className="flex items-center gap-3">
-            {/* Theme Toggle Button - Available for all users in the header */}
+            {/* Dark Mode Icon Button - Available in the Landing Header for all Roles */}
             <button 
               onClick={toggleDarkMode}
-              className={`w-11 h-11 flex items-center justify-center rounded-2xl bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-500 dark:text-amber-400 hover:bg-slate-50 dark:hover:bg-slate-700 transition-all shadow-sm`}
+              className="w-11 h-11 flex items-center justify-center rounded-2xl bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-500 dark:text-amber-400 hover:bg-slate-50 dark:hover:bg-slate-700 transition-all shadow-sm active:scale-95 group"
               title={settings.dark_mode ? "Switch to Light Mode" : "Switch to Dark Mode"}
             >
-              <i className={`fas ${settings.dark_mode ? 'fa-sun' : 'fa-moon'} text-lg`}></i>
+              <i className={`fas ${settings.dark_mode ? 'fa-sun' : 'fa-moon'} text-lg group-hover:rotate-12 transition-transform`}></i>
             </button>
 
             {hasPermission('system.db') && <button onClick={handleInitDB} disabled={syncing} className="px-4 py-2.5 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300 rounded-xl hover:bg-slate-50 dark:hover:bg-slate-700 transition font-bold text-sm shadow-sm flex items-center gap-2 disabled:opacity-50"><i className={`fas fa-database ${syncing ? 'animate-spin' : ''}`}></i> Sync & Init</button>}
