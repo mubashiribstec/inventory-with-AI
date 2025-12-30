@@ -79,6 +79,8 @@ app.post('/api/init-db', async (req, res) => {
         icon VARCHAR(50) DEFAULT 'fa-shield-alt',
         updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
       )`,
+      // Ensure 'icon' column exists if table was created previously without it
+      `ALTER TABLE roles ADD COLUMN IF NOT EXISTS icon VARCHAR(50) DEFAULT 'fa-shield-alt'`,
       `CREATE TABLE IF NOT EXISTS users (
         id VARCHAR(50) PRIMARY KEY,
         username VARCHAR(50) UNIQUE NOT NULL,
@@ -90,6 +92,10 @@ app.post('/api/init-db', async (req, res) => {
         team_lead_id VARCHAR(50),
         manager_id VARCHAR(50)
       )`,
+      `ALTER TABLE users ADD COLUMN IF NOT EXISTS department VARCHAR(100) DEFAULT 'Unassigned'`,
+      `ALTER TABLE users ADD COLUMN IF NOT EXISTS shift_start_time VARCHAR(5) DEFAULT '09:00'`,
+      `ALTER TABLE users ADD COLUMN IF NOT EXISTS team_lead_id VARCHAR(50)`,
+      `ALTER TABLE users ADD COLUMN IF NOT EXISTS manager_id VARCHAR(50)`,
       `CREATE TABLE IF NOT EXISTS notifications (
         id INT AUTO_INCREMENT PRIMARY KEY,
         recipient_id VARCHAR(50) NOT NULL,
