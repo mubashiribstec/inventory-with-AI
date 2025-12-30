@@ -16,32 +16,32 @@ const BudgetBreakdown: React.FC<BudgetBreakdownProps> = ({ department, items }) 
       <div className="flex items-center justify-between">
         <div>
           <h2 className="text-2xl font-bold text-slate-800 poppins">{department.name}</h2>
-          <p className="text-slate-500 text-sm font-medium">Detailed Spending Analysis</p>
+          <p className="text-slate-500 text-sm font-medium">Departmental Asset Inventory</p>
         </div>
         <div className="text-right">
-          <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Total Spent</p>
+          <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Total Asset Value</p>
           <p className="text-2xl font-bold text-indigo-600">${totalCost.toLocaleString()}</p>
         </div>
       </div>
 
       <div className="bg-slate-50 p-6 rounded-3xl border border-slate-100 flex items-center justify-between gap-4">
-        <div className="flex-1">
-          <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">Budget Capacity</p>
-          <div className="w-full bg-white h-3 rounded-full overflow-hidden border border-slate-200">
-            <div 
-              className={`h-full transition-all duration-700 ${department.utilization! > 90 ? 'bg-rose-500' : 'bg-indigo-600'}`} 
-              style={{ width: `${Math.min(department.utilization || 0, 100)}%` }}
-            ></div>
-          </div>
+        <div className="flex items-center gap-4">
+           <div className="w-12 h-12 bg-white rounded-2xl flex items-center justify-center text-slate-400 border border-slate-100">
+              <i className="fas fa-user-tie"></i>
+           </div>
+           <div>
+              <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Department Head</p>
+              <p className="font-bold text-slate-800">{department.head || 'Not Assigned'}</p>
+           </div>
         </div>
-        <div className="px-4 py-2 bg-white rounded-2xl border border-slate-100 text-center min-w-[100px]">
-          <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Utilized</p>
-          <p className="text-lg font-bold text-slate-800">{department.utilization?.toFixed(1)}%</p>
+        <div className="px-4 py-2 bg-indigo-600 rounded-2xl text-center min-w-[100px] text-white">
+          <p className="text-[10px] font-bold text-indigo-100 uppercase tracking-widest">Asset Count</p>
+          <p className="text-lg font-bold">{deptItems.length}</p>
         </div>
       </div>
 
       <div className="space-y-3">
-        <h4 className="text-xs font-bold text-slate-400 uppercase tracking-widest ml-1">Allocated Assets</h4>
+        <h4 className="text-xs font-bold text-slate-400 uppercase tracking-widest ml-1">Allocated Hardware</h4>
         <div className="max-h-[350px] overflow-y-auto custom-scrollbar pr-2 space-y-2">
           {deptItems.length > 0 ? (
             deptItems.map(item => (
@@ -62,7 +62,7 @@ const BudgetBreakdown: React.FC<BudgetBreakdownProps> = ({ department, items }) 
               </div>
             ))
           ) : (
-            <div className="py-12 text-center text-slate-400 italic text-sm">
+            <div className="py-12 text-center text-slate-400 italic text-sm bg-slate-50 rounded-2xl border border-dashed border-slate-200">
               No assets recorded for this department yet.
             </div>
           )}
@@ -71,10 +71,7 @@ const BudgetBreakdown: React.FC<BudgetBreakdownProps> = ({ department, items }) 
 
       <div className="pt-4 border-t border-slate-100 flex gap-4">
         <button className="flex-1 py-3 bg-white border border-slate-200 text-slate-600 rounded-2xl font-bold text-sm hover:bg-slate-50 transition">
-          <i className="fas fa-file-export mr-2"></i> Export CSV
-        </button>
-        <button className="flex-1 py-3 bg-indigo-600 text-white rounded-2xl font-bold text-sm hover:bg-indigo-700 transition shadow-lg shadow-indigo-100">
-          Adjust Budget
+          <i className="fas fa-file-export mr-2"></i> Export List
         </button>
       </div>
     </div>

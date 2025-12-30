@@ -9,7 +9,8 @@ interface ManagementFormProps {
 
 const ManagementForm: React.FC<ManagementFormProps> = ({ type, onSubmit, initialData }) => {
   const [formData, setFormData] = useState(initialData || {
-    budget_month: new Date().toISOString().substring(0, 7) // Default to current YYYY-MM
+    budget_month: new Date().toISOString().substring(0, 7), // Default to current YYYY-MM
+    budget: 0
   });
 
   const handleSubmit = (e: React.FormEvent) => {
@@ -65,21 +66,24 @@ const ManagementForm: React.FC<ManagementFormProps> = ({ type, onSubmit, initial
           <>
             <div className="space-y-2">
               <label className="text-xs font-bold text-slate-500 uppercase tracking-wider ml-1">Department Name</label>
-              <input name="name" type="text" required className="w-full px-4 py-3 bg-slate-50 border border-slate-100 rounded-xl outline-none focus:ring-2 focus:ring-indigo-500" value={formData.name || ''} onChange={handleChange} placeholder="Operations" />
+              <input name="name" type="text" required className="w-full px-4 py-3 bg-slate-50 border border-slate-100 rounded-xl outline-none focus:ring-2 focus:ring-indigo-500 font-bold" value={formData.name || ''} onChange={handleChange} placeholder="e.g. Operations" />
             </div>
             <div className="space-y-2">
-              <label className="text-xs font-bold text-slate-500 uppercase tracking-wider ml-1">Department Head</label>
+              <label className="text-xs font-bold text-slate-500 uppercase tracking-wider ml-1">Department Head / Manager</label>
               <input name="head" type="text" className="w-full px-4 py-3 bg-slate-50 border border-slate-100 rounded-xl outline-none focus:ring-2 focus:ring-indigo-500" value={formData.head || ''} onChange={handleChange} placeholder="Jane Smith" />
             </div>
-            <div className="grid grid-cols-2 gap-4">
-              <div className="space-y-2">
-                <label className="text-xs font-bold text-slate-500 uppercase tracking-wider ml-1">Annual Budget ($)</label>
-                <input name="budget" type="number" className="w-full px-4 py-3 bg-slate-50 border border-slate-100 rounded-xl outline-none focus:ring-2 focus:ring-indigo-500" value={formData.budget || ''} onChange={handleChange} placeholder="100000" />
-              </div>
-              <div className="space-y-2">
-                <label className="text-xs font-bold text-slate-500 uppercase tracking-wider ml-1">Budget Month</label>
-                <input name="budget_month" type="month" required className="w-full px-4 py-3 bg-slate-50 border border-slate-100 rounded-xl outline-none focus:ring-2 focus:ring-indigo-500 font-bold text-indigo-600" value={formData.budget_month || ''} onChange={handleChange} />
-              </div>
+            <div className="p-4 bg-indigo-50 rounded-2xl border border-indigo-100">
+               <p className="text-[10px] text-indigo-400 font-bold uppercase mb-2 tracking-widest">Optional Metadata</p>
+               <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-1">
+                    <label className="text-[9px] font-bold text-slate-400 uppercase">Budget Reference ($)</label>
+                    <input name="budget" type="number" className="w-full px-3 py-2 bg-white border border-slate-200 rounded-lg text-xs" value={formData.budget || ''} onChange={handleChange} placeholder="0" />
+                  </div>
+                  <div className="space-y-1">
+                    <label className="text-[9px] font-bold text-slate-400 uppercase">Tracking Month</label>
+                    <input name="budget_month" type="month" className="w-full px-3 py-2 bg-white border border-slate-200 rounded-lg text-xs" value={formData.budget_month || ''} onChange={handleChange} />
+                  </div>
+               </div>
             </div>
           </>
         )}

@@ -112,20 +112,8 @@ const App: React.FC = () => {
       setEmployees(fEmps || []);
       setUsers(fUsers || []);
 
-      const rawDepts = fDepts || [];
-      const enrichedDepts = rawDepts.map(dept => {
-        const spent = (fItems || []).filter(item => {
-            if (!item.department) return false;
-            const itemDept = item.department.trim().toLowerCase();
-            const targetDept = dept.name.trim().toLowerCase();
-            return itemDept === targetDept || (targetDept === 'human resources' && itemDept === 'hr');
-        }).reduce((acc, item) => acc + (Number(item.cost) || 0), 0);
-        
-        const budget = Number(dept.budget) || 0;
-        const utilization = budget > 0 ? (spent / budget) * 100 : 0;
-        return { ...dept, spent, remaining: budget - spent, utilization, budget_status: utilization > 100 ? 'OVER BUDGET' : utilization > 85 ? 'NEAR LIMIT' : 'ON TRACK' };
-      });
-      setDepartments(enrichedDepts);
+      // Decoupled from automated budget tracking as requested
+      setDepartments(fDepts || []);
 
       if (currentUser.role === UserRole.ADMIN) {
         const logs = await apiService.getSystemLogs();
@@ -249,11 +237,11 @@ const App: React.FC = () => {
       case 'licenses': return isStaff ? null : <LicenseList licenses={licenses} suppliers={suppliers} onUpdate={fetchData} onAdd={isAdmin ? () => setIsLicenseModalOpen(true) : undefined} />;
       case 'categories': return isStaff ? null : <GenericListView title="Asset Categories" icon="fa-tags" items={categories} columns={['id', 'name', 'itemCount']} onAdd={isAdmin ? () => setManagementModal({ isOpen: true, type: 'Category' }) : undefined} onDelete={isAdmin ? (item) => handleManagementDelete(item, 'Category') : undefined} />;
       case 'employees': return isStaff && !isTeamLead ? null : <GenericListView title="Staff Directory" icon="fa-users" items={visibleEmployees} columns={['id', 'name', 'email', 'department', 'role']} onAdd={isAdmin ? () => setManagementModal({ isOpen: true, type: 'Employee' }) : undefined} onDelete={isAdmin ? (item) => handleManagementDelete(item, 'Employee') : undefined} onView={(emp) => setViewingEmployee(emp)} />;
-      case 'departments': return isHR ? <GenericListView title="Departmental Overview" icon="fa-building" items={departments} columns={['id', 'name', 'head', 'spent', 'budget']} onAdd={isAdmin ? () => setManagementModal({ isOpen: true, type: 'Department' }) : undefined} onDelete={isAdmin ? (item) => handleManagementDelete(item, 'Department') : undefined} /> : null;
+      case 'departments': return isHR ? <GenericListView title="Departmental Overview" icon="fa-building" items={departments} columns={['id', 'name', 'head']} onAdd={isAdmin ? () => setManagementModal({ isOpen: true, type: 'Department' }) : undefined} onDelete={isAdmin ? (item) => handleManagementDelete(item, 'Department') : undefined} /> : null;
       case 'purchase-history': return isStaff ? null : <GenericListView title="Procurement History" icon="fa-history" items={movements.filter(m => m.status === 'PURCHASED')} columns={['date', 'item', 'from', 'to']} onAdd={isAdmin ? () => setIsPurchaseModalOpen(true) : undefined} onDelete={isAdmin ? (m) => handleManagementDelete(m, 'Movement') : undefined} />;
       case 'requests': return <GenericListView title="Asset Requests" icon="fa-clipboard-list" items={isStaff ? requests.filter(r => r.employee === currentUser.full_name) : requests} columns={['item', 'employee', 'urgency', 'status', 'request_date']} onAdd={() => setIsRequestModalOpen(true)} onDelete={isAdmin ? (item) => handleManagementDelete(item, 'Request') : undefined} onView={(item) => alert(item.notes)} />;
       case 'faulty-reports': return isStaff ? null : <GenericListView title="Faulty Reports" icon="fa-exclamation-circle" items={maintenance} columns={['item_id', 'issue_type', 'description', 'status']} onAdd={() => setIsMaintenanceModalOpen(true)} onView={() => setActiveTab('maintenance')} />;
-      case 'budgets': return isManager ? <GenericListView title="Budget Tracker" icon="fa-wallet" items={departments} columns={['name', 'budget', 'spent', 'remaining', 'utilization', 'budget_status']} onAdd={isAdmin ? () => setManagementModal({ isOpen: true, type: 'Department' }) : undefined} onView={(dept) => setViewingBudgetBreakdown(dept)} /> : null;
+      case 'budgets': return isManager ? <GenericListView title="Department Asset Analytics" icon="fa-wallet" items={departments} columns={['id', 'name', 'head']} onAdd={isAdmin ? () => setManagementModal({ isOpen: true, type: 'Department' }) : undefined} onView={(dept) => setViewingBudgetBreakdown(dept)} /> : null;
       case 'audit-trail': return isStaff ? null : <GenericListView title="Movement Ledger" icon="fa-history" items={movements} columns={['date', 'item', 'from', 'to', 'employee', 'department', 'status']} onDelete={isAdmin ? (item) => handleManagementDelete(item, 'Movement') : undefined} />;
       case 'system-logs': return isAdmin ? <GenericListView title="System Audit Logs" icon="fa-shield-alt" items={systemLogs} columns={['timestamp', 'username', 'action', 'target_type', 'target_id', 'details']} /> : null;
       default: return isStaff ? <AttendanceModule currentUser={currentUser} /> : <Dashboard stats={stats} movements={movements} items={items} onFullAudit={() => setActiveTab('audit-trail')} onCheckIn={() => setActiveTab('attendance')} />;
@@ -302,7 +290,7 @@ const App: React.FC = () => {
           <EmployeeDetails employee={viewingEmployee} items={items} linkedUser={users.find(u => u.full_name === viewingEmployee.name)} allUsers={users} />
         </Modal>
       )}
-      {viewingBudgetBreakdown && <Modal title="Financial Analysis" onClose={() => setViewingBudgetBreakdown(null)}><BudgetBreakdown department={viewingBudgetBreakdown} items={items} /></Modal>}
+      {viewingBudgetBreakdown && <Modal title="Department Asset Breakdown" onClose={() => setViewingBudgetBreakdown(null)}><BudgetBreakdown department={viewingBudgetBreakdown} items={items} /></Modal>}
     </div>
   );
 };
