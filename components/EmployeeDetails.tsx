@@ -6,9 +6,10 @@ interface EmployeeDetailsProps {
   employee: Employee;
   items: InventoryItem[];
   linkedUser?: User;
+  allUsers?: User[]; // New prop to resolve superior names
 }
 
-const EmployeeDetails: React.FC<EmployeeDetailsProps> = ({ employee, items, linkedUser }) => {
+const EmployeeDetails: React.FC<EmployeeDetailsProps> = ({ employee, items, linkedUser, allUsers = [] }) => {
   const assignedItems = items.filter(item => item.assignedTo === employee.name);
 
   const getStatusBadge = (status: ItemStatus) => {
@@ -19,6 +20,9 @@ const EmployeeDetails: React.FC<EmployeeDetailsProps> = ({ employee, items, link
       default: return 'bg-slate-50 text-slate-600 border-slate-100';
     }
   };
+
+  const teamLead = allUsers.find(u => u.id === linkedUser?.team_lead_id || u.id === employee.team_lead_id);
+  const manager = allUsers.find(u => u.id === linkedUser?.manager_id || u.id === employee.manager_id);
 
   return (
     <div className="space-y-8">
@@ -45,6 +49,28 @@ const EmployeeDetails: React.FC<EmployeeDetailsProps> = ({ employee, items, link
               {employee.role}
             </span>
           </div>
+        </div>
+      </div>
+
+      {/* Reporting Hierarchy */}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div className="p-5 bg-white rounded-2xl border border-indigo-50 shadow-sm flex items-center gap-4">
+           <div className="w-12 h-12 bg-indigo-50 text-indigo-600 rounded-xl flex items-center justify-center text-xl">
+              <i className="fas fa-user-tie"></i>
+           </div>
+           <div>
+              <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Team Lead</p>
+              <p className="font-bold text-slate-800">{teamLead?.full_name || 'No TL Assigned'}</p>
+           </div>
+        </div>
+        <div className="p-5 bg-white rounded-2xl border border-amber-50 shadow-sm flex items-center gap-4">
+           <div className="w-12 h-12 bg-amber-50 text-amber-600 rounded-xl flex items-center justify-center text-xl">
+              <i className="fas fa-user-shield"></i>
+           </div>
+           <div>
+              <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Manager</p>
+              <p className="font-bold text-slate-800">{manager?.full_name || 'No Manager Assigned'}</p>
+           </div>
         </div>
       </div>
 

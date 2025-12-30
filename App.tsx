@@ -195,7 +195,7 @@ const App: React.FC = () => {
       case 'inventory': return isStaff ? null : <InventoryTable items={items} onUpdate={fetchData} onEdit={canEdit ? setEditingItem : undefined} onView={setViewingItem} />;
       case 'maintenance': return isStaff ? null : <MaintenanceList logs={maintenance} items={items} onUpdate={fetchData} onAdd={() => setIsMaintenanceModalOpen(true)} />;
       case 'suppliers': return isStaff ? null : <SupplierList suppliers={suppliers} />;
-      case 'licenses': return isStaff ? null : <LicenseList licenses={licenses} suppliers={suppliers} onAdd={canEdit ? () => setIsLicenseModalOpen(true) : undefined} />;
+      case 'licenses': return isStaff ? null : <LicenseList licenses={licenses} suppliers={suppliers} onUpdate={fetchData} onAdd={canEdit ? () => setIsLicenseModalOpen(true) : undefined} />;
       case 'categories': return isStaff ? null : <GenericListView title="Asset Categories" icon="fa-tags" items={categories} columns={['id', 'name', 'itemCount']} onAdd={canEdit ? () => setManagementModal({ isOpen: true, type: 'Category' }) : undefined} onDelete={canEdit ? (item) => handleManagementDelete(item, 'Category') : undefined} />;
       case 'employees': return isStaff && !isTeamLead ? null : <GenericListView title="Staff Directory" icon="fa-users" items={employees} columns={['id', 'name', 'email', 'department', 'role']} onAdd={isAdmin ? () => setManagementModal({ isOpen: true, type: 'Employee' }) : undefined} onDelete={isAdmin ? (item) => handleManagementDelete(item, 'Employee') : undefined} onView={(emp) => setViewingEmployee(emp)} />;
       case 'departments': return isHR ? <GenericListView title="Departmental Overview" icon="fa-building" items={departments} columns={['id', 'name', 'budget_month', 'head', 'spent', 'budget']} onAdd={isAdmin ? () => setManagementModal({ isOpen: true, type: 'Department' }) : undefined} onDelete={isAdmin ? (item) => handleManagementDelete(item, 'Department') : undefined} /> : null;
@@ -269,6 +269,14 @@ const App: React.FC = () => {
     } catch (err) { alert(err); }
   };
 
+  const handleMaintenanceTicketSubmit = async (log: any) => {
+    try {
+      await apiService.saveMaintenance(log);
+      setIsMaintenanceModalOpen(false);
+      fetchData();
+    } catch (err) { alert(err); }
+  };
+
   const handleRequestSubmit = async (req: any) => {
     try {
       await apiService.saveRequest(req);
@@ -332,7 +340,7 @@ const App: React.FC = () => {
 
       {isMaintenanceModalOpen && (
         <Modal title="🔧 Maintenance Ticket" onClose={() => setIsMaintenanceModalOpen(false)}>
-          <MaintenanceForm items={items} onSubmit={handleMaintenanceSubmit} />
+          <MaintenanceForm items={items} onSubmit={handleMaintenanceTicketSubmit} />
         </Modal>
       )}
 
@@ -371,6 +379,7 @@ const App: React.FC = () => {
             employee={viewingEmployee} 
             items={items} 
             linkedUser={users.find(u => u.full_name === viewingEmployee.name)}
+            allUsers={users}
           />
         </Modal>
       )}

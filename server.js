@@ -95,10 +95,14 @@ app.post('/api/init-db', async (req, res) => {
         password VARCHAR(100) NOT NULL,
         role VARCHAR(20) NOT NULL,
         full_name VARCHAR(100),
-        shift_start_time VARCHAR(5) DEFAULT '09:00'
+        shift_start_time VARCHAR(5) DEFAULT '09:00',
+        team_lead_id VARCHAR(50),
+        manager_id VARCHAR(50)
       )`,
-      // Migration: Ensure column exists if table was already created
+      // Migration: Ensure columns exist if table was already created
       `ALTER TABLE users ADD COLUMN IF NOT EXISTS shift_start_time VARCHAR(5) DEFAULT '09:00'`,
+      `ALTER TABLE users ADD COLUMN IF NOT EXISTS team_lead_id VARCHAR(50)`,
+      `ALTER TABLE users ADD COLUMN IF NOT EXISTS manager_id VARCHAR(50)`,
       `CREATE TABLE IF NOT EXISTS user_logs (
         id INT AUTO_INCREMENT PRIMARY KEY,
         user_id VARCHAR(50),
@@ -164,8 +168,12 @@ app.post('/api/init-db', async (req, res) => {
         name VARCHAR(255) NOT NULL,
         email VARCHAR(255),
         department VARCHAR(100),
-        role VARCHAR(100)
+        role VARCHAR(100),
+        team_lead_id VARCHAR(50),
+        manager_id VARCHAR(50)
       )`,
+      `ALTER TABLE employees ADD COLUMN IF NOT EXISTS team_lead_id VARCHAR(50)`,
+      `ALTER TABLE employees ADD COLUMN IF NOT EXISTS manager_id VARCHAR(50)`,
       `CREATE TABLE IF NOT EXISTS suppliers (
         id INT AUTO_INCREMENT PRIMARY KEY,
         name VARCHAR(255) NOT NULL,

@@ -42,8 +42,12 @@ const PurchaseForm: React.FC<PurchaseFormProps> = ({ onSubmit, suppliers, locati
       warrantyDate = d.toISOString().split('T')[0];
     }
 
+    // New ID pattern: IBS-PUR-****
+    const randomNum = Math.floor(1000 + Math.random() * 9000);
+    const purchaseId = formData.id || `IBS-PUR-${randomNum}`;
+
     const finalItem: InventoryItem = {
-      id: formData.id || `IT-${Math.floor(Math.random() * 10000).toString().padStart(4, '0')}`,
+      id: purchaseId,
       name: formData.name,
       category: formData.category,
       serial: formData.serial,

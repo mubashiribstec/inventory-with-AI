@@ -1,14 +1,35 @@
 
 import React from 'react';
 import { License, Supplier } from '../types';
+import { apiService } from '../api.ts';
 
 interface LicenseListProps {
   licenses: License[];
   suppliers: Supplier[];
   onAdd: () => void;
+  onUpdate?: () => void;
 }
 
-const LicenseList: React.FC<LicenseListProps> = ({ licenses, suppliers, onAdd }) => {
+const LicenseList: React.FC<LicenseListProps> = ({ licenses, suppliers, onAdd, onUpdate }) => {
+  
+  const handleResetData = async () => {
+    const isConfirmed = window.confirm("SECURITY ALERT: Are you absolutely sure you want to PERMANENTLY delete ALL software license data? This action cannot be undone.");
+    
+    if (isConfirmed) {
+      try {
+        // Iterate through all licenses and delete them one by one
+        // A bulk delete endpoint would be more efficient, but we use existing infrastructure
+        const deletePromises = licenses.map(l => apiService.deleteLicense(l.id));
+        await Promise.all(deletePromises);
+        
+        alert("Software inventory has been reset successfully.");
+        if (onUpdate) onUpdate();
+      } catch (err) {
+        alert("Error resetting data: " + err);
+      }
+    }
+  };
+
   return (
     <div className="space-y-6 animate-fadeIn">
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
@@ -26,13 +47,23 @@ const LicenseList: React.FC<LicenseListProps> = ({ licenses, suppliers, onAdd })
 
       <div className="bg-white rounded-3xl border border-slate-100 shadow-sm overflow-hidden">
         <div className="p-6 border-b border-slate-100 flex items-center justify-between">
-          <h3 className="font-bold text-slate-800 poppins">Software Assets & Seats</h3>
-          <button 
-            onClick={onAdd}
-            className="px-4 py-2 bg-indigo-600 text-white rounded-xl text-xs font-bold hover:bg-indigo-700 transition"
-          >
-            <i className="fas fa-plus mr-2"></i>Add License
-          </button>
+          <div className="flex items-center gap-3">
+             <h3 className="font-bold text-slate-800 poppins">Software Assets & Seats</h3>
+          </div>
+          <div className="flex gap-3">
+            <button 
+              onClick={handleResetData}
+              className="px-4 py-2 bg-rose-50 text-rose-600 border border-rose-100 rounded-xl text-xs font-bold hover:bg-rose-100 transition"
+            >
+              <i className="fas fa-trash-alt mr-2"></i>Reset Software Data
+            </button>
+            <button 
+              onClick={onAdd}
+              className="px-4 py-2 bg-indigo-600 text-white rounded-xl text-xs font-bold hover:bg-indigo-700 transition shadow-md shadow-indigo-100"
+            >
+              <i className="fas fa-plus mr-2"></i>Add License
+            </button>
+          </div>
         </div>
         <div className="overflow-x-auto">
           <table className="w-full text-left">
@@ -57,7 +88,7 @@ const LicenseList: React.FC<LicenseListProps> = ({ licenses, suppliers, onAdd })
                     <div className="w-full bg-slate-100 h-1.5 rounded-full overflow-hidden mb-1">
                       <div 
                         className={`h-full rounded-full ${license.assigned_seats / license.total_seats > 0.9 ? 'bg-rose-500' : 'bg-indigo-500'}`} 
-                        style={{ width: `${(license.assigned_seats / license.total_seats) * 100}%` }}
+                        style={{ width: `${(license.assigned_seats / (license.total_seats || 1)) * 100}%` }}
                       ></div>
                     </div>
                     <p className="text-[10px] font-bold text-slate-500">{license.assigned_seats} / {license.total_seats} Seats</p>
@@ -70,6 +101,16 @@ const LicenseList: React.FC<LicenseListProps> = ({ licenses, suppliers, onAdd })
                   </td>
                 </tr>
               ))}
+              {licenses.length === 0 && (
+                <tr>
+                  <td colSpan={5} className="px-6 py-20 text-center">
+                    <div className="flex flex-col items-center gap-3 opacity-20">
+                      <i className="fas fa-key text-4xl"></i>
+                      <p className="text-sm font-bold uppercase tracking-widest">No licenses found</p>
+                    </div>
+                  </td>
+                </tr>
+              )}
             </tbody>
           </table>
         </div>

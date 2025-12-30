@@ -25,6 +25,8 @@ export interface User {
   full_name: string;
   avatar?: string;
   shift_start_time?: string; // Format: HH:mm
+  team_lead_id?: string;
+  manager_id?: string;
 }
 
 export interface UserLog {
@@ -137,6 +139,8 @@ export interface Employee {
   email: string;
   department: string;
   role: string;
+  team_lead_id?: string;
+  manager_id?: string;
 }
 
 export interface Department {
