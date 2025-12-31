@@ -9,14 +9,34 @@ const port = process.env.PORT || 3000;
 app.use(cors());
 app.use(express.json());
 
+// Enhanced Pool Configuration for Native/Docker reliability
 const pool = mariadb.createPool({
   host: process.env.DB_HOST || 'localhost',
   user: process.env.DB_USER || 'inventory_user',
   password: process.env.DB_PASSWORD || 'inventory_password',
   database: process.env.DB_NAME || 'smartstock',
   connectionLimit: 20,
-  connectTimeout: 15000
+  connectTimeout: 20000, // Increased for slower local disks
+  acquireTimeout: 20000
 });
+
+// Immediate Connectivity Test
+(async () => {
+  let conn;
+  try {
+    conn = await pool.getConnection();
+    console.log(`[DATABASE] Successfully connected to ${process.env.DB_HOST || 'localhost'}`);
+  } catch (err) {
+    console.error(`[DATABASE ERROR] Could not establish connection: ${err.message}`);
+    if (err.code === 'ER_ACCESS_DENIED_ERROR') {
+      console.error('HINT: Check your DB_USER and DB_PASSWORD in .env');
+    } else if (err.code === 'ECONNREFUSED') {
+      console.error('HINT: Ensure MariaDB service is running on this machine.');
+    }
+  } finally {
+    if (conn) conn.release();
+  }
+})();
 
 app.use('/api', (req, res, next) => {
   res.setHeader('Content-Type', 'application/json; charset=utf-8');
@@ -275,7 +295,6 @@ app.post('/api/settings', async (req, res) => {
   finally { if (conn) conn.release(); }
 });
 
-// System Logs Endpoint
 app.get('/api/system-logs', async (req, res) => {
   let conn;
   try {
@@ -286,7 +305,6 @@ app.get('/api/system-logs', async (req, res) => {
   finally { if (conn) conn.release(); }
 });
 
-// Specific routes for Notifications
 app.get('/api/notifications/:userId', async (req, res) => {
   let conn;
   try {
@@ -371,19 +389,16 @@ const handleCRUD = (tableName) => {
   });
 };
 
-// CRUD handlers for all tables
 const modules = ['items', 'movements', 'suppliers', 'locations', 'maintenance_logs', 'categories', 'employees', 'departments', 'licenses', 'requests', 'attendance', 'users', 'leave_requests', 'roles', 'notifications', 'user_logs'];
 modules.forEach(handleCRUD);
 
 const staticPath = path.join(__dirname, 'dist');
 app.use(express.static(staticPath));
 
-// API Catch-all 404
 app.use('/api', (req, res) => {
   res.status(404).send(JSON.stringify({ error: 'Endpoint not found' }));
 });
 
-// Client Catch-all
 app.get('*', (req, res) => {
   res.sendFile(path.join(staticPath, 'index.html'));
 });
