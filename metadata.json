@@ -1,7 +1,5 @@
 {
   "name": "SmartStock Pro Enterprise",
   "description": "Enterprise-grade inventory system with MariaDB backend, Node.js API, and Docker orchestration. Features Gemini AI asset intelligence.",
-  "requestFramePermissions": [
-    "camera"
-  ]
+  "requestFramePermissions": []
 }

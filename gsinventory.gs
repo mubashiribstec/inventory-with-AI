@@ -1,4 +1,3 @@
-
 /**
  * SmartStock Pro - Google Apps Script ERP Controller
  * This script acts as the backend for the SmartStock ERP when deployed as a Google Web App.
@@ -15,7 +14,14 @@ const DB_SHEETS = {
   CATEGORIES: 'Categories',
   EMPLOYEES: 'Employees',
   DEPARTMENTS: 'Departments',
-  REQUESTS: 'Requests'
+  REQUESTS: 'Requests',
+  USERS: 'Users',
+  SETTINGS: 'Settings',
+  LOGS: 'Logs',
+  ATTENDANCE: 'Attendance',
+  LEAVES: 'Leaves',
+  ROLES: 'Roles',
+  NOTIFICATIONS: 'Notifications'
 };
 
 /**
@@ -38,7 +44,6 @@ function include(filename) {
 
 /**
  * Initialize Database (Sheets)
- * Run this function once from the Apps Script editor to prepare your Sheet.
  */
 function setupDatabase() {
   const ss = SpreadsheetApp.getActiveSpreadsheet();
@@ -53,7 +58,11 @@ function setupDatabase() {
     [DB_SHEETS.CATEGORIES]: ['id', 'name', 'icon'],
     [DB_SHEETS.EMPLOYEES]: ['id', 'name', 'email', 'department', 'role'],
     [DB_SHEETS.DEPARTMENTS]: ['id', 'name', 'head', 'budget', 'budget_month'],
-    [DB_SHEETS.REQUESTS]: ['id', 'item', 'employee', 'department', 'urgency', 'status', 'request_date', 'notes']
+    [DB_SHEETS.REQUESTS]: ['id', 'item', 'employee', 'department', 'urgency', 'status', 'request_date', 'notes'],
+    [DB_SHEETS.USERS]: ['id', 'username', 'password', 'role', 'full_name', 'department', 'shift_start_time', 'team_lead_id', 'manager_id'],
+    [DB_SHEETS.SETTINGS]: ['id', 'software_name', 'primary_color'],
+    [DB_SHEETS.ROLES]: ['id', 'label', 'description', 'permissions', 'color', 'icon'],
+    [DB_SHEETS.ATTENDANCE]: ['id', 'user_id', 'username', 'date', 'check_in', 'check_out', 'status', 'location']
   };
 
   Object.keys(schema).forEach(sheetName => {
@@ -79,48 +88,40 @@ function getSheetData(sheetName) {
   const sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(sheetName);
   if (!sheet) return [];
   
-  const data = sheet.getDataRange().getValues();
-  if (data.length <= 1) return []; // Only headers or empty
+  const range = sheet.getDataRange();
+  const data = range.getValues();
+  if (data.length <= 1) return []; 
   
   const headers = data.shift();
   
   return data.map(row => {
     const obj = {};
-    headers.forEach((header, i) => obj[header] = row[i]);
+    headers.forEach((header, i) => {
+      let val = row[i];
+      // Convert Date objects to ISO strings for JS frontend
+      if (val instanceof Date) {
+        val = val.toISOString().split('T')[0];
+      }
+      obj[header] = val;
+    });
     return obj;
   });
-}
-
-/**
- * Main ERP API - Fetch all data in one go for the frontend
- */
-function getFullERPData() {
-  return {
-    items: getSheetData(DB_SHEETS.ITEMS),
-    movements: getSheetData(DB_SHEETS.MOVEMENTS),
-    suppliers: getSheetData(DB_SHEETS.SUPPLIERS),
-    locations: getSheetData(DB_SHEETS.LOCATIONS),
-    licenses: getSheetData(DB_SHEETS.LICENSES),
-    maintenance: getSheetData(DB_SHEETS.MAINTENANCE),
-    categories: getSheetData(DB_SHEETS.CATEGORIES),
-    employees: getSheetData(DB_SHEETS.EMPLOYEES),
-    departments: getSheetData(DB_SHEETS.DEPARTMENTS),
-    requests: getSheetData(DB_SHEETS.REQUESTS),
-    timestamp: new Date().toISOString()
-  };
 }
 
 /**
  * Save or Update any entity generically
  */
 function upsertEntity(sheetName, entityData) {
-  const sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(sheetName);
-  if (!sheet) return { success: false, error: 'Sheet not found: ' + sheetName };
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  let sheet = ss.getSheetByName(sheetName);
+  if (!sheet) throw new Error('Sheet not found: ' + sheetName);
   
   const data = sheet.getDataRange().getValues();
   const headers = data[0];
   const idIndex = headers.indexOf('id');
   
+  if (idIndex === -1) throw new Error('Target sheet missing ID column');
+
   let rowIndex = -1;
   if (data.length > 1) {
     for (let i = 1; i < data.length; i++) {
@@ -131,7 +132,10 @@ function upsertEntity(sheetName, entityData) {
     }
   }
 
-  const rowValues = headers.map(h => entityData[h] === undefined ? '' : entityData[h]);
+  const rowValues = headers.map(h => {
+    let val = entityData[h];
+    return (val === undefined || val === null) ? '' : val;
+  });
 
   if (rowIndex > -1) {
     sheet.getRange(rowIndex, 1, 1, rowValues.length).setValues([rowValues]);
@@ -141,17 +145,6 @@ function upsertEntity(sheetName, entityData) {
   
   return { success: true, id: entityData.id };
 }
-
-/**
- * Wrapper functions for specific entities to match API structure
- */
-function upsertItem(itemData) { return upsertEntity(DB_SHEETS.ITEMS, itemData); }
-function logMovement(movementData) { return upsertEntity(DB_SHEETS.MOVEMENTS, movementData); }
-function addMaintenanceTicket(log) { return upsertEntity(DB_SHEETS.MAINTENANCE, log); }
-function upsertCategory(data) { return upsertEntity(DB_SHEETS.CATEGORIES, data); }
-function upsertEmployee(data) { return upsertEntity(DB_SHEETS.EMPLOYEES, data); }
-function upsertDepartment(data) { return upsertEntity(DB_SHEETS.DEPARTMENTS, data); }
-function upsertRequest(data) { return upsertEntity(DB_SHEETS.REQUESTS, data); }
 
 /**
  * Generic Delete Function

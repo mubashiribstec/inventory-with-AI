@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import Sidebar from './components/Sidebar.tsx';
 import Dashboard from './components/Dashboard.tsx';
@@ -39,7 +40,7 @@ interface Toast {
 const App: React.FC = () => {
   const [currentUser, setCurrentUser] = useState<User | null>(null);
   const [currentRole, setCurrentRole] = useState<Role | null>(null);
-  const [settings, setSettings] = useState<SystemSettings>({ id: 'GLOBAL', software_name: 'SmartStock Pro', primary_color: 'indigo', dark_mode: false });
+  const [settings, setSettings] = useState<SystemSettings>({ id: 'GLOBAL', software_name: 'SmartStock Pro', primary_color: 'indigo' });
   const [activeTab, setActiveTab] = useState<AppTab>('dashboard');
   const [items, setItems] = useState<InventoryItem[]>([]);
   const [movements, setMovements] = useState<Movement[]>([]);
@@ -158,26 +159,6 @@ const App: React.FC = () => {
     };
     initApp();
   }, [fetchRoleData, fetchSettings]);
-
-  useEffect(() => {
-    const root = window.document.documentElement;
-    if (settings.dark_mode) {
-      root.classList.add('dark');
-    } else {
-      root.classList.remove('dark');
-    }
-  }, [settings.dark_mode]);
-
-  const toggleDarkMode = async () => {
-    const newDarkMode = !settings.dark_mode;
-    const newSettings = { ...settings, dark_mode: newDarkMode };
-    setSettings(newSettings);
-    try {
-      await apiService.updateSettings(newSettings);
-    } catch (e) {
-      console.error("Failed to persist theme preference", e);
-    }
-  };
 
   const handleLogin = (user: User) => {
     setLoading(true);
@@ -358,10 +339,10 @@ const App: React.FC = () => {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-slate-50 dark:bg-slate-950 flex items-center justify-center">
+      <div className="min-h-screen bg-slate-50 flex items-center justify-center">
         <div className="flex flex-col items-center gap-4">
           <div className="w-12 h-12 border-4 border-indigo-600 border-t-transparent rounded-full animate-spin"></div>
-          <p className="text-slate-400 font-bold uppercase tracking-widest text-[10px] dark:text-slate-500">Synchronizing SmartStock Pro...</p>
+          <p className="text-slate-400 font-bold uppercase tracking-widest text-[10px]">Synchronizing SmartStock Pro...</p>
         </div>
       </div>
     );
@@ -370,18 +351,18 @@ const App: React.FC = () => {
   if (!currentUser) return <Login onLogin={handleLogin} />;
 
   return (
-    <div className="flex min-h-screen bg-slate-50 dark:bg-slate-950 transition-colors duration-300">
+    <div className="flex min-h-screen bg-slate-50 transition-colors duration-300">
       <div className="fixed top-6 right-6 z-[100] flex flex-col gap-3">
         {toasts.map(toast => (
-          <div key={toast.id} className="bg-white dark:bg-slate-800 border border-slate-100 dark:border-slate-700 shadow-2xl rounded-2xl p-4 flex items-start gap-4 min-w-[320px] animate-toastIn">
+          <div key={toast.id} className="bg-white border border-slate-100 shadow-2xl rounded-2xl p-4 flex items-start gap-4 min-w-[320px] animate-toastIn">
             <div className={`w-10 h-10 rounded-xl flex items-center justify-center text-white shrink-0 bg-${settings.primary_color}-500`}>
               <i className={`fas ${toast.type === 'ATTENDANCE' ? 'fa-clock' : 'fa-bell'}`}></i>
             </div>
             <div className="flex-1 min-w-0">
-              <p className="text-[10px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-widest">{toast.sender}</p>
-              <p className="text-sm font-bold text-slate-800 dark:text-slate-100 leading-snug mt-0.5">{toast.message}</p>
+              <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">{toast.sender}</p>
+              <p className="text-sm font-bold text-slate-800 leading-snug mt-0.5">{toast.message}</p>
             </div>
-            <button onClick={() => setToasts(prev => prev.filter(t => t.id !== toast.id))} className="text-slate-300 hover:text-slate-500 dark:text-slate-600">
+            <button onClick={() => setToasts(prev => prev.filter(t => t.id !== toast.id))} className="text-slate-300 hover:text-slate-500">
               <i className="fas fa-times"></i>
             </button>
           </div>
@@ -400,29 +381,20 @@ const App: React.FC = () => {
       <main className="flex-1 lg:ml-64 p-6 lg:p-10 transition-all duration-300 min-w-0">
         <header className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-8">
           <div className="flex items-center gap-4">
-             <div className={`w-12 h-12 bg-${settings.primary_color}-50 dark:bg-${settings.primary_color}-900/30 rounded-2xl flex items-center justify-center text-${settings.primary_color}-600 dark:text-${settings.primary_color}-400 border border-${settings.primary_color}-100 dark:border-${settings.primary_color}-800 lg:hidden`}><i className="fas fa-bars"></i></div>
+             <div className={`w-12 h-12 bg-${settings.primary_color}-50 rounded-2xl flex items-center justify-center text-${settings.primary_color}-600 border border-${settings.primary_color}-100 lg:hidden`}><i className="fas fa-bars"></i></div>
              <div>
-                <h1 className="text-3xl font-bold text-slate-800 dark:text-slate-50 capitalize tracking-tight">{activeTab.replace('-', ' ')}</h1>
-                <p className="text-slate-500 dark:text-slate-400 mt-1 flex items-center gap-2">
-                   <span className={`font-bold text-${settings.primary_color}-600 dark:text-${settings.primary_color}-400`}>{currentUser.full_name}</span>
-                   <span className={`px-2 py-0.5 text-[10px] rounded-full border font-bold uppercase ${currentRole ? `bg-${currentRole.color}-50 dark:bg-${currentRole.color}-900/40 text-${currentRole.color}-600 dark:text-${currentRole.color}-400 border-${currentRole.color}-100 dark:border-${currentRole.color}-800` : 'bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400 border-slate-200 dark:border-slate-700'}`}>
+                <h1 className="text-3xl font-bold text-slate-800 capitalize tracking-tight">{activeTab.replace('-', ' ')}</h1>
+                <p className="text-slate-500 mt-1 flex items-center gap-2">
+                   <span className={`font-bold text-${settings.primary_color}-600`}>{currentUser.full_name}</span>
+                   <span className={`px-2 py-0.5 text-[10px] rounded-full border font-bold uppercase ${currentRole ? `bg-${currentRole.color}-50 text-${currentRole.color}-600 border-${currentRole.color}-100` : 'bg-slate-100 text-slate-500 border-slate-200'}`}>
                     {currentRole?.label || currentUser.role.replace('_', ' ')}
                    </span>
                 </p>
              </div>
           </div>
           <div className="flex items-center gap-3">
-            {/* Dark Mode Icon Button - Available in the Landing Header for all Roles */}
-            <button 
-              onClick={toggleDarkMode}
-              className="w-11 h-11 flex items-center justify-center rounded-2xl bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-500 dark:text-amber-400 hover:bg-slate-50 dark:hover:bg-slate-700 transition-all shadow-sm active:scale-95 group"
-              title={settings.dark_mode ? "Switch to Light Mode" : "Switch to Dark Mode"}
-            >
-              <i className={`fas ${settings.dark_mode ? 'fa-sun' : 'fa-moon'} text-lg group-hover:rotate-12 transition-transform`}></i>
-            </button>
-
-            {hasPermission('system.db') && <button onClick={handleInitDB} disabled={syncing} className="px-4 py-2.5 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300 rounded-xl hover:bg-slate-50 dark:hover:bg-slate-700 transition font-bold text-sm shadow-sm flex items-center gap-2 disabled:opacity-50"><i className={`fas fa-database ${syncing ? 'animate-spin' : ''}`}></i> Sync & Init</button>}
-            {hasPermission('inventory.procure') && <button onClick={() => { setEditingItem(null); setIsPurchaseModalOpen(true); }} className={`px-4 py-2.5 bg-${settings.primary_color}-600 text-white rounded-xl hover:bg-${settings.primary_color}-700 transition font-bold text-sm shadow-lg shadow-${settings.primary_color}-100 dark:shadow-none flex items-center gap-2`}><i className="fas fa-plus"></i> New Asset</button>}
+            {hasPermission('system.db') && <button onClick={handleInitDB} disabled={syncing} className="px-4 py-2.5 bg-white border border-slate-200 text-slate-700 rounded-xl hover:bg-slate-50 transition font-bold text-sm shadow-sm flex items-center gap-2 disabled:opacity-50"><i className={`fas fa-database ${syncing ? 'animate-spin' : ''}`}></i> Sync & Init</button>}
+            {hasPermission('inventory.procure') && <button onClick={() => { setEditingItem(null); setIsPurchaseModalOpen(true); }} className={`px-4 py-2.5 bg-${settings.primary_color}-600 text-white rounded-xl hover:bg-${settings.primary_color}-700 transition font-bold text-sm shadow-lg shadow-${settings.primary_color}-100 flex items-center gap-2`}><i className="fas fa-plus"></i> New Asset</button>}
           </div>
         </header>
         

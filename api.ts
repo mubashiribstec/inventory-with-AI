@@ -1,15 +1,16 @@
-
 import { InventoryItem, Movement, Supplier, LocationRecord, MaintenanceLog, License, Category, Employee, Department, AssetRequest, User, UserLog, AttendanceRecord, LeaveRequest, Role, Notification, SystemSettings } from './types.ts';
 import { dbService } from './db.ts';
 
 const BASE_URL = '/api';
 
-// Simple session helper
 const getUserContext = () => {
   const user = localStorage.getItem('smartstock_user');
   return user ? JSON.parse(user) : null;
 };
 
+/**
+ * Optimized request handler with fallback support for offline/local database
+ */
 const handleRequest = async <T>(url: string, options: RequestInit = {}, fallbackAction?: () => Promise<T>): Promise<T> => {
   const user = getUserContext();
   const headers = {
@@ -24,15 +25,21 @@ const handleRequest = async <T>(url: string, options: RequestInit = {}, fallback
     if (!res.ok) {
       if (res.status === 404 && fallbackAction) return await fallbackAction();
       const text = await res.text();
-      throw new Error(`API Error (${res.status}): ${text || 'Unknown Error'}`);
+      throw new Error(`Server Error (${res.status}): ${text || 'Unknown Error'}`);
     }
 
     const text = await res.text();
     if (!text || text.trim() === '') return {} as T;
-    return JSON.parse(text.trim());
+    
+    try {
+      return JSON.parse(text.trim());
+    } catch (parseError) {
+      // Return as successful message if response is plain text
+      return { success: true, message: text } as unknown as T;
+    }
   } catch (e) {
     if (fallbackAction) return await fallbackAction();
-    throw e;
+    throw new Error(`Network Connectivity Issue: Could not reach the service.`);
   }
 };
 
@@ -63,7 +70,6 @@ export const apiService = {
     });
   },
 
-  // Generic Save Helper
   async genericSave(endpoint: string, data: any): Promise<void> {
     return handleRequest<void>(`${BASE_URL}/${endpoint}`, {
       method: 'POST',
@@ -75,7 +81,6 @@ export const apiService = {
     return handleRequest<void>(`${BASE_URL}/${endpoint}/${id}`, { method: 'DELETE' });
   },
 
-  // Specific Entity Methods
   async getAllItems(): Promise<InventoryItem[]> { return handleRequest<InventoryItem[]>(`${BASE_URL}/items`, {}, () => dbService.getAllItems()); },
   async saveItem(item: InventoryItem): Promise<void> { return this.genericSave('items', item); },
   async updateItem(id: string, item: Partial<InventoryItem>): Promise<void> { return this.genericSave('items', { ...item, id }); },
@@ -110,7 +115,6 @@ export const apiService = {
   async getAllSuppliers(): Promise<Supplier[]> { return handleRequest<Supplier[]>(`${BASE_URL}/suppliers`, {}, () => dbService.getAllSuppliers()); },
   async getAllLocations(): Promise<LocationRecord[]> { return handleRequest<LocationRecord[]>(`${BASE_URL}/locations`, {}, () => dbService.getAllLocations()); },
 
-  // Attendance & Leaves & Users
   async getAttendance(): Promise<AttendanceRecord[]> { return handleRequest<AttendanceRecord[]>(`${BASE_URL}/attendance`); },
   async saveAttendance(record: AttendanceRecord): Promise<void> { return this.genericSave('attendance', record); },
   async deleteAttendance(id: string): Promise<void> { return this.genericDelete('attendance', id); },
@@ -123,10 +127,8 @@ export const apiService = {
   async saveUser(user: User): Promise<void> { return this.genericSave('users', user); },
   async deleteUser(id: string): Promise<void> { return this.genericDelete('users', id); },
 
-  // Added getRoles to expose the roles endpoint properly and resolve missing property errors
   async getRoles(): Promise<Role[]> { return handleRequest<Role[]>(`${BASE_URL}/roles`); },
 
-  // Notifications
   async getNotifications(userId: string): Promise<Notification[]> {
     return handleRequest<Notification[]>(`${BASE_URL}/notifications/${userId}`);
   },

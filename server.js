@@ -93,8 +93,7 @@ app.post('/api/init-db', async (req, res) => {
       `CREATE TABLE IF NOT EXISTS settings (
         id VARCHAR(50) PRIMARY KEY,
         software_name VARCHAR(255),
-        primary_color VARCHAR(50),
-        dark_mode BOOLEAN DEFAULT FALSE
+        primary_color VARCHAR(50)
       )`,
       `CREATE TABLE IF NOT EXISTS notifications (
         id INT AUTO_INCREMENT PRIMARY KEY,
@@ -228,7 +227,7 @@ app.post('/api/init-db', async (req, res) => {
     }
 
     // Default Settings
-    await conn.query("REPLACE INTO settings (id, software_name, primary_color, dark_mode) VALUES ('GLOBAL', 'SmartStock Pro', 'indigo', FALSE)");
+    await conn.query("REPLACE INTO settings (id, software_name, primary_color) VALUES ('GLOBAL', 'SmartStock Pro', 'indigo')");
 
     // Default Roles
     const roles = [
@@ -267,17 +266,17 @@ app.post('/api/settings', async (req, res) => {
   let conn;
   try {
     conn = await pool.getConnection();
-    const { software_name, primary_color, dark_mode } = req.body;
+    const { software_name, primary_color } = req.body;
     await conn.query(
-      'REPLACE INTO settings (id, software_name, primary_color, dark_mode) VALUES (?, ?, ?, ?)',
-      ['GLOBAL', software_name, primary_color, dark_mode]
+      'REPLACE INTO settings (id, software_name, primary_color) VALUES (?, ?, ?)',
+      ['GLOBAL', software_name, primary_color]
     );
     sendJSON(res, { success: true });
   } catch (err) { sendJSON(res, { error: err.message }, 500); }
   finally { if (conn) conn.release(); }
 });
 
-// System Logs Endpoint (Missing Endpoint causing 404)
+// System Logs Endpoint
 app.get('/api/system-logs', async (req, res) => {
   let conn;
   try {
@@ -380,7 +379,7 @@ modules.forEach(handleCRUD);
 const staticPath = path.join(__dirname, 'dist');
 app.use(express.static(staticPath));
 
-// API Catch-all 404 (prevents returning index.html for failed API calls)
+// API Catch-all 404
 app.use('/api', (req, res) => {
   res.status(404).send(JSON.stringify({ error: 'Endpoint not found' }));
 });

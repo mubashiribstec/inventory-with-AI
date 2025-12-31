@@ -9,7 +9,6 @@
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
   <script>
     tailwind.config = {
-      darkMode: 'class',
       theme: {
         extend: {
           fontFamily: {
@@ -21,11 +20,11 @@
       safelist: [
         {
           pattern: /(bg|text|border|shadow|ring)-(indigo|rose|amber|emerald|blue|violet|cyan|slate)-(50|100|200|300|400|500|600|700|800|900)/,
-          variants: ['hover', 'focus', 'group-hover', 'dark'],
+          variants: ['hover', 'focus', 'group-hover'],
         },
         {
           pattern: /(bg|text|border|shadow|ring)-(indigo|rose|amber|emerald|blue|violet|cyan|slate)-(50|100|200|300|400|500|600|700|800|900)\/(10|20|30|40|50)/,
-          variants: ['hover', 'focus', 'dark'],
+          variants: ['hover', 'focus'],
         }
       ]
     }
@@ -48,9 +47,6 @@
       background: #cbd5e1;
       border-radius: 10px;
     }
-    .dark .custom-scrollbar::-webkit-scrollbar-thumb {
-      background: #475569;
-    }
     
     .animate-fadeIn {
       animation: fadeIn 0.4s ease-out forwards;
@@ -58,10 +54,6 @@
     @keyframes fadeIn {
       from { opacity: 0; transform: translateY(10px); }
       to { opacity: 1; transform: translateY(0); }
-    }
-
-    .theme-transition {
-      transition: background-color 0.3s ease, color 0.3s ease, border-color 0.3s ease, shadow 0.3s ease;
     }
   </style>
 <script type="importmap">
@@ -71,15 +63,15 @@
     "react-dom": "https://esm.sh/react-dom@19.0.0",
     "react-dom/client": "https://esm.sh/react-dom@19.0.0/client",
     "@google/genai": "https://esm.sh/@google/genai@1.3.0",
-    "react/": "https://esm.sh/react@^19.2.3/",
     "react-dom/": "https://esm.sh/react-dom@^19.2.3/",
+    "react/": "https://esm.sh/react@^19.2.3/",
     "vite": "https://esm.sh/vite@^7.3.0",
     "@vitejs/plugin-react": "https://esm.sh/@vitejs/plugin-react@^5.1.2"
   }
 }
 </script>
 </head>
-<body class="bg-slate-50 text-slate-900 dark:bg-slate-950 dark:text-slate-100 theme-transition">
+<body class="bg-slate-50 text-slate-900">
   <div id="root"></div>
   <script type="module" src="/index.tsx"></script>
 </body>
