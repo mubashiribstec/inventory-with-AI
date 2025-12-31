@@ -1,6 +1,5 @@
-
 import React, { useState, useEffect } from 'react';
-import { UserRole, Notification } from '../types.ts';
+import { UserRole } from '../types.ts';
 import { apiService } from '../api.ts';
 
 interface SidebarProps {
@@ -91,13 +90,13 @@ const Sidebar: React.FC<SidebarProps> = ({ userRole, activeTab, setActiveTab, on
   const suffix = softwareNameParts.length > 1 ? softwareNameParts[softwareNameParts.length - 1] : '';
 
   return (
-    <div className="fixed inset-y-0 left-0 w-64 bg-white dark:bg-slate-800 border-r border-slate-200 dark:border-slate-700 flex flex-col z-30 shadow-sm hidden lg:flex custom-scrollbar overflow-y-auto transition-colors duration-300">
-      <div className="p-6 sticky top-0 bg-white dark:bg-slate-800 z-10 border-b border-slate-100 dark:border-slate-700 mb-6">
+    <div className="fixed inset-y-0 left-0 w-64 bg-white border-r border-slate-200 flex flex-col z-30 shadow-sm hidden lg:flex custom-scrollbar overflow-y-auto">
+      <div className="p-6 sticky top-0 bg-white z-10 border-b border-slate-100 mb-6">
         <div className="flex items-center gap-3">
-          <div className={`w-10 h-10 bg-${themeColor}-600 rounded-xl flex items-center justify-center text-white text-xl shadow-lg shadow-${themeColor}-100 dark:shadow-none`}>
+          <div className={`w-10 h-10 bg-${themeColor}-600 rounded-xl flex items-center justify-center text-white text-xl shadow-lg shadow-${themeColor}-100`}>
             <i className="fas fa-warehouse"></i>
           </div>
-          <h2 className="text-xl font-bold text-slate-800 dark:text-white poppins">
+          <h2 className="text-xl font-bold text-slate-800 poppins">
             {mainName}{suffix && <span className={`text-${themeColor}-600 italic`}>.{suffix}</span>}
           </h2>
         </div>
@@ -113,7 +112,7 @@ const Sidebar: React.FC<SidebarProps> = ({ userRole, activeTab, setActiveTab, on
           
           return (
             <div key={groupIdx}>
-              <p className="px-4 text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-widest mb-3">{group.title}</p>
+              <p className="px-4 text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-3">{group.title}</p>
               <div className="space-y-1">
                 {visibleItems.map(item => (
                   <button
@@ -121,12 +120,12 @@ const Sidebar: React.FC<SidebarProps> = ({ userRole, activeTab, setActiveTab, on
                     onClick={() => setActiveTab(item.id)}
                     className={`w-full flex items-center justify-between px-4 py-2.5 rounded-xl transition-all duration-200 group ${
                       activeTab === item.id 
-                        ? `bg-${themeColor}-600 text-white shadow-lg shadow-${themeColor}-100 dark:shadow-none` 
-                        : 'text-slate-500 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-700'
+                        ? `bg-${themeColor}-600 text-white shadow-lg shadow-${themeColor}-100` 
+                        : 'text-slate-500 hover:bg-slate-50'
                     }`}
                   >
                     <div className="flex items-center gap-3">
-                      <i className={`fas ${item.icon} w-5 text-center ${activeTab === item.id ? 'text-white' : `text-slate-400 group-hover:text-${themeColor}-600 dark:group-hover:text-${themeColor}-400`}`}></i>
+                      <i className={`fas ${item.icon} w-5 text-center ${activeTab === item.id ? 'text-white' : `text-slate-400 group-hover:text-${themeColor}-600`}`}></i>
                       <span className="font-medium text-sm">{item.label}</span>
                     </div>
                     {item.badge !== undefined && item.badge > 0 && (
@@ -144,20 +143,20 @@ const Sidebar: React.FC<SidebarProps> = ({ userRole, activeTab, setActiveTab, on
 
       <div className="mt-auto p-4 space-y-3">
         {(isAdmin || hasPermission('system.roles') || hasPermission('analytics.logs') || hasPermission('system.settings')) && (
-           <div className="bg-slate-50 dark:bg-slate-900 p-4 rounded-2xl border border-slate-100 dark:border-slate-700 space-y-2">
-              <p className="text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-widest mb-2">Admin Panel</p>
+           <div className="bg-slate-50 p-4 rounded-2xl border border-slate-100 space-y-2">
+              <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-2">Admin Panel</p>
               {hasPermission('analytics.logs') && (
-                <button onClick={() => setActiveTab('system-logs')} className={`w-full py-2 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 rounded-xl text-xs font-bold hover:bg-slate-50 dark:hover:bg-slate-700 transition ${activeTab === 'system-logs' ? `ring-2 ring-${themeColor}-500` : ''}`}>
+                <button onClick={() => setActiveTab('system-logs')} className={`w-full py-2 bg-white border border-slate-200 text-slate-600 rounded-xl text-xs font-bold hover:bg-slate-50 transition ${activeTab === 'system-logs' ? `ring-2 ring-${themeColor}-500` : ''}`}>
                    <i className="fas fa-shield-alt mr-2"></i> Audit Logs
                 </button>
               )}
               {hasPermission('system.roles') && (
-                <button onClick={() => setActiveTab('role-mgmt')} className={`w-full py-2 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 rounded-xl text-xs font-bold hover:bg-slate-50 dark:hover:bg-slate-700 transition ${activeTab === 'role-mgmt' ? `ring-2 ring-${themeColor}-500` : ''}`}>
+                <button onClick={() => setActiveTab('role-mgmt')} className={`w-full py-2 bg-white border border-slate-200 text-slate-600 rounded-xl text-xs font-bold hover:bg-slate-50 transition ${activeTab === 'role-mgmt' ? `ring-2 ring-${themeColor}-500` : ''}`}>
                    <i className="fas fa-user-tag mr-2"></i> Role Config
                 </button>
               )}
               {hasPermission('system.settings') && (
-                <button onClick={() => setActiveTab('settings')} className={`w-full py-2 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 rounded-xl text-xs font-bold hover:bg-slate-50 dark:hover:bg-slate-700 transition ${activeTab === 'settings' ? `ring-2 ring-${themeColor}-500` : ''}`}>
+                <button onClick={() => setActiveTab('settings')} className={`w-full py-2 bg-white border border-slate-200 text-slate-600 rounded-xl text-xs font-bold hover:bg-slate-50 transition ${activeTab === 'settings' ? `ring-2 ring-${themeColor}-500` : ''}`}>
                    <i className="fas fa-sliders-h mr-2"></i> Settings
                 </button>
               )}
@@ -165,7 +164,7 @@ const Sidebar: React.FC<SidebarProps> = ({ userRole, activeTab, setActiveTab, on
         )}
         <button 
           onClick={onLogout}
-          className="w-full flex items-center gap-3 px-4 py-3 rounded-xl text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-900/20 transition font-bold text-sm"
+          className="w-full flex items-center gap-3 px-4 py-3 rounded-xl text-rose-500 hover:bg-rose-50 transition font-bold text-sm"
         >
           <i className="fas fa-sign-out-alt w-5"></i>
           <span>Logout Session</span>

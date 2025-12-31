@@ -1,4 +1,3 @@
-
 const express = require('express');
 const mariadb = require('mariadb');
 const cors = require('cors');

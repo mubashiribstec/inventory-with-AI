@@ -8,6 +8,9 @@
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Poppins:wght@400;500;600;700&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
   <script>
+    // Critical: Initialize process shim before any modules load to prevent ReferenceErrors
+    window.process = { env: { API_KEY: '' } };
+    
     tailwind.config = {
       theme: {
         extend: {
@@ -33,6 +36,7 @@
     body {
       font-family: 'Inter', sans-serif;
       overflow-x: hidden;
+      background-color: #f8fafc;
     }
     h1, h2, h3, h4, .poppins {
       font-family: 'Poppins', sans-serif;
@@ -71,7 +75,7 @@
 }
 </script>
 </head>
-<body class="bg-slate-50 text-slate-900">
+<body class="text-slate-900">
   <div id="root"></div>
   <script type="module" src="/index.tsx"></script>
 </body>
