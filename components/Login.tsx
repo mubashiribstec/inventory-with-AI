@@ -1,4 +1,3 @@
-
 import React, { useState } from 'react';
 import { apiService } from '../api.ts';
 import { User } from '../types.ts';
@@ -13,6 +12,7 @@ const Login: React.FC<LoginProps> = ({ onLogin }) => {
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
   const [loading, setLoading] = useState(false);
+  const [isOffline, setIsOffline] = useState(false);
   const [initLoading, setInitLoading] = useState(false);
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -24,7 +24,25 @@ const Login: React.FC<LoginProps> = ({ onLogin }) => {
       const user = await apiService.login(username, password);
       onLogin(user);
     } catch (err: any) {
-      setError(err.message.includes('401') ? 'Invalid username or password' : 'Connection error. Please ensure the database is initialized.');
+      if (err.message.includes('Unreachable') || err.message.includes('fetch')) {
+        setIsOffline(true);
+        setError('Backend is offline. You can still test using Local Demo Mode.');
+      } else {
+        setError('Invalid username or password.');
+      }
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleDemoLogin = async () => {
+    setLoading(true);
+    try {
+      // Force local login with default admin
+      const user = await apiService.login('admin', 'admin123');
+      onLogin(user);
+    } catch (e) {
+      setError("Demo Mode initialization failed.");
     } finally {
       setLoading(false);
     }
@@ -37,7 +55,8 @@ const Login: React.FC<LoginProps> = ({ onLogin }) => {
     try {
       const result = await apiService.initDatabase();
       if (result.success) {
-        setSuccess('System Ready! Use "admin" and "admin123" to log in.');
+        setSuccess('Local system initialized! Use admin / admin123');
+        setIsOffline(false);
       }
     } catch (err: any) {
       setError('Initialization failed: ' + err.message);
@@ -62,8 +81,8 @@ const Login: React.FC<LoginProps> = ({ onLogin }) => {
         
         <div className="p-8 space-y-6">
           {error && (
-            <div className="p-4 bg-rose-50 border border-rose-100 rounded-2xl text-rose-600 text-xs font-bold flex items-center gap-3 animate-fadeIn">
-              <i className="fas fa-exclamation-circle text-lg"></i>
+            <div className={`p-4 rounded-2xl text-xs font-bold flex items-center gap-3 animate-fadeIn border ${isOffline ? 'bg-amber-50 border-amber-100 text-amber-700' : 'bg-rose-50 border-rose-100 text-rose-600'}`}>
+              <i className={`fas ${isOffline ? 'fa-wifi-slash' : 'fa-exclamation-circle'} text-lg`}></i>
               {error}
             </div>
           )}
@@ -84,7 +103,7 @@ const Login: React.FC<LoginProps> = ({ onLogin }) => {
                   type="text" 
                   required
                   className="w-full pl-12 pr-4 py-3 bg-slate-50 border border-slate-100 rounded-xl focus:ring-2 focus:ring-indigo-500 outline-none transition"
-                  placeholder="Enter username"
+                  placeholder="admin"
                   value={username}
                   onChange={e => setUsername(e.target.value)}
                 />
@@ -99,60 +118,54 @@ const Login: React.FC<LoginProps> = ({ onLogin }) => {
                   type="password" 
                   required
                   className="w-full pl-12 pr-4 py-3 bg-slate-50 border border-slate-100 rounded-xl focus:ring-2 focus:ring-indigo-500 outline-none transition"
-                  placeholder="••••••••"
+                  placeholder="admin123"
                   value={password}
                   onChange={e => setPassword(e.target.value)}
                 />
               </div>
             </div>
 
-            <button 
-              type="submit" 
-              disabled={loading || initLoading}
-              className="w-full py-4 bg-indigo-600 hover:bg-indigo-700 text-white rounded-2xl font-bold transition shadow-lg shadow-indigo-100 flex items-center justify-center gap-3 disabled:opacity-50"
-            >
-              {loading ? (
-                <i className="fas fa-spinner animate-spin"></i>
-              ) : (
-                <>
-                  <span>Sign In</span>
-                  <i className="fas fa-arrow-right text-xs"></i>
-                </>
+            <div className="flex flex-col gap-3">
+              <button 
+                type="submit" 
+                disabled={loading}
+                className="w-full py-4 bg-indigo-600 hover:bg-indigo-700 text-white rounded-2xl font-bold transition shadow-lg shadow-indigo-100 flex items-center justify-center gap-3 disabled:opacity-50"
+              >
+                {loading ? <i className="fas fa-spinner animate-spin"></i> : <span>Connect & Sign In</span>}
+              </button>
+
+              {isOffline && (
+                <button 
+                  type="button"
+                  onClick={handleDemoLogin}
+                  className="w-full py-4 bg-amber-500 hover:bg-amber-600 text-white rounded-2xl font-bold transition shadow-lg shadow-amber-100 flex items-center justify-center gap-3"
+                >
+                  <i className="fas fa-play"></i>
+                  Run Local Demo Mode
+                </button>
               )}
-            </button>
+            </div>
           </form>
 
           <div className="relative py-2 flex items-center">
             <div className="flex-grow border-t border-slate-100"></div>
-            <span className="flex-shrink mx-4 text-[10px] text-slate-300 font-bold uppercase tracking-widest">Setup Required?</span>
+            <span className="flex-shrink mx-4 text-[10px] text-slate-300 font-bold uppercase tracking-widest">Database Maintenance</span>
             <div className="flex-grow border-t border-slate-100"></div>
           </div>
 
-          <div className="p-1 bg-slate-50 rounded-2xl border border-slate-100">
-            <button 
-              type="button"
-              onClick={handleInitialize}
-              disabled={initLoading || loading}
-              className={`w-full py-3 rounded-xl text-xs font-bold transition flex items-center justify-center gap-2 ${
-                success 
-                ? 'bg-emerald-500 text-white shadow-lg shadow-emerald-100' 
-                : 'bg-white border border-slate-200 text-slate-600 hover:bg-slate-50'
-              } disabled:opacity-50`}
-            >
-              {initLoading ? (
-                <i className="fas fa-cog animate-spin"></i>
-              ) : (
-                <i className={`fas ${success ? 'fa-check' : 'fa-database'}`}></i>
-              )}
-              <span>{success ? 'System Initialized' : 'Initialize System Database'}</span>
-            </button>
-          </div>
-          
-          <div className="pt-2 text-center">
-            <p className="text-[10px] text-slate-400 font-bold uppercase tracking-tighter">
-              Admin: <span className="text-indigo-400 font-mono">admin / admin123</span>
-            </p>
-          </div>
+          <button 
+            type="button"
+            onClick={handleInitialize}
+            disabled={initLoading || loading}
+            className={`w-full py-3 rounded-xl text-xs font-bold transition flex items-center justify-center gap-2 ${
+              success 
+              ? 'bg-emerald-500 text-white shadow-lg shadow-emerald-100' 
+              : 'bg-white border border-slate-200 text-slate-600 hover:bg-slate-50'
+            } disabled:opacity-50`}
+          >
+            <i className={`fas ${initLoading ? 'fa-sync animate-spin' : (success ? 'fa-check' : 'fa-database')}`}></i>
+            <span>{success ? 'Local DB Ready' : 'Initialize Local Storage'}</span>
+          </button>
         </div>
       </div>
     </div>
