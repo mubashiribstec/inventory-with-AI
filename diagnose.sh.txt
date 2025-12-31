@@ -1,0 +1,107 @@
+#!/bin/bash
+
+# SmartStock Pro Enterprise - Linux CLI Diagnostic Tool
+# This script identifies why the software stack might not be loading.
+
+# Text Formatting
+BOLD='\033[1m'
+GREEN='\033[0;32m'
+RED='\033[0;31m'
+YELLOW='\033[1;33m'
+NC='\033[0m' # No Color
+
+echo -e "${BOLD}====================================================${NC}"
+echo -e "${BOLD}   SmartStock Pro Enterprise - System Diagnosis     ${NC}"
+echo -e "${BOLD}====================================================${NC}"
+
+# 1. Environment Variables Check
+echo -e "\n${BOLD}[1/5] Checking Environment Configuration${NC}"
+if [ -f .env ]; then
+    echo -e "  [${GREEN}OK${NC}] .env file exists."
+    if grep -q "API_KEY=." .env; then
+        echo -e "  [${GREEN}OK${NC}] API_KEY is set."
+    else
+        echo -e "  [${RED}FAIL${NC}] API_KEY is empty in .env file."
+    fi
+    if grep -q "DB_HOST=db" .env; then
+        echo -e "  [${GREEN}OK${NC}] DB_HOST is correctly set to 'db' for Docker."
+    else
+        echo -e "  [${YELLOW}WARN${NC}] DB_HOST is not 'db'. If running in Docker, this will fail."
+    fi
+else
+    echo -e "  [${RED}FAIL${NC}] .env file is missing."
+fi
+
+# 2. Docker Service & Container Check
+echo -e "\n${BOLD}[2/5] Checking Docker Containers${NC}"
+if ! command -v docker &> /dev/null; then
+    echo -e "  [${RED}FAIL${NC}] Docker is not installed."
+else
+    APP_STATUS=$(docker ps -a --filter "name=smartstock-app" --format "{{.Status}}")
+    DB_STATUS=$(docker ps -a --filter "name=smartstock-db" --format "{{.Status}}")
+
+    if [[ $APP_STATUS == Up* ]]; then
+        echo -e "  [${GREEN}OK${NC}] App Container: $APP_STATUS"
+    else
+        echo -e "  [${RED}FAIL${NC}] App Container is DOWN or CRASHING. Status: ${APP_STATUS:-Not Found}"
+    fi
+
+    if [[ $DB_STATUS == Up* ]]; then
+        echo -e "  [${GREEN}OK${NC}] DB Container: $DB_STATUS"
+    else
+        echo -e "  [${RED}FAIL${NC}] DB Container is DOWN. Status: ${DB_STATUS:-Not Found}"
+    fi
+fi
+
+# 3. Database Connectivity Check
+echo -e "\n${BOLD}[3/5] Testing MariaDB Connectivity${NC}"
+if [[ $DB_STATUS == Up* ]]; then
+    DB_TEST=$(docker exec smartstock-db mariadb -u root -proot_password -e "SELECT 1;" 2>&1)
+    if [ $? -eq 0 ]; then
+        echo -e "  [${GREEN}OK${NC}] Database is responding to queries."
+    else
+        echo -e "  [${RED}FAIL${NC}] Database error: $DB_TEST"
+    fi
+else
+    echo -e "  [${RED}SKIP${NC}] Cannot test DB because container is down."
+fi
+
+# 4. Network & CDN Connectivity Check
+echo -e "\n${BOLD}[4/5] Testing Internet/CDN Reachability${NC}"
+# Testing esm.sh (Critical for React modules)
+if curl -s --head  --request GET https://esm.sh/react | grep "200 OK" > /dev/null; then
+    echo -e "  [${GREEN}OK${NC}] Can reach esm.sh (Frontend Dependencies)."
+else
+    echo -e "  [${RED}FAIL${NC}] Cannot reach esm.sh. Check firewall or DNS."
+fi
+
+# Testing Google AI API
+if curl -s --head --request GET https://generativelanguage.googleapis.com > /dev/null; then
+    echo -e "  [${GREEN}OK${NC}] Can reach Google Gemini API endpoint."
+else
+    echo -e "  [${RED}FAIL${NC}] Google API unreachable."
+fi
+
+# 5. Application Error Logs
+echo -e "\n${BOLD}[5/5] Inspecting Recent Application Logs${NC}"
+if [[ $APP_STATUS == Up* ]]; then
+    LOGS=$(docker compose logs --tail=15 app)
+    if [[ $LOGS == *"error"* ]] || [[ $LOGS == *"Error"* ]]; then
+        echo -e "  [${RED}ALERT${NC}] Found errors in recent logs:"
+        echo "----------------------------------------------------"
+        echo "$LOGS"
+        echo "----------------------------------------------------"
+    else
+        echo -e "  [${GREEN}OK${NC}] No obvious errors in the last 15 log lines."
+    fi
+else
+    echo -e "  [${RED}SKIP${NC}] App is not running, no logs to show."
+fi
+
+echo -e "\n${BOLD}====================================================${NC}"
+echo -e "${BOLD}             Diagnosis Complete                     ${NC}"
+echo -e "${BOLD}====================================================${NC}"
+echo -e "If everything is OK but you still see a white screen:"
+echo -e "1. Check your browser's console (F12) for JS errors."
+echo -e "2. Clear browser cache (the app relies on Import Maps)."
+echo -e "3. Ensure you aren't blocking scripts from esm.sh."
