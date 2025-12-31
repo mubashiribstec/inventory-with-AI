@@ -19,20 +19,27 @@ echo -e "${BOLD}====================================================${NC}"
 echo -e "\n${BOLD}[1/6] Checking Environment Configuration${NC}"
 if [ -f .env ]; then
     echo -e "  [${GREEN}OK${NC}] .env file exists."
-    source .env
-    if [ -z "$API_KEY" ]; then
-        echo -e "  [${RED}FAIL${NC}] API_KEY is empty."
+    # Use grep to safely extract variables without executing the whole file
+    ENV_API_KEY=$(grep "^API_KEY=" .env | cut -d'=' -f2-)
+    ENV_DB_HOST=$(grep "^DB_HOST=" .env | cut -d'=' -f2-)
+    ENV_DB_USER=$(grep "^DB_USER=" .env | cut -d'=' -f2-)
+    ENV_DB_PASS=$(grep "^DB_PASSWORD=" .env | cut -d'=' -f2-)
+
+    if [ -z "$ENV_API_KEY" ]; then
+        echo -e "  [${RED}FAIL${NC}] API_KEY is empty in .env."
     else
         echo -e "  [${GREEN}OK${NC}] API_KEY is present."
     fi
     
     # Check for Docker vs Native settings
-    if [ "$DB_HOST" == "db" ]; then
+    if [ "$ENV_DB_HOST" == "db" ]; then
         echo -e "  [${CYAN}INFO${NC}] Configured for ${BOLD}Docker Mode${NC} (DB_HOST=db)."
         RUN_MODE="DOCKER"
     else
-        echo -e "  [${CYAN}INFO${NC}] Configured for ${BOLD}Native Mode${NC} (DB_HOST=$DB_HOST)."
+        HOST_DISPLAY=${ENV_DB_HOST:-"localhost (default)"}
+        echo -e "  [${CYAN}INFO${NC}] Configured for ${BOLD}Native Mode${NC} (DB_HOST=$HOST_DISPLAY)."
         RUN_MODE="NATIVE"
+        DB_HOST_ACTUAL=${ENV_DB_HOST:-"127.0.0.1"}
     fi
 else
     echo -e "  [${RED}FAIL${NC}] .env file is missing."
@@ -74,36 +81,46 @@ else
     echo -e "  [${YELLOW}SKIP${NC}] 'ss' command not found, skipping port check."
 fi
 
-# 4. Database Credentials
+# 4. Database Credentials & Client
 echo -e "\n${BOLD}[4/6] Testing Database Login${NC}"
-if [ "$RUN_MODE" == "DOCKER" ]; then
-    DB_TEST=$(docker exec smartstock-db mariadb -u $DB_USER -p$DB_PASSWORD -e "SELECT 1;" 2>&1)
-else
-    DB_TEST=$(mariadb -h $DB_HOST -u $DB_USER -p$DB_PASSWORD -e "SELECT 1;" 2>&1)
+DB_CLIENT=""
+if command -v mariadb &> /dev/null; then
+    DB_CLIENT="mariadb"
+elif command -v mysql &> /dev/null; then
+    DB_CLIENT="mysql"
 fi
 
-if [ $? -eq 0 ]; then
-    echo -e "  [${GREEN}OK${NC}] Database credentials verified."
+if [ -z "$DB_CLIENT" ]; then
+    echo -e "  [${RED}FAIL${NC}] No DB client found (mariadb or mysql command missing)."
+    echo -e "         ${YELLOW}HINT: Install with 'sudo apt install mariadb-client'${NC}"
 else
-    echo -e "  [${RED}FAIL${NC}] DB Login Error: $DB_TEST"
+    echo -e "  [${GREEN}OK${NC}] Found DB client: $DB_CLIENT"
+    if [ "$RUN_MODE" == "DOCKER" ]; then
+        DB_TEST=$(docker exec smartstock-db $DB_CLIENT -u "$ENV_DB_USER" -p"$ENV_DB_PASS" -e "SELECT 1;" 2>&1)
+    else
+        DB_TEST=$($DB_CLIENT -h "$DB_HOST_ACTUAL" -u "$ENV_DB_USER" -p"$ENV_DB_PASS" -e "SELECT 1;" 2>&1)
+    fi
+
+    if [ $? -eq 0 ]; then
+        echo -e "  [${GREEN}OK${NC}] Database credentials verified."
+    else
+        echo -e "  [${RED}FAIL${NC}] DB Connection Error: $DB_TEST"
+    fi
 fi
 
 # 5. Connectivity & DNS
 echo -e "\n${BOLD}[5/6] Testing Internet & CDN Reachability${NC}"
-# Test raw IP ping (checks if networking works at all)
 if ping -c 1 8.8.8.8 &> /dev/null; then
     echo -e "  [${GREEN}OK${NC}] Global Internet reachability (8.8.8.8)."
 else
     echo -e "  [${RED}FAIL${NC}] Cannot ping 8.8.8.8. Network interface might be down."
 fi
 
-# Test esm.sh (Critical)
 ESM_STATUS=$(curl -s -o /dev/null -w "%{http_code}" https://esm.sh/react)
 if [ "$ESM_STATUS" == "200" ]; then
     echo -e "  [${GREEN}OK${NC}] esm.sh (Frontend Modules) is reachable."
 else
-    echo -e "  [${RED}FAIL${NC}] esm.sh is unreachable (HTTP $ESM_STATUS). Your machine cannot download React."
-    echo -e "         ${YELLOW}HINT: Check /etc/resolv.conf or Firewall rules.${NC}"
+    echo -e "  [${RED}FAIL${NC}] esm.sh is unreachable (HTTP $ESM_STATUS)."
 fi
 
 # 6. Recent Logs
@@ -111,8 +128,7 @@ echo -e "\n${BOLD}[6/6] Inspecting Recent Errors${NC}"
 if [ "$RUN_MODE" == "DOCKER" ]; then
     docker compose logs --tail=10 app
 else
-    # Assuming logs are directed to a file or stdout
-    echo -e "  [${CYAN}INFO${NC}] Native mode detected. Check your terminal output for stack traces."
+    echo -e "  [${CYAN}INFO${NC}] Native mode detected. Reviewing last 10 lines of standard output..."
 fi
 
 echo -e "\n${BOLD}====================================================${NC}"

@@ -10,13 +10,18 @@ app.use(cors());
 app.use(express.json());
 
 // Enhanced Pool Configuration for Native/Docker reliability
+// If DB_HOST is present but empty, we force 127.0.0.1 for local resolution stability
+const dbHost = process.env.DB_HOST && process.env.DB_HOST.trim() !== '' 
+  ? process.env.DB_HOST 
+  : '127.0.0.1';
+
 const pool = mariadb.createPool({
-  host: process.env.DB_HOST || 'localhost',
+  host: dbHost,
   user: process.env.DB_USER || 'inventory_user',
   password: process.env.DB_PASSWORD || 'inventory_password',
   database: process.env.DB_NAME || 'smartstock',
   connectionLimit: 20,
-  connectTimeout: 20000, // Increased for slower local disks
+  connectTimeout: 20000, 
   acquireTimeout: 20000
 });
 
@@ -25,13 +30,13 @@ const pool = mariadb.createPool({
   let conn;
   try {
     conn = await pool.getConnection();
-    console.log(`[DATABASE] Successfully connected to ${process.env.DB_HOST || 'localhost'}`);
+    console.log(`[DATABASE] Successfully connected to ${dbHost}`);
   } catch (err) {
-    console.error(`[DATABASE ERROR] Could not establish connection: ${err.message}`);
+    console.error(`[DATABASE ERROR] Could not establish connection to ${dbHost}: ${err.message}`);
     if (err.code === 'ER_ACCESS_DENIED_ERROR') {
       console.error('HINT: Check your DB_USER and DB_PASSWORD in .env');
     } else if (err.code === 'ECONNREFUSED') {
-      console.error('HINT: Ensure MariaDB service is running on this machine.');
+      console.error(`HINT: Ensure MariaDB service is running on ${dbHost}.`);
     }
   } finally {
     if (conn) conn.release();
