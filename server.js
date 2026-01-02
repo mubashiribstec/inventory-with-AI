@@ -25,6 +25,9 @@ const pool = mariadb.createPool({
   acquireTimeout: 20000
 });
 
+let isDbReady = false;
+let dbError = null;
+
 // Forward Declaration of Init Logic
 const handleInitDb = async (conn) => {
   console.log('[DATABASE] Running schema check and auto-initialization...');
@@ -215,29 +218,49 @@ const handleInitDb = async (conn) => {
     await conn.query("REPLACE INTO roles (id, label, description, permissions, color, icon) VALUES (?, ?, ?, ?, ?, ?)", r);
   }
 
-  // Ensure default admin exists
+  // Ensure default admin exists with password 'admin'
   await conn.query("REPLACE INTO users (id, username, password, role, full_name, shift_start_time, department, joining_date, designation, is_active) VALUES ('U-001', 'admin', 'admin', 'ADMIN', 'System Administrator', '09:00', 'IT Infrastructure', '2023-01-01', 'Chief Systems Admin', 1)");
   
   console.log('[DATABASE] Auto-initialization complete. Default Login: admin / admin');
   return true;
 };
 
-// Immediate Connectivity & Auto-Init Test
-(async () => {
-  let conn;
-  try {
-    conn = await pool.getConnection();
-    console.log(`[DATABASE] Successfully connected to ${dbHost}`);
-    await handleInitDb(conn);
-  } catch (err) {
-    console.error(`[DATABASE ERROR] Could not establish connection to ${dbHost}: ${err.message}`);
-  } finally {
-    if (conn) conn.release();
+// Retry Loop for Database Connection
+const initDbWithRetry = async (retries = 10, delay = 3000) => {
+  for (let i = 0; i < retries; i++) {
+    let conn;
+    try {
+      console.log(`[DATABASE] Attempting connection to ${dbHost} (Attempt ${i + 1}/${retries})...`);
+      conn = await pool.getConnection();
+      console.log(`[DATABASE] Successfully connected to ${dbHost}`);
+      await handleInitDb(conn);
+      isDbReady = true;
+      dbError = null;
+      return;
+    } catch (err) {
+      dbError = err.message;
+      console.error(`[DATABASE ERROR] Attempt ${i + 1} failed: ${err.message}`);
+      if (i < retries - 1) {
+        await new Promise(res => setTimeout(res, delay));
+      }
+    } finally {
+      if (conn) conn.release();
+    }
   }
-})();
+  console.error('[DATABASE] Critical: Failed to initialize database after multiple attempts.');
+};
+
+// Start initialization
+initDbWithRetry();
 
 app.use('/api', (req, res, next) => {
   res.setHeader('Content-Type', 'application/json; charset=utf-8');
+  if (!isDbReady && req.path !== '/init-db') {
+    return res.status(503).json({ 
+      error: 'Database Initializing', 
+      details: dbError || 'The server is currently establishing a connection to MariaDB. Please wait a few moments and try again.' 
+    });
+  }
   next();
 });
 
@@ -276,10 +299,10 @@ app.post('/api/login', async (req, res) => {
       await logAction(user.id, user.username, 'LOGIN', 'USER', user.id, 'User logged in successfully');
       sendJSON(res, userSafe);
     } else {
-      sendJSON(res, { error: 'Invalid credentials' }, 401);
+      sendJSON(res, { error: 'Invalid username or password' }, 401);
     }
   } catch (err) {
-    sendJSON(res, { error: err.message }, 500);
+    sendJSON(res, { error: `Login Failed: ${err.message}` }, 500);
   } finally {
     if (conn) conn.release();
   }
@@ -291,11 +314,9 @@ app.post('/api/factory-reset', async (req, res) => {
   let conn;
   try {
     conn = await pool.getConnection();
-    // Truncate all tables
     for (const table of modules) {
       await conn.query(`DELETE FROM ${table}`);
     }
-    // Re-run initialization logic
     await handleInitDb(conn);
     sendJSON(res, { success: true, message: 'Software factory reset complete.' });
   } catch (err) {
@@ -306,11 +327,16 @@ app.post('/api/factory-reset', async (req, res) => {
 });
 
 app.post('/api/init-db', async (req, res) => {
+  if (isDbReady) {
+    return sendJSON(res, { success: true, message: 'Database already ready.' });
+  }
   let conn;
   try {
     conn = await pool.getConnection();
     await handleInitDb(conn);
-    sendJSON(res, { success: true, message: 'Database initialized.' });
+    isDbReady = true;
+    dbError = null;
+    sendJSON(res, { success: true, message: 'Database initialized manually.' });
   } catch (err) {
     sendJSON(res, { error: err.message }, 500);
   } finally {
@@ -337,45 +363,6 @@ app.post('/api/settings', async (req, res) => {
       'REPLACE INTO settings (id, software_name, primary_color, software_description, software_logo) VALUES (?, ?, ?, ?, ?)',
       ['GLOBAL', software_name, primary_color, software_description, software_logo]
     );
-    sendJSON(res, { success: true });
-  } catch (err) { sendJSON(res, { error: err.message }, 500); }
-  finally { if (conn) conn.release(); }
-});
-
-app.get('/api/system-logs', async (req, res) => {
-  let conn;
-  try {
-    conn = await pool.getConnection();
-    const rows = await conn.query('SELECT * FROM user_logs ORDER BY timestamp DESC LIMIT 500');
-    sendJSON(res, Array.from(rows));
-  } catch (err) { sendJSON(res, { error: err.message }, 500); }
-  finally { if (conn) conn.release(); }
-});
-
-app.get('/api/notifications/:userId', async (req, res) => {
-  let conn;
-  try {
-    conn = await pool.getConnection();
-    const { userId } = req.params;
-    let rows;
-    if (userId === 'ADMIN' || userId.startsWith('U-001')) {
-      rows = await conn.query('SELECT * FROM notifications ORDER BY timestamp DESC LIMIT 50');
-    } else {
-      rows = await conn.query('SELECT * FROM notifications WHERE recipient_id = ? ORDER BY timestamp DESC LIMIT 50', [userId]);
-    }
-    sendJSON(res, Array.from(rows));
-  } catch (err) { sendJSON(res, { error: err.message }, 500); }
-  finally { if (conn) conn.release(); }
-});
-
-app.post('/api/notifications/read', async (req, res) => {
-  let conn;
-  try {
-    conn = await pool.getConnection();
-    const { ids } = req.body;
-    if (ids && ids.length > 0) {
-      await conn.query('UPDATE notifications SET is_read = TRUE WHERE id IN (?)', [ids]);
-    }
     sendJSON(res, { success: true });
   } catch (err) { sendJSON(res, { error: err.message }, 500); }
   finally { if (conn) conn.release(); }

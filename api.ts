@@ -8,24 +8,31 @@ const API_BASE = '/api';
 export const apiService = {
   // Authentication - Strictly Remote (MariaDB)
   async login(username, password): Promise<User> {
-    const response = await fetch(`${API_BASE}/login`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ username, password })
-    });
+    try {
+      const response = await fetch(`${API_BASE}/login`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ username, password })
+      });
 
-    if (!response.ok) {
-      let errorMsg = "Invalid Credentials";
-      try {
-          const errorData = await response.json();
-          errorMsg = errorData.error || errorMsg;
-      } catch (e) {}
-      throw new Error(errorMsg);
+      if (!response.ok) {
+        let errorMsg = `Server Error (${response.status})`;
+        try {
+            const errorData = await response.json();
+            errorMsg = errorData.error || errorData.details || errorMsg;
+        } catch (e) {}
+        throw new Error(errorMsg);
+      }
+
+      const user = await response.json();
+      await dbService.saveUser(user); // Cache for session persistence
+      return user;
+    } catch (e) {
+      if (e instanceof TypeError && e.message === 'Failed to fetch') {
+          throw new Error("Authentication server unreachable. Please check if the backend is running.");
+      }
+      throw e;
     }
-
-    const user = await response.json();
-    await dbService.saveUser(user); // Cache for session persistence
-    return user;
   },
 
   // Global Settings - Source of Truth is the MariaDB 'settings' table
@@ -82,7 +89,10 @@ export const apiService = {
 
   async get<T>(path: string): Promise<T[]> {
     const res = await fetch(`${API_BASE}/${path}`);
-    if (!res.ok) throw new Error(`Server Error: ${res.statusText}`);
+    if (!res.ok) {
+        const errorData = await res.json().catch(() => ({}));
+        throw new Error(errorData.error || `Server Error: ${res.statusText}`);
+    }
     return res.json();
   },
 
@@ -99,6 +109,10 @@ export const apiService = {
       },
       body: JSON.stringify(data)
     });
+    if (!res.ok) {
+        const errorData = await res.json().catch(() => ({}));
+        throw new Error(errorData.error || `Server Error: ${res.statusText}`);
+    }
     return res.json();
   },
 
@@ -113,6 +127,10 @@ export const apiService = {
         'x-username': user?.username || 'SYSTEM'
       }
     });
+    if (!res.ok) {
+        const errorData = await res.json().catch(() => ({}));
+        throw new Error(errorData.error || `Server Error: ${res.statusText}`);
+    }
     return res.json();
   },
 
@@ -188,14 +206,18 @@ export const apiService = {
 
   async initDatabase(): Promise<{ success: boolean }> { 
     await dbService.init(); 
-    try {
-        const res = await fetch(`${API_BASE}/init-db`, { method: 'POST' });
-        if (res.ok) {
-          await this.getSettings();
-          return { success: true };
+    // Small retry for server initialization
+    for (let i = 0; i < 3; i++) {
+        try {
+            const res = await fetch(`${API_BASE}/init-db`, { method: 'POST' });
+            if (res.ok) {
+                await this.getSettings();
+                return { success: true };
+            }
+        } catch (e) {
+            console.error(`Init attempt ${i+1} failed`, e);
+            await new Promise(r => setTimeout(r, 2000));
         }
-    } catch (e) {
-        console.error("Server init probe failed", e);
     }
     return { success: false };
   }

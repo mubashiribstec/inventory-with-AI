@@ -22,18 +22,12 @@ const Login: React.FC<LoginProps> = ({ onLogin, softwareName, themeColor = 'indi
     setError('');
     setLoading(true);
     try {
-      // Direct remote authentication check
       const user = await apiService.login(username, password);
       onLogin(user);
     } catch (err: any) {
       console.error("Login attempt failed:", err);
-      if (err.message.includes('disabled')) {
-        setError('Your account has been deactivated by an administrator.');
-      } else if (err.message.includes('Credentials')) {
-        setError('Invalid username or password. Please try again.');
-      } else {
-        setError('Authentication server unreachable. Check your connection.');
-      }
+      // Display the specific error message from the server/apiService
+      setError(err.message || 'Authentication server unreachable. Check your connection.');
     } finally {
       setLoading(false);
     }
@@ -55,9 +49,12 @@ const Login: React.FC<LoginProps> = ({ onLogin, softwareName, themeColor = 'indi
         
         <div className="p-8 space-y-6">
           {error && (
-            <div className="p-4 rounded-2xl text-xs font-bold flex items-center gap-3 animate-fadeIn border bg-rose-50 border-rose-100 text-rose-600">
-              <i className="fas fa-exclamation-circle text-lg"></i>
-              {error}
+            <div className="p-4 rounded-2xl text-xs font-bold flex flex-col gap-2 animate-fadeIn border bg-rose-50 border-rose-100 text-rose-600">
+              <div className="flex items-center gap-3">
+                <i className="fas fa-exclamation-circle text-lg"></i>
+                <span className="uppercase tracking-widest font-black">Login Error</span>
+              </div>
+              <p className="pl-8 leading-relaxed font-medium">{error}</p>
             </div>
           )}
           
@@ -106,7 +103,7 @@ const Login: React.FC<LoginProps> = ({ onLogin, softwareName, themeColor = 'indi
           <div className="text-center pt-4">
             <p className="text-[10px] text-slate-400 font-medium leading-relaxed uppercase tracking-tighter">
               Authorized Personnel Only <br/>
-              Encrypted Session via Google Identity
+              Default Access: admin / admin
             </p>
           </div>
         </div>
