@@ -86,9 +86,7 @@ const App: React.FC = () => {
   useEffect(() => {
     const initApp = async () => {
       try {
-        // Critical: Ensure DB is initialized before checking session
         await apiService.initDatabase();
-        
         const s = await apiService.getSettings();
         if (s) setSettings(s);
         const saved = localStorage.getItem('smartstock_user');
@@ -114,12 +112,70 @@ const App: React.FC = () => {
     finally { setSyncing(false); }
   };
 
+  /**
+   * Enhanced Deletion Logic: Cascades removal to User account if it exists
+   */
   const handleDeleteEmployee = async (emp: Employee) => {
-    if (window.confirm(`Are you sure you want to remove ${emp.name} from the staff directory?`)) {
+    const userToCleanup = users.find(u => u.full_name === emp.name || u.id.includes(emp.id.split('-').pop()!));
+    
+    let confirmMsg = `Are you sure you want to remove ${emp.name} from the staff directory?`;
+    if (userToCleanup) confirmMsg += `\n\nNote: The associated user account (@${userToCleanup.username}) will also be deleted.`;
+
+    if (window.confirm(confirmMsg)) {
       try {
         await apiService.deleteEmployee(emp.id);
+        if (userToCleanup) {
+            await apiService.deleteUser(userToCleanup.id);
+        }
         fetchData();
       } catch (e) { alert("Error deleting employee: " + e); }
+    }
+  };
+
+  const handleManagementSubmit = async (data: any) => {
+    try {
+      if (managementModal.type === 'Employee') {
+        const empId = data.id;
+        await apiService.saveEmployee({
+          id: empId,
+          name: data.name,
+          email: data.email,
+          department: data.department,
+          role: data.role,
+          joining_date: data.joining_date,
+          is_active: data.is_active
+        });
+
+        // If 'Create User' was toggled, also save user record
+        if (data.create_user && data.username && data.password) {
+          const userId = `U-${empId.split('-').pop()}`;
+          await apiService.saveUser({
+            id: userId,
+            username: data.username,
+            password: data.password,
+            role: UserRole.STAFF,
+            full_name: data.name,
+            department: data.department,
+            joining_date: data.joining_date,
+            designation: data.role,
+            is_active: data.is_active
+          });
+        }
+        
+        // Synchronize status with existing user if editing
+        const existingUser = users.find(u => u.full_name === data.name);
+        if (existingUser && data.is_active !== undefined) {
+            await apiService.saveUser({ ...existingUser, is_active: data.is_active });
+        }
+      }
+      
+      if (managementModal.type === 'Department') await apiService.saveDepartment(data);
+      if (managementModal.type === 'Category') await apiService.put('categories' as any, data);
+      
+      setManagementModal({ isOpen: false, type: null });
+      fetchData();
+    } catch (err) {
+      alert("Error saving record: " + err);
     }
   };
 
@@ -143,7 +199,7 @@ const App: React.FC = () => {
       case 'locations': return <GenericListView title="Operational Sites" icon="fa-map-marker-alt" items={locations} columns={['id', 'building', 'room', 'manager']} />;
       case 'licenses': return <LicenseList licenses={licenses} suppliers={suppliers} onUpdate={fetchData} onAdd={() => fetchData()} />;
       case 'categories': return <GenericListView title="Asset Categories" icon="fa-tags" items={categories} columns={['id', 'name', 'itemCount']} />;
-      case 'employees': return <GenericListView title="Staff Directory" icon="fa-users" items={employees} columns={['id', 'name', 'email', 'department', 'is_active']} onView={setViewingEmployee} onAdd={() => setManagementModal({ isOpen: true, type: 'Employee' })} onDelete={handleDeleteEmployee} />;
+      case 'employees': return <GenericListView title="Staff Directory" icon="fa-users" items={employees} columns={['id', 'name', 'email', 'department', 'role', 'is_active']} onView={setViewingEmployee} onAdd={() => setManagementModal({ isOpen: true, type: 'Employee' })} onDelete={handleDeleteEmployee} />;
       case 'departments': return <GenericListView title="Departments & Business Units" icon="fa-building" items={departments} columns={['id', 'name', 'manager']} onAdd={() => setManagementModal({ isOpen: true, type: 'Department' })} />;
       case 'budgets': return <BudgetModule />;
       case 'audit-trail': return <GenericListView title="Movement Ledger" icon="fa-history" items={movements} columns={['date', 'item', 'from', 'to', 'status']} />;
@@ -214,19 +270,13 @@ const App: React.FC = () => {
       )}
 
       {managementModal.isOpen && (
-        <Modal title={`Create ${managementModal.type}`} onClose={() => setManagementModal({ isOpen: false, type: null })}>
-          <ManagementForm type={managementModal.type!} onSubmit={async (data) => {
-            if (managementModal.type === 'Employee') await apiService.saveEmployee(data);
-            if (managementModal.type === 'Department') await apiService.saveDepartment(data);
-            if (managementModal.type === 'Category') await apiService.put('categories' as any, data);
-            setManagementModal({ isOpen: false, type: null });
-            fetchData();
-          }} />
+        <Modal title={`Manage ${managementModal.type}`} onClose={() => setManagementModal({ isOpen: false, type: null })}>
+          <ManagementForm type={managementModal.type!} onSubmit={handleManagementSubmit} />
         </Modal>
       )}
 
       {viewingItem && <Modal title="Asset DNA Profile" onClose={() => setViewingItem(null)}><ItemDetails item={viewingItem} /></Modal>}
-      {viewingEmployee && <Modal title="Employee Record" onClose={() => setViewingEmployee(null)}><EmployeeDetails employee={viewingEmployee} items={items} /></Modal>}
+      {viewingEmployee && <Modal title="Employee Record" onClose={() => setViewingEmployee(null)}><EmployeeDetails employee={viewingEmployee} items={items} allUsers={users} /></Modal>}
     </div>
   );
 };

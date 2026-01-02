@@ -1,5 +1,6 @@
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
+import { UserRole } from '../types.ts';
 
 interface ManagementFormProps {
   type: 'Category' | 'Employee' | 'Department';
@@ -10,18 +11,35 @@ interface ManagementFormProps {
 const ManagementForm: React.FC<ManagementFormProps> = ({ type, onSubmit, initialData }) => {
   const [formData, setFormData] = useState(initialData || {
     name: '',
-    manager: '',
-    joining_date: new Date().toISOString().split('T')[0]
+    email: '',
+    department: 'IT',
+    role: '',
+    joining_date: new Date().toISOString().split('T')[0],
+    is_active: true,
+    create_user: false,
+    username: '',
+    password: ''
   });
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    const id = formData.id || `${type.substring(0, 3).toUpperCase()}-${Math.floor(Math.random() * 1000)}`;
-    onSubmit({ ...formData, id });
+    const id = formData.id || `${type.substring(0, 3).toUpperCase()}-${Math.floor(Date.now() % 10000)}`;
+    
+    // Clean data for submission
+    const submissionData = { ...formData, id };
+    
+    // Map 'role' to designation for Employees if needed
+    if (type === 'Employee') {
+      submissionData.is_active = formData.is_active !== false;
+    }
+
+    onSubmit(submissionData);
   };
 
-  const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
-    setFormData({ ...formData, [e.target.name]: e.target.value });
+  const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => {
+    const { name, value, type: inputType } = e.target;
+    const val = inputType === 'checkbox' ? (e.target as HTMLInputElement).checked : value;
+    setFormData({ ...formData, [name]: val });
   };
 
   return (
@@ -41,26 +59,78 @@ const ManagementForm: React.FC<ManagementFormProps> = ({ type, onSubmit, initial
         )}
 
         {type === 'Employee' && (
-          <>
-            <div className="space-y-2">
-              <label className="text-xs font-bold text-slate-500 uppercase tracking-wider ml-1">Full Name</label>
-              <input name="name" type="text" required className="w-full px-4 py-3 bg-slate-50 border border-slate-100 rounded-xl outline-none focus:ring-2 focus:ring-indigo-500" value={formData.name || ''} onChange={handleChange} placeholder="John Doe" />
+          <div className="space-y-5">
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <label className="text-xs font-bold text-slate-500 uppercase tracking-wider ml-1">Full Name</label>
+                <input name="name" type="text" required className="w-full px-4 py-3 bg-slate-50 border border-slate-100 rounded-xl outline-none focus:ring-2 focus:ring-indigo-500 font-bold" value={formData.name || ''} onChange={handleChange} placeholder="John Doe" />
+              </div>
+              <div className="space-y-2">
+                <label className="text-xs font-bold text-slate-500 uppercase tracking-wider ml-1">Official Email</label>
+                <input name="email" type="email" required className="w-full px-4 py-3 bg-slate-50 border border-slate-100 rounded-xl outline-none focus:ring-2 focus:ring-indigo-500" value={formData.email || ''} onChange={handleChange} placeholder="john@company.com" />
+              </div>
             </div>
-            <div className="space-y-2">
-              <label className="text-xs font-bold text-slate-500 uppercase tracking-wider ml-1">Email Address</label>
-              <input name="email" type="email" required className="w-full px-4 py-3 bg-slate-50 border border-slate-100 rounded-xl outline-none focus:ring-2 focus:ring-indigo-500" value={formData.email || ''} onChange={handleChange} placeholder="john@example.com" />
-            </div>
+
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2">
                 <label className="text-xs font-bold text-slate-500 uppercase tracking-wider ml-1">Department</label>
-                <input name="department" type="text" className="w-full px-4 py-3 bg-slate-50 border border-slate-100 rounded-xl outline-none focus:ring-2 focus:ring-indigo-500" value={formData.department || ''} onChange={handleChange} placeholder="IT" />
+                <input name="department" type="text" required className="w-full px-4 py-3 bg-slate-50 border border-slate-100 rounded-xl outline-none focus:ring-2 focus:ring-indigo-500" value={formData.department || ''} onChange={handleChange} placeholder="e.g. IT, Finance" />
               </div>
               <div className="space-y-2">
-                <label className="text-xs font-bold text-slate-500 uppercase tracking-wider ml-1">Role</label>
-                <input name="role" type="text" className="w-full px-4 py-3 bg-slate-50 border border-slate-100 rounded-xl outline-none focus:ring-2 focus:ring-indigo-500" value={formData.role || ''} onChange={handleChange} placeholder="Engineer" />
+                <label className="text-xs font-bold text-slate-500 uppercase tracking-wider ml-1">Designation / Role</label>
+                <input name="role" type="text" required className="w-full px-4 py-3 bg-slate-50 border border-slate-100 rounded-xl outline-none focus:ring-2 focus:ring-indigo-500 font-medium text-indigo-600" value={formData.role || ''} onChange={handleChange} placeholder="e.g. Senior Software Engineer" />
               </div>
             </div>
-          </>
+
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <label className="text-xs font-bold text-slate-500 uppercase tracking-wider ml-1">Joining Date</label>
+                <input name="joining_date" type="date" required className="w-full px-4 py-3 bg-slate-50 border border-slate-100 rounded-xl outline-none focus:ring-2 focus:ring-indigo-500 font-bold" value={formData.joining_date || ''} onChange={handleChange} />
+              </div>
+              <div className="space-y-2">
+                <label className="text-xs font-bold text-slate-500 uppercase tracking-wider ml-1">Staff Status</label>
+                <div className="flex items-center gap-3 h-[50px] px-4 bg-slate-50 border border-slate-100 rounded-xl">
+                   <input 
+                      id="is_active_emp"
+                      name="is_active" 
+                      type="checkbox" 
+                      className="w-5 h-5 accent-emerald-500 rounded" 
+                      checked={formData.is_active !== false} 
+                      onChange={handleChange} 
+                   />
+                   <label htmlFor="is_active_emp" className="text-xs font-bold text-slate-700 cursor-pointer">Account Enabled</label>
+                </div>
+              </div>
+            </div>
+
+            {!initialData && (
+              <div className="mt-4 p-5 bg-indigo-50/50 border border-indigo-100 rounded-2xl space-y-4">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <i className="fas fa-user-shield text-indigo-500"></i>
+                    <p className="text-xs font-bold text-indigo-900">Authorize System Access</p>
+                  </div>
+                  <label className="relative inline-flex items-center cursor-pointer">
+                    <input name="create_user" type="checkbox" className="sr-only peer" checked={formData.create_user} onChange={handleChange} />
+                    <div className="w-9 h-5 bg-slate-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full rtl:peer-checked:after:-translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:start-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-indigo-600"></div>
+                  </label>
+                </div>
+                
+                {formData.create_user && (
+                  <div className="grid grid-cols-2 gap-4 animate-fadeIn">
+                    <div className="space-y-1">
+                      <label className="text-[10px] font-bold text-indigo-400 uppercase">Username</label>
+                      <input name="username" type="text" className="w-full px-3 py-2 bg-white border border-indigo-100 rounded-lg text-xs outline-none focus:ring-2 focus:ring-indigo-500" value={formData.username} onChange={handleChange} placeholder="Login ID" required />
+                    </div>
+                    <div className="space-y-1">
+                      <label className="text-[10px] font-bold text-indigo-400 uppercase">Password</label>
+                      <input name="password" type="password" className="w-full px-3 py-2 bg-white border border-indigo-100 rounded-lg text-xs outline-none focus:ring-2 focus:ring-indigo-500" value={formData.password} onChange={handleChange} placeholder="••••••••" required />
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
         )}
 
         {type === 'Department' && (
