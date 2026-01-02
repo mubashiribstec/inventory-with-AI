@@ -15,8 +15,12 @@ export const apiService = {
     });
 
     if (!response.ok) {
-      const errorData = await response.json();
-      throw new Error(errorData.error || "Invalid Credentials");
+      let errorMsg = "Invalid Credentials";
+      try {
+          const errorData = await response.json();
+          errorMsg = errorData.error || errorMsg;
+      } catch (e) {}
+      throw new Error(errorMsg);
     }
 
     const user = await response.json();
@@ -72,21 +76,16 @@ export const apiService = {
   },
 
   async importFullDataSnapshot(data: any) {
-    // For MariaDB mode, we process local overwrite and could theoretically 
-    // trigger a server-side bulk import if an endpoint existed.
     await dbService.bulkImport(data);
     return { success: true };
   },
 
-  // Core Data APIs (MariaDB standard fetch)
-  // Removed invalid 'private' modifier from object literal method
   async get<T>(path: string): Promise<T[]> {
     const res = await fetch(`${API_BASE}/${path}`);
     if (!res.ok) throw new Error(`Server Error: ${res.statusText}`);
     return res.json();
   },
 
-  // Removed invalid 'private' modifier from object literal method
   async post(path: string, data: any): Promise<any> {
     const userStr = localStorage.getItem('smartstock_user');
     const user = userStr ? JSON.parse(userStr) : null;
@@ -103,12 +102,11 @@ export const apiService = {
     return res.json();
   },
 
-  // Removed invalid 'private' modifier from object literal method
   async del(path: string, id: string | number): Promise<any> {
     const userStr = localStorage.getItem('smartstock_user');
     const user = userStr ? JSON.parse(userStr) : null;
 
-    const res = await fetch(`${API_BASE}/${path}/${id}`, {
+    const res = await fetch(`${API_BASE}/${id ? path+'/'+id : path}`, {
       method: 'DELETE',
       headers: {
         'x-user-id': user?.id || 'SYSTEM',
@@ -129,7 +127,7 @@ export const apiService = {
   async getDepartments(): Promise<Department[]> { return this.get('departments'); },
   async saveDepartment(d: Department) { return this.post('departments', d); },
   
-  async getBudgets(): Promise<PersonalBudget[]> { return this.get('salaries'); }, // Map to backend table if needed
+  async getBudgets(): Promise<PersonalBudget[]> { return this.get('salaries'); },
   async saveBudget(b: PersonalBudget) { return this.post('salaries', b); },
   
   async getCategories(): Promise<Category[]> { return this.get('categories'); },
@@ -190,10 +188,14 @@ export const apiService = {
 
   async initDatabase(): Promise<{ success: boolean }> { 
     await dbService.init(); 
-    const res = await fetch(`${API_BASE}/init-db`, { method: 'POST' });
-    if (res.ok) {
-      await this.getSettings();
-      return { success: true };
+    try {
+        const res = await fetch(`${API_BASE}/init-db`, { method: 'POST' });
+        if (res.ok) {
+          await this.getSettings();
+          return { success: true };
+        }
+    } catch (e) {
+        console.error("Server init probe failed", e);
     }
     return { success: false };
   }

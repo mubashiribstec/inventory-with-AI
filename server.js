@@ -25,89 +25,9 @@ const pool = mariadb.createPool({
   acquireTimeout: 20000
 });
 
-// Immediate Connectivity Test
-(async () => {
-  let conn;
-  try {
-    conn = await pool.getConnection();
-    console.log(`[DATABASE] Successfully connected to ${dbHost}`);
-  } catch (err) {
-    console.error(`[DATABASE ERROR] Could not establish connection to ${dbHost}: ${err.message}`);
-  } finally {
-    if (conn) conn.release();
-  }
-})();
-
-app.use('/api', (req, res, next) => {
-  res.setHeader('Content-Type', 'application/json; charset=utf-8');
-  next();
-});
-
-const sendJSON = (res, data, status = 200) => {
-  return res.status(status).send(JSON.stringify(data));
-};
-
-async function logAction(userId, username, action, targetType, targetId, details) {
-  let conn;
-  try {
-    conn = await pool.getConnection();
-    await conn.query(
-      `INSERT INTO user_logs (user_id, username, action, target_type, target_id, details) 
-       VALUES (?, ?, ?, ?, ?, ?)`,
-      [userId, username, action, targetType, targetId, JSON.stringify(details)]
-    );
-  } catch (err) {
-    console.error('Audit Log Error:', err);
-  } finally {
-    if (conn) conn.release();
-  }
-}
-
-app.post('/api/login', async (req, res) => {
-  const { username, password } = req.body;
-  let conn;
-  try {
-    conn = await pool.getConnection();
-    const rows = await conn.query('SELECT * FROM users WHERE username = ? AND password = ?', [username, password]);
-    if (rows.length > 0) {
-      const user = rows[0];
-      if (user.is_active === 0) {
-        return sendJSON(res, { error: 'Account disabled' }, 403);
-      }
-      const { password: _, ...userSafe } = user;
-      await logAction(user.id, user.username, 'LOGIN', 'USER', user.id, 'User logged in successfully');
-      sendJSON(res, userSafe);
-    } else {
-      sendJSON(res, { error: 'Invalid credentials' }, 401);
-    }
-  } catch (err) {
-    sendJSON(res, { error: err.message }, 500);
-  } finally {
-    if (conn) conn.release();
-  }
-});
-
-const modules = ['items', 'movements', 'suppliers', 'locations', 'maintenance_logs', 'categories', 'employees', 'departments', 'licenses', 'requests', 'attendance', 'users', 'leave_requests', 'roles', 'notifications', 'user_logs', 'settings', 'salaries'];
-
-app.post('/api/factory-reset', async (req, res) => {
-  let conn;
-  try {
-    conn = await pool.getConnection();
-    // Truncate all tables
-    for (const table of modules) {
-      await conn.query(`DELETE FROM ${table}`);
-    }
-    // Re-run initialization logic
-    const initRes = await handleInitDb(conn);
-    sendJSON(res, { success: true, message: 'Software factory reset complete.' });
-  } catch (err) {
-    sendJSON(res, { error: err.message }, 500);
-  } finally {
-    if (conn) conn.release();
-  }
-});
-
+// Forward Declaration of Init Logic
 const handleInitDb = async (conn) => {
+  console.log('[DATABASE] Running schema check and auto-initialization...');
   const queries = [
     `CREATE TABLE IF NOT EXISTS roles (
       id VARCHAR(50) PRIMARY KEY,
@@ -295,11 +215,95 @@ const handleInitDb = async (conn) => {
     await conn.query("REPLACE INTO roles (id, label, description, permissions, color, icon) VALUES (?, ?, ?, ?, ?, ?)", r);
   }
 
-  // Updated default password to 'admin'
+  // Ensure default admin exists
   await conn.query("REPLACE INTO users (id, username, password, role, full_name, shift_start_time, department, joining_date, designation, is_active) VALUES ('U-001', 'admin', 'admin', 'ADMIN', 'System Administrator', '09:00', 'IT Infrastructure', '2023-01-01', 'Chief Systems Admin', 1)");
   
+  console.log('[DATABASE] Auto-initialization complete. Default Login: admin / admin');
   return true;
 };
+
+// Immediate Connectivity & Auto-Init Test
+(async () => {
+  let conn;
+  try {
+    conn = await pool.getConnection();
+    console.log(`[DATABASE] Successfully connected to ${dbHost}`);
+    await handleInitDb(conn);
+  } catch (err) {
+    console.error(`[DATABASE ERROR] Could not establish connection to ${dbHost}: ${err.message}`);
+  } finally {
+    if (conn) conn.release();
+  }
+})();
+
+app.use('/api', (req, res, next) => {
+  res.setHeader('Content-Type', 'application/json; charset=utf-8');
+  next();
+});
+
+const sendJSON = (res, data, status = 200) => {
+  return res.status(status).send(JSON.stringify(data));
+};
+
+async function logAction(userId, username, action, targetType, targetId, details) {
+  let conn;
+  try {
+    conn = await pool.getConnection();
+    await conn.query(
+      `INSERT INTO user_logs (user_id, username, action, target_type, target_id, details) 
+       VALUES (?, ?, ?, ?, ?, ?)`,
+      [userId, username, action, targetType, targetId, JSON.stringify(details)]
+    );
+  } catch (err) {
+    console.error('Audit Log Error:', err);
+  } finally {
+    if (conn) conn.release();
+  }
+}
+
+app.post('/api/login', async (req, res) => {
+  const { username, password } = req.body;
+  let conn;
+  try {
+    conn = await pool.getConnection();
+    const rows = await conn.query('SELECT * FROM users WHERE username = ? AND password = ?', [username, password]);
+    if (rows.length > 0) {
+      const user = rows[0];
+      if (user.is_active === 0) {
+        return sendJSON(res, { error: 'Account disabled' }, 403);
+      }
+      const { password: _, ...userSafe } = user;
+      await logAction(user.id, user.username, 'LOGIN', 'USER', user.id, 'User logged in successfully');
+      sendJSON(res, userSafe);
+    } else {
+      sendJSON(res, { error: 'Invalid credentials' }, 401);
+    }
+  } catch (err) {
+    sendJSON(res, { error: err.message }, 500);
+  } finally {
+    if (conn) conn.release();
+  }
+});
+
+const modules = ['items', 'movements', 'suppliers', 'locations', 'maintenance_logs', 'categories', 'employees', 'departments', 'licenses', 'requests', 'attendance', 'users', 'leave_requests', 'roles', 'notifications', 'user_logs', 'settings', 'salaries'];
+
+app.post('/api/factory-reset', async (req, res) => {
+  let conn;
+  try {
+    conn = await pool.getConnection();
+    // Truncate all tables
+    for (const table of modules) {
+      await conn.query(`DELETE FROM ${table}`);
+    }
+    // Re-run initialization logic
+    await handleInitDb(conn);
+    sendJSON(res, { success: true, message: 'Software factory reset complete.' });
+  } catch (err) {
+    sendJSON(res, { error: err.message }, 500);
+  } finally {
+    if (conn) conn.release();
+  }
+});
 
 app.post('/api/init-db', async (req, res) => {
   let conn;
