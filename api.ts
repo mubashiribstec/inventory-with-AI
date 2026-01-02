@@ -1,4 +1,3 @@
-
 import { InventoryItem, Movement, Supplier, LocationRecord, MaintenanceLog, License, Category, Employee, Department, AssetRequest, User, UserLog, AttendanceRecord, LeaveRequest, Role, Notification, SystemSettings } from './types.ts';
 import { dbService } from './db.ts';
 
@@ -28,16 +27,22 @@ const handleRequest = async <T>(url: string, options: RequestInit = {}, fallback
   if (isGAS) {
     const parts = url.split('/');
     const endpoint = parts[parts.length - 1];
+    
+    // Custom Handlers for Special Endpoints
     if (url.includes('/login')) return gasRequest<T>('apiLogin', JSON.parse(options.body as string).username, JSON.parse(options.body as string).password);
     if (url.includes('/init-db')) return gasRequest<T>('setupDatabase');
+    if (url.includes('/factory-reset')) return gasRequest<T>('apiFactoryReset');
+    
     if (url.includes('/settings')) {
         if (options.method === 'POST') return gasRequest<T>('apiUpsert', 'Settings', JSON.parse(options.body as string));
         const settings = await gasRequest<any[]>('getSheetData', 'Settings');
         return (settings[0] || {}) as T;
     }
+    
     const sheetName = endpoint.charAt(0).toUpperCase() + endpoint.slice(1);
     if (options.method === 'POST') return gasRequest<T>('apiUpsert', sheetName, JSON.parse(options.body as string));
     if (options.method === 'DELETE') return gasRequest<T>('apiDelete', sheetName, parts[parts.length - 1]);
+    
     return gasRequest<T>('getSheetData', sheetName);
   }
 
@@ -93,8 +98,15 @@ export const apiService = {
   },
 
   async factoryReset(): Promise<void> {
-    // Note: For real servers, you might need a restricted backend endpoint.
-    // For local/GAS fallback, we wipe the local IndexedDB.
+    try {
+      // Attempt to clear backend data first
+      await handleRequest<void>(`${BASE_URL}/factory-reset`, { method: 'POST' }, async () => {
+        console.log("Local Reset Mode Triggered");
+      });
+    } catch (e) {
+      console.error("Backend reset failed, proceeding with local wipe only", e);
+    }
+    // Wipe local cache regardless
     await dbService.clearAllData();
   },
 

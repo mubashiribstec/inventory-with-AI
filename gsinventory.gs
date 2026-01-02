@@ -86,8 +86,31 @@ function setupDatabase() {
   if (userSheet.getLastRow() === 1) {
     userSheet.appendRow(['U-001', 'admin', 'admin123', 'ADMIN', 'System Administrator', 'IT', '09:00', '', '']);
   }
+
+  // Seed default settings if missing
+  const settingsSheet = ss.getSheetByName(DB_SHEETS.SETTINGS);
+  if (settingsSheet.getLastRow() === 1) {
+    settingsSheet.appendRow(['GLOBAL', 'SmartStock Pro', 'indigo', 'Enterprise Resource Planning', 'fa-warehouse']);
+  }
   
   return "SmartStock Database initialized with all " + Object.keys(schema).length + " tables.";
+}
+
+/**
+ * Deep Reset - Wipes all sheets and re-initializes
+ */
+function apiFactoryReset() {
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const sheets = ss.getSheets();
+  
+  sheets.forEach(sheet => {
+    const lastRow = sheet.getLastRow();
+    if (lastRow > 1) {
+      sheet.deleteRows(2, lastRow - 1);
+    }
+  });
+  
+  return setupDatabase();
 }
 
 /**
