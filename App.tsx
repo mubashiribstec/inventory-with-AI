@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import Sidebar from './components/Sidebar.tsx';
 import Dashboard from './components/Dashboard.tsx';
@@ -60,19 +61,15 @@ const App: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [isInitialized, setIsInitialized] = useState(false);
   const [dataLoading, setDataLoading] = useState(false);
-  const [syncing, setSyncing] = useState(false);
   const [toasts, setToasts] = useState<Toast[]>([]);
-  const [lastNotificationId, setLastNotificationId] = useState<number | null>(null);
   
   const [isPurchaseModalOpen, setIsPurchaseModalOpen] = useState(false);
   const [managementModal, setManagementModal] = useState<{ isOpen: boolean, type: 'Category' | 'Employee' | 'Department' | null }>({ isOpen: false, type: null });
   
-  const [editingItem, setEditingItem] = useState<InventoryItem | null>(null);
   const [viewingItem, setViewingItem] = useState<InventoryItem | null>(null);
   const [viewingEmployee, setViewingEmployee] = useState<Employee | null>(null);
   const [viewingBudgetBreakdown, setViewingBudgetBreakdown] = useState<Department | null>(null);
 
-  // Update document title when branding changes
   useEffect(() => {
     document.title = `${settings.software_name} | Enterprise Portal`;
   }, [settings.software_name]);
@@ -88,27 +85,17 @@ const App: React.FC = () => {
     return currentRole.permissions.split(',').map(p => p.trim()).includes(perm);
   }, [currentUser, currentRole]);
 
-  const addToast = (message: string, type: string, sender: string) => {
-    const id = Date.now().toString();
-    setToasts(prev => [...prev, { id, message, type, sender }]);
-    setTimeout(() => {
-      setToasts(prev => prev.filter(t => t.id !== id));
-    }, 5000);
-  };
-
   const fetchRoleData = useCallback(async (roleId: string, user: User) => {
     try {
       const allRoles = await apiService.getRoles();
       const role = allRoles.find(r => r.id === roleId);
       if (role) {
         setCurrentRole(role);
-        const landing = getLandingTab(user);
-        setActiveTab(prev => (prev === 'dashboard' || prev === 'attendance') ? landing : prev);
       }
     } catch (e) {
       console.error("Error fetching role info", e);
     }
-  }, [getLandingTab]);
+  }, []);
 
   const fetchSettings = useCallback(async () => {
     try {
@@ -125,13 +112,11 @@ const App: React.FC = () => {
     }
   }, []);
 
-  // System Initialization Sequence
   useEffect(() => {
     const initApp = async () => {
       try {
         setLoading(true);
         await fetchSettings();
-        
         const savedUserString = localStorage.getItem('smartstock_user');
         if (savedUserString) {
           try {
@@ -157,7 +142,6 @@ const App: React.FC = () => {
     try {
       setDataLoading(true);
       await dbService.init(); 
-      
       const [fItems, fMovements, fSuppliers, fLocations, fMaintenance, fLicenses, fCats, fEmps, fDepts, fRequests, fUsers] = await Promise.all([
         apiService.getAllItems(),
         apiService.getAllMovements(),
@@ -197,6 +181,23 @@ const App: React.FC = () => {
 
   useEffect(() => { if (currentUser) fetchData(); }, [currentUser, fetchData]);
 
+  // Derived Department Analytics for Budget Tracker
+  const enrichedDepartments = useMemo(() => {
+    return departments.map(dept => {
+      const deptItems = items.filter(i => i.department === dept.name);
+      const spent = deptItems.reduce((acc, i) => acc + (Number(i.cost) || 0), 0);
+      const budget = Number(dept.budget) || 0;
+      const remaining = budget - spent;
+      const utilization = budget > 0 ? (spent / budget) * 100 : 0;
+      
+      let budget_status = 'ON TRACK';
+      if (utilization > 100) budget_status = 'OVER BUDGET';
+      else if (utilization > 85) budget_status = 'NEAR LIMIT';
+
+      return { ...dept, spent, remaining, utilization, budget_status };
+    });
+  }, [departments, items]);
+
   const handleLogin = (user: User) => {
     setLoading(true);
     setCurrentUser(user);
@@ -224,7 +225,7 @@ const App: React.FC = () => {
       case 'user-mgmt': return hasPermission('hr.users') ? <UserManagement usersOverride={users} /> : null;
       case 'role-mgmt': return hasPermission('system.roles') ? <RoleManagement /> : null;
       case 'settings': return hasPermission('system.settings') ? <SettingsModule settings={settings} onUpdate={setSettings} /> : null;
-      case 'inventory': return !hasPermission('inventory.view') ? null : <InventoryTable items={items} onUpdate={fetchData} onEdit={hasPermission('inventory.edit') ? setEditingItem : undefined} onView={setViewingItem} onAddAsset={hasPermission('inventory.procure') ? () => setIsPurchaseModalOpen(true) : undefined} themeColor={themeColor} />;
+      case 'inventory': return !hasPermission('inventory.view') ? null : <InventoryTable items={items} onUpdate={fetchData} onEdit={() => {}} onView={setViewingItem} onAddAsset={hasPermission('inventory.procure') ? () => setIsPurchaseModalOpen(true) : undefined} themeColor={themeColor} />;
       case 'maintenance': return !hasPermission('inventory.edit') ? null : <MaintenanceList logs={maintenance} items={items} onUpdate={fetchData} onAdd={() => setActiveTab('requests')} />;
       case 'suppliers': return !hasPermission('inventory.view') ? null : <SupplierList suppliers={suppliers} />;
       case 'locations': return !hasPermission('inventory.view') ? null : <GenericListView title="Physical Sites" icon="fa-map-marker-alt" items={locations} columns={['id', 'building', 'floor', 'room', 'manager']} />;
@@ -232,6 +233,8 @@ const App: React.FC = () => {
       case 'categories': return !hasPermission('inventory.view') ? null : <GenericListView title="Asset Categories" icon="fa-tags" items={categories} columns={['id', 'name', 'itemCount']} />;
       case 'employees': return !hasPermission('hr.view') ? null : <GenericListView title="Staff Directory" icon="fa-users" items={employees} columns={['id', 'name', 'email', 'department', 'role', 'joining_date']} onView={(emp) => setViewingEmployee(emp)} onAdd={() => setManagementModal({ isOpen: true, type: 'Employee' })} />;
       case 'departments': return !hasPermission('hr.view') ? null : <GenericListView title="Departmental Overview" icon="fa-building" items={departments} columns={['id', 'name', 'head']} onAdd={() => setManagementModal({ isOpen: true, type: 'Department' })} />;
+      case 'budgets': return !hasPermission('analytics.financials') ? null : <GenericListView title="Budget Tracker" icon="fa-wallet" items={enrichedDepartments} columns={['name', 'budget', 'spent', 'remaining', 'utilization', 'budget_status']} onView={(dept) => setViewingBudgetBreakdown(dept)} />;
+      case 'faulty-reports': return !hasPermission('inventory.view') ? null : <InventoryTable items={items.filter(i => i.status === ItemStatus.FAULTY)} onUpdate={fetchData} onEdit={() => {}} onView={setViewingItem} themeColor="rose" />;
       case 'purchase-history': return !hasPermission('inventory.procure') ? null : <GenericListView title="Procurement History" icon="fa-history" items={movements.filter(m => m.status === 'PURCHASED')} columns={['date', 'item', 'from', 'to']} />;
       case 'requests': return <GenericListView title="Asset Requests" icon="fa-clipboard-list" items={requests} columns={['item', 'employee', 'urgency', 'status', 'request_date']} />;
       case 'audit-trail': return !hasPermission('analytics.logs') ? null : <GenericListView title="Movement Ledger" icon="fa-history" items={movements} columns={['date', 'item', 'from', 'to', 'employee', 'department', 'status']} />;
@@ -268,23 +271,6 @@ const App: React.FC = () => {
 
   return (
     <div className={`flex min-h-screen bg-slate-50 theme-${themeColor}`}>
-      <div className="fixed top-6 right-6 z-[100] flex flex-col gap-3">
-        {toasts.map(toast => (
-          <div key={toast.id} className="bg-white border border-slate-100 shadow-2xl rounded-2xl p-4 flex items-start gap-4 min-w-[320px] animate-toastIn">
-            <div className={`w-10 h-10 rounded-xl flex items-center justify-center text-white shrink-0 bg-${themeColor}-500`}>
-              <i className="fas fa-bell"></i>
-            </div>
-            <div className="flex-1 min-w-0">
-              <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">{toast.sender}</p>
-              <p className="text-sm font-bold text-slate-800 leading-snug mt-0.5">{toast.message}</p>
-            </div>
-            <button onClick={() => setToasts(prev => prev.filter(t => t.id !== toast.id))} className="text-slate-300 hover:text-slate-500">
-              <i className="fas fa-times"></i>
-            </button>
-          </div>
-        ))}
-      </div>
-
       <Sidebar 
         userRole={currentUser.role} 
         activeTab={activeTab as any} 
@@ -298,7 +284,6 @@ const App: React.FC = () => {
       <main className="flex-1 lg:ml-64 p-6 lg:p-10 transition-all duration-300 min-w-0">
         <header className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-8">
           <div className="flex items-center gap-4">
-             <div className={`w-12 h-12 bg-${themeColor}-50 rounded-2xl flex items-center justify-center text-${themeColor}-600 border border-${themeColor}-100 lg:hidden`}><i className="fas fa-bars"></i></div>
              <div>
                 <h1 className="text-3xl font-bold text-slate-800 capitalize tracking-tight">{activeTab.replace('-', ' ')}</h1>
                 <p className="text-slate-500 mt-1 flex items-center gap-2">
@@ -309,11 +294,7 @@ const App: React.FC = () => {
                 </p>
              </div>
           </div>
-          <div className="flex items-center gap-3">
-            {/* Global buttons removed as per request for contextual action */}
-          </div>
         </header>
-        
         {dataLoading ? (
           <div className="flex h-64 w-full items-center justify-center">
             <div className={`animate-spin rounded-full h-10 w-10 border-4 border-${themeColor}-600 border-t-transparent`}></div>
