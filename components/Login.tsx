@@ -4,9 +4,13 @@ import { User } from '../types.ts';
 
 interface LoginProps {
   onLogin: (user: User) => void;
+  softwareName: string;
+  themeColor?: string;
+  logoIcon?: string;
+  description?: string;
 }
 
-const Login: React.FC<LoginProps> = ({ onLogin }) => {
+const Login: React.FC<LoginProps> = ({ onLogin, softwareName, themeColor = 'indigo', logoIcon = 'fa-warehouse', description = 'Enterprise Resource Planning' }) => {
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
@@ -68,14 +72,14 @@ const Login: React.FC<LoginProps> = ({ onLogin }) => {
   return (
     <div className="min-h-screen flex items-center justify-center bg-slate-50 px-4">
       <div className="max-w-md w-full bg-white rounded-3xl shadow-xl shadow-slate-200 overflow-hidden animate-fadeIn border border-slate-100">
-        <div className="bg-indigo-600 p-8 text-white text-center relative overflow-hidden">
+        <div className={`bg-${themeColor}-600 p-8 text-white text-center relative overflow-hidden`}>
           <div className="absolute top-0 left-0 w-full h-full bg-[radial-gradient(circle_at_top_right,_var(--tw-gradient-stops))] from-white/10 to-transparent"></div>
           <div className="relative z-10">
             <div className="w-16 h-16 bg-white/20 rounded-2xl flex items-center justify-center mx-auto mb-4 backdrop-blur-md border border-white/20">
-              <i className="fas fa-warehouse text-3xl"></i>
+              <i className={`fas ${logoIcon} text-3xl`}></i>
             </div>
-            <h2 className="text-2xl font-bold poppins">SmartStock Pro</h2>
-            <p className="text-indigo-100 text-sm mt-1">Enterprise Resource Planning</p>
+            <h2 className="text-2xl font-bold poppins">{softwareName}</h2>
+            <p className={`text-${themeColor}-100 text-sm mt-1`}>{description}</p>
           </div>
         </div>
         
@@ -102,7 +106,7 @@ const Login: React.FC<LoginProps> = ({ onLogin }) => {
                 <input 
                   type="text" 
                   required
-                  className="w-full pl-12 pr-4 py-3 bg-slate-50 border border-slate-100 rounded-xl focus:ring-2 focus:ring-indigo-500 outline-none transition"
+                  className={`w-full pl-12 pr-4 py-3 bg-slate-50 border border-slate-100 rounded-xl focus:ring-2 focus:ring-${themeColor}-500 outline-none transition`}
                   placeholder="admin"
                   value={username}
                   onChange={e => setUsername(e.target.value)}
@@ -117,7 +121,7 @@ const Login: React.FC<LoginProps> = ({ onLogin }) => {
                 <input 
                   type="password" 
                   required
-                  className="w-full pl-12 pr-4 py-3 bg-slate-50 border border-slate-100 rounded-xl focus:ring-2 focus:ring-indigo-500 outline-none transition"
+                  className={`w-full pl-12 pr-4 py-3 bg-slate-50 border border-slate-100 rounded-xl focus:ring-2 focus:ring-${themeColor}-500 outline-none transition`}
                   placeholder="admin123"
                   value={password}
                   onChange={e => setPassword(e.target.value)}
@@ -129,7 +133,7 @@ const Login: React.FC<LoginProps> = ({ onLogin }) => {
               <button 
                 type="submit" 
                 disabled={loading}
-                className="w-full py-4 bg-indigo-600 hover:bg-indigo-700 text-white rounded-2xl font-bold transition shadow-lg shadow-indigo-100 flex items-center justify-center gap-3 disabled:opacity-50"
+                className={`w-full py-4 bg-${themeColor}-600 hover:bg-${themeColor}-700 text-white rounded-2xl font-bold transition shadow-lg shadow-${themeColor}-100 flex items-center justify-center gap-3 disabled:opacity-50`}
               >
                 {loading ? <i className="fas fa-spinner animate-spin"></i> : <span>Connect & Sign In</span>}
               </button>

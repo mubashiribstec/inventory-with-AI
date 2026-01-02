@@ -1,4 +1,3 @@
-
 import React from 'react';
 import { DashboardStats, Movement, InventoryItem } from '../types.ts';
 
@@ -8,11 +7,12 @@ interface DashboardProps {
   items: InventoryItem[];
   onFullAudit: () => void;
   onCheckIn: () => void;
+  themeColor?: string;
 }
 
-const Dashboard: React.FC<DashboardProps> = ({ stats, movements, items, onFullAudit, onCheckIn }) => {
+const Dashboard: React.FC<DashboardProps> = ({ stats, movements, items, onFullAudit, onCheckIn, themeColor = 'indigo' }) => {
   const statCards = [
-    { label: 'Purchased Stock', value: stats.purchased, icon: 'fa-shopping-cart', color: 'indigo', trend: '+12%' },
+    { label: 'Purchased Stock', value: stats.purchased, icon: 'fa-shopping-cart', color: themeColor, trend: '+12%' },
     { label: 'Assigned Items', value: stats.assigned, icon: 'fa-user-check', color: 'blue', trend: '+8%' },
     { label: 'In Active Use', value: stats.inUse, icon: 'fa-laptop', color: 'emerald', trend: '+15%' },
     { label: 'Backup Storage', value: stats.backup, icon: 'fa-box', color: 'amber', trend: '-5%' },
@@ -28,16 +28,18 @@ const Dashboard: React.FC<DashboardProps> = ({ stats, movements, items, onFullAu
       case 'amber': return 'bg-amber-100 text-amber-600 border-amber-200';
       case 'rose': return 'bg-rose-100 text-rose-600 border-rose-200';
       case 'violet': return 'bg-violet-100 text-violet-600 border-violet-200';
-      default: return 'bg-slate-100 text-slate-600 border-slate-200';
+      case 'cyan': return 'bg-cyan-100 text-cyan-600 border-cyan-200';
+      case 'slate': return 'bg-slate-100 text-slate-600 border-slate-200';
+      default: return `bg-${color}-100 text-${color}-600 border-${color}-200`;
     }
   };
 
   return (
     <div className="space-y-8 animate-fadeIn">
       {/* Attendance Quick Access */}
-      <div className="bg-white p-6 rounded-3xl border border-indigo-100 shadow-sm border-l-4 border-l-indigo-600 flex items-center justify-between">
+      <div className={`bg-white p-6 rounded-3xl border border-${themeColor}-100 shadow-sm border-l-4 border-l-${themeColor}-600 flex items-center justify-between`}>
          <div className="flex items-center gap-4">
-            <div className="w-12 h-12 bg-indigo-50 rounded-2xl flex items-center justify-center text-indigo-600 border border-indigo-100">
+            <div className={`w-12 h-12 bg-${themeColor}-50 rounded-2xl flex items-center justify-center text-${themeColor}-600 border border-${themeColor}-100`}>
                <i className="fas fa-user-clock text-xl"></i>
             </div>
             <div>
@@ -47,7 +49,7 @@ const Dashboard: React.FC<DashboardProps> = ({ stats, movements, items, onFullAu
          </div>
          <button 
           onClick={onCheckIn}
-          className="px-6 py-2.5 bg-indigo-600 text-white rounded-xl font-bold text-xs hover:bg-indigo-700 transition shadow-lg shadow-indigo-100"
+          className={`px-6 py-2.5 bg-${themeColor}-600 text-white rounded-xl font-bold text-xs hover:bg-${themeColor}-700 transition shadow-lg shadow-${themeColor}-100`}
          >
             Check Status
          </button>
@@ -80,7 +82,7 @@ const Dashboard: React.FC<DashboardProps> = ({ stats, movements, items, onFullAu
                 </div>
                 <div className="relative flex flex-col md:flex-row items-center justify-between gap-8 py-4">
                     {[
-                        { label: 'Purchase', icon: 'fa-shopping-cart', desc: 'Received', color: 'indigo' },
+                        { label: 'Purchase', icon: 'fa-shopping-cart', desc: 'Received', color: themeColor },
                         { label: 'Store', icon: 'fa-warehouse', desc: 'Available', color: 'blue' },
                         { label: 'Assign', icon: 'fa-user-check', desc: 'To Staff', color: 'amber' },
                         { label: 'In Use', icon: 'fa-laptop', desc: 'Active', color: 'emerald' },
@@ -108,7 +110,7 @@ const Dashboard: React.FC<DashboardProps> = ({ stats, movements, items, onFullAu
             <div className="bg-white rounded-3xl border border-slate-100 shadow-sm overflow-hidden">
                 <div className="p-6 border-b border-slate-50 flex items-center justify-between">
                     <h3 className="text-lg font-bold text-slate-800 poppins">Recent Activity Log</h3>
-                    <button onClick={onFullAudit} className="text-indigo-600 text-sm font-semibold hover:underline">Full Audit</button>
+                    <button onClick={onFullAudit} className={`text-${themeColor}-600 text-sm font-semibold hover:underline`}>Full Audit</button>
                 </div>
                 <div className="overflow-x-auto">
                     <table className="w-full text-left">
@@ -128,7 +130,7 @@ const Dashboard: React.FC<DashboardProps> = ({ stats, movements, items, onFullAu
                                 <p className="text-sm font-bold text-slate-800">{m.item}</p>
                             </td>
                             <td className="px-6 py-4">
-                                <span className="text-xs font-medium text-slate-600">{m.from} <i className="fas fa-arrow-right mx-1 text-indigo-400"></i> {m.to}</span>
+                                <span className="text-xs font-medium text-slate-600">{m.from} <i className={`fas fa-arrow-right mx-1 text-${themeColor}-400`}></i> {m.to}</span>
                             </td>
                             <td className="px-6 py-4">
                             <span className={`px-2 py-1 rounded-full text-[9px] font-bold uppercase ${
@@ -157,7 +159,7 @@ const Dashboard: React.FC<DashboardProps> = ({ stats, movements, items, onFullAu
                     soon.setDate(soon.getDate() + 30);
                     return exp < soon;
                 }).length} items expiring within 30 days.</p>
-                <button className="text-indigo-600 text-xs font-bold hover:underline">View Expirations</button>
+                <button className={`text-${themeColor}-600 text-xs font-bold hover:underline`}>View Expirations</button>
             </div>
         </div>
       </div>

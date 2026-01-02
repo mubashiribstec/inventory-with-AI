@@ -35,7 +35,13 @@ interface Toast {
 const App: React.FC = () => {
   const [currentUser, setCurrentUser] = useState<User | null>(null);
   const [currentRole, setCurrentRole] = useState<Role | null>(null);
-  const [settings, setSettings] = useState<SystemSettings>({ id: 'GLOBAL', software_name: 'SmartStock Pro', primary_color: 'indigo' });
+  const [settings, setSettings] = useState<SystemSettings>({ 
+    id: 'GLOBAL', 
+    software_name: 'SmartStock Pro', 
+    primary_color: 'indigo',
+    software_description: 'Enterprise Resource Planning',
+    software_logo: 'fa-warehouse'
+  });
   const [activeTab, setActiveTab] = useState<AppTab>('dashboard');
   const [items, setItems] = useState<InventoryItem[]>([]);
   const [movements, setMovements] = useState<Movement[]>([]);
@@ -64,6 +70,11 @@ const App: React.FC = () => {
   const [viewingItem, setViewingItem] = useState<InventoryItem | null>(null);
   const [viewingEmployee, setViewingEmployee] = useState<Employee | null>(null);
   const [viewingBudgetBreakdown, setViewingBudgetBreakdown] = useState<Department | null>(null);
+
+  // Update document title when branding changes
+  useEffect(() => {
+    document.title = `${settings.software_name} | Enterprise Portal`;
+  }, [settings.software_name]);
 
   const getLandingTab = useCallback((user: User): AppTab => {
     if (user.role === UserRole.ADMIN || user.role === UserRole.MANAGER) return 'dashboard';
@@ -104,7 +115,7 @@ const App: React.FC = () => {
       if (s && s.software_name) {
         setSettings(prev => ({ 
           ...prev, 
-          software_name: s.software_name || prev.software_name,
+          ...s,
           primary_color: (s.primary_color || prev.primary_color).toLowerCase() 
         }));
       }
@@ -204,7 +215,7 @@ const App: React.FC = () => {
     if (!currentUser) return null;
     
     switch (activeTab) {
-      case 'dashboard': return !hasPermission('analytics.view') ? <AttendanceModule currentUser={currentUser} /> : <Dashboard stats={stats} movements={movements} items={items} onFullAudit={() => setActiveTab('audit-trail')} onCheckIn={() => setActiveTab('attendance')} />;
+      case 'dashboard': return !hasPermission('analytics.view') ? <AttendanceModule currentUser={currentUser} /> : <Dashboard stats={stats} movements={movements} items={items} onFullAudit={() => setActiveTab('audit-trail')} onCheckIn={() => setActiveTab('attendance')} themeColor={themeColor} />;
       case 'attendance': return <AttendanceModule currentUser={currentUser} />;
       case 'notifications': return <NotificationCenter currentUser={currentUser} />;
       case 'leaves': return <LeaveModule currentUser={currentUser} allUsers={users} />;
@@ -238,20 +249,20 @@ const App: React.FC = () => {
     expiring_soon: 0
   }), [items, licenses]);
 
+  const themeColor = (settings.primary_color || 'indigo').toLowerCase();
+
   if (!isInitialized || (loading && !currentUser)) {
     return (
       <div className="min-h-screen bg-slate-50 flex items-center justify-center">
         <div className="flex flex-col items-center gap-4">
-          <div className="w-12 h-12 border-4 border-indigo-600 border-t-transparent rounded-full animate-spin"></div>
+          <div className={`w-12 h-12 border-4 border-${themeColor}-600 border-t-transparent rounded-full animate-spin`}></div>
           <p className="text-slate-400 font-bold uppercase tracking-widest text-[10px]">Loading ERP Workspace...</p>
         </div>
       </div>
     );
   }
 
-  if (!currentUser) return <Login onLogin={handleLogin} />;
-
-  const themeColor = (settings.primary_color || 'indigo').toLowerCase();
+  if (!currentUser) return <Login onLogin={handleLogin} softwareName={settings.software_name} themeColor={themeColor} logoIcon={settings.software_logo} description={settings.software_description} />;
 
   return (
     <div className={`flex min-h-screen bg-slate-50 theme-${themeColor}`}>
@@ -280,6 +291,7 @@ const App: React.FC = () => {
         permissions={currentRole?.permissions?.split(',').map(p => p.trim()) || []}
         appName={settings.software_name}
         themeColor={themeColor}
+        logoIcon={settings.software_logo}
       />
       <main className="flex-1 lg:ml-64 p-6 lg:p-10 transition-all duration-300 min-w-0">
         <header className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-8">

@@ -10,9 +10,19 @@ interface SidebarProps {
   permissions: string[];
   appName?: string;
   themeColor?: string;
+  logoIcon?: string;
 }
 
-const Sidebar: React.FC<SidebarProps> = ({ userRole, activeTab, setActiveTab, onLogout, permissions, appName = 'SmartStock Pro', themeColor = 'indigo' }) => {
+const Sidebar: React.FC<SidebarProps> = ({ 
+  userRole, 
+  activeTab, 
+  setActiveTab, 
+  onLogout, 
+  permissions, 
+  appName = 'SmartStock Pro', 
+  themeColor = 'indigo',
+  logoIcon = 'fa-warehouse'
+}) => {
   const [unreadCount, setUnreadCount] = useState(0);
 
   const isAdmin = userRole === UserRole.ADMIN;
@@ -94,7 +104,7 @@ const Sidebar: React.FC<SidebarProps> = ({ userRole, activeTab, setActiveTab, on
       <div className="p-6 sticky top-0 bg-white z-10 border-b border-slate-100 mb-6">
         <div className="flex items-center gap-3">
           <div className={`w-10 h-10 bg-${themeColor}-600 rounded-xl flex items-center justify-center text-white text-xl shadow-lg shadow-${themeColor}-100`}>
-            <i className="fas fa-warehouse"></i>
+            <i className={`fas ${logoIcon}`}></i>
           </div>
           <h2 className="text-xl font-bold text-slate-800 poppins">
             {mainName}{suffix && <span className={`text-${themeColor}-600 italic`}>.{suffix}</span>}

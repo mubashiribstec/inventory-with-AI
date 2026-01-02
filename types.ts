@@ -21,6 +21,8 @@ export interface SystemSettings {
   id: string;
   software_name: string;
   primary_color: string;
+  software_description?: string;
+  software_logo?: string;
 }
 
 export interface Role {
