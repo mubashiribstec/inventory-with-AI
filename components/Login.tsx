@@ -1,3 +1,4 @@
+
 import React, { useState } from 'react';
 import { apiService } from '../api.ts';
 import { User } from '../types.ts';
@@ -14,15 +15,12 @@ const Login: React.FC<LoginProps> = ({ onLogin, softwareName, themeColor = 'indi
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
-  const [success, setSuccess] = useState('');
   const [loading, setLoading] = useState(false);
   const [isOffline, setIsOffline] = useState(false);
-  const [initLoading, setInitLoading] = useState(false);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
-    setSuccess('');
     setLoading(true);
     try {
       const user = await apiService.login(username, password);
@@ -52,23 +50,6 @@ const Login: React.FC<LoginProps> = ({ onLogin, softwareName, themeColor = 'indi
     }
   };
 
-  const handleInitialize = async () => {
-    setError('');
-    setSuccess('');
-    setInitLoading(true);
-    try {
-      const result = await apiService.initDatabase();
-      if (result.success) {
-        setSuccess('Local system initialized! Use admin / admin123');
-        setIsOffline(false);
-      }
-    } catch (err: any) {
-      setError('Initialization failed: ' + err.message);
-    } finally {
-      setInitLoading(false);
-    }
-  };
-
   return (
     <div className="min-h-screen flex items-center justify-center bg-slate-50 px-4">
       <div className="max-w-md w-full bg-white rounded-3xl shadow-xl shadow-slate-200 overflow-hidden animate-fadeIn border border-slate-100">
@@ -88,13 +69,6 @@ const Login: React.FC<LoginProps> = ({ onLogin, softwareName, themeColor = 'indi
             <div className={`p-4 rounded-2xl text-xs font-bold flex items-center gap-3 animate-fadeIn border ${isOffline ? 'bg-amber-50 border-amber-100 text-amber-700' : 'bg-rose-50 border-rose-100 text-rose-600'}`}>
               <i className={`fas ${isOffline ? 'fa-wifi-slash' : 'fa-exclamation-circle'} text-lg`}></i>
               {error}
-            </div>
-          )}
-
-          {success && (
-            <div className="p-4 bg-emerald-50 border border-emerald-100 rounded-2xl text-emerald-600 text-xs font-bold flex items-center gap-3 animate-fadeIn">
-              <i className="fas fa-check-circle text-lg"></i>
-              {success}
             </div>
           )}
           
@@ -129,7 +103,7 @@ const Login: React.FC<LoginProps> = ({ onLogin, softwareName, themeColor = 'indi
               </div>
             </div>
 
-            <div className="flex flex-col gap-3">
+            <div className="flex flex-col gap-3 pt-2">
               <button 
                 type="submit" 
                 disabled={loading}
@@ -151,25 +125,12 @@ const Login: React.FC<LoginProps> = ({ onLogin, softwareName, themeColor = 'indi
             </div>
           </form>
 
-          <div className="relative py-2 flex items-center">
-            <div className="flex-grow border-t border-slate-100"></div>
-            <span className="flex-shrink mx-4 text-[10px] text-slate-300 font-bold uppercase tracking-widest">Database Maintenance</span>
-            <div className="flex-grow border-t border-slate-100"></div>
+          <div className="text-center">
+            <p className="text-[10px] text-slate-400 font-medium leading-relaxed">
+              Protected by Enterprise Security Layers. <br/>
+              Default credentials for first setup are admin / admin123.
+            </p>
           </div>
-
-          <button 
-            type="button"
-            onClick={handleInitialize}
-            disabled={initLoading || loading}
-            className={`w-full py-3 rounded-xl text-xs font-bold transition flex items-center justify-center gap-2 ${
-              success 
-              ? 'bg-emerald-500 text-white shadow-lg shadow-emerald-100' 
-              : 'bg-white border border-slate-200 text-slate-600 hover:bg-slate-50'
-            } disabled:opacity-50`}
-          >
-            <i className={`fas ${initLoading ? 'fa-sync animate-spin' : (success ? 'fa-check' : 'fa-database')}`}></i>
-            <span>{success ? 'Local DB Ready' : 'Initialize Local Storage'}</span>
-          </button>
         </div>
       </div>
     </div>

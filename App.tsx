@@ -18,6 +18,7 @@ import SettingsModule from './components/SettingsModule.tsx';
 import SalaryModule from './components/SalaryModule.tsx';
 import BudgetModule from './components/BudgetModule.tsx';
 import Login from './components/Login.tsx';
+import RequestForm from './components/RequestForm.tsx';
 import { ItemStatus, UserRole, User, UserLog, InventoryItem, Movement, Supplier, LocationRecord, MaintenanceLog, Category, Employee, Department, License, AssetRequest, Notification, Role, SystemSettings } from './types.ts';
 import Modal from './components/Modal.tsx';
 import PurchaseForm from './components/PurchaseForm.tsx';
@@ -50,6 +51,7 @@ const App: React.FC = () => {
   const [syncing, setSyncing] = useState(false);
   
   const [isPurchaseModalOpen, setIsPurchaseModalOpen] = useState(false);
+  const [isRequestModalOpen, setIsRequestModalOpen] = useState(false);
   const [managementModal, setManagementModal] = useState<{ isOpen: boolean, type: 'Category' | 'Employee' | 'Department' | null }>({ isOpen: false, type: null });
   
   const [viewingItem, setViewingItem] = useState<InventoryItem | null>(null);
@@ -122,12 +124,13 @@ const App: React.FC = () => {
       case 'user-mgmt': return <UserManagement usersOverride={users} />;
       case 'role-mgmt': return <RoleManagement />;
       case 'settings': return <SettingsModule settings={settings} onUpdate={setSettings} />;
+      case 'requests': return <GenericListView title="Employee Asset Requests" icon="fa-clipboard-list" items={requests} columns={['id', 'item', 'employee', 'urgency', 'status', 'request_date']} onAdd={() => setIsRequestModalOpen(true)} />;
       case 'maintenance': return <MaintenanceList logs={maintenance} items={items} onUpdate={fetchData} onAdd={() => setActiveTab('requests')} />;
       case 'suppliers': return <SupplierList suppliers={suppliers} />;
       case 'locations': return <GenericListView title="Operational Sites" icon="fa-map-marker-alt" items={locations} columns={['id', 'building', 'room', 'manager']} />;
       case 'licenses': return <LicenseList licenses={licenses} suppliers={suppliers} onUpdate={fetchData} onAdd={() => fetchData()} />;
       case 'categories': return <GenericListView title="Asset Categories" icon="fa-tags" items={categories} columns={['id', 'name', 'itemCount']} />;
-      case 'employees': return <GenericListView title="Employee Directory" icon="fa-users" items={employees} columns={['id', 'name', 'email', 'department']} onView={setViewingEmployee} onAdd={() => setManagementModal({ isOpen: true, type: 'Employee' })} />;
+      case 'employees': return <GenericListView title="Staff Directory" icon="fa-users" items={employees} columns={['id', 'name', 'email', 'department']} onView={setViewingEmployee} onAdd={() => setManagementModal({ isOpen: true, type: 'Employee' })} />;
       case 'departments': return <GenericListView title="Departments & Business Units" icon="fa-building" items={departments} columns={['id', 'name', 'manager']} onAdd={() => setManagementModal({ isOpen: true, type: 'Department' })} />;
       case 'budgets': return <BudgetModule />;
       case 'audit-trail': return <GenericListView title="Movement Ledger" icon="fa-history" items={movements} columns={['date', 'item', 'from', 'to', 'status']} />;
@@ -181,6 +184,21 @@ const App: React.FC = () => {
 
       {isPurchaseModalOpen && <Modal title="Execute Procurement" onClose={() => setIsPurchaseModalOpen(false)}><PurchaseForm onSubmit={async (i) => { await apiService.saveItem(i); setIsPurchaseModalOpen(false); fetchData(); }} suppliers={suppliers} locations={locations} departments={departments} /></Modal>}
       
+      {isRequestModalOpen && (
+        <Modal title="New Asset Request" onClose={() => setIsRequestModalOpen(false)}>
+          <RequestForm 
+            employees={employees} 
+            departments={departments} 
+            categories={categories} 
+            onSubmit={async (req) => { 
+              await apiService.genericSave('requests', req); 
+              setIsRequestModalOpen(false); 
+              fetchData(); 
+            }} 
+          />
+        </Modal>
+      )}
+
       {managementModal.isOpen && (
         <Modal title={`Create ${managementModal.type}`} onClose={() => setManagementModal({ isOpen: false, type: null })}>
           <ManagementForm type={managementModal.type!} onSubmit={async (data) => {

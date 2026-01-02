@@ -22,7 +22,10 @@ function getDbFile() {
   if (files.hasNext()) {
     return files.next();
   }
-  // Create default structure if file doesn't exist
+  return createDefaultDbFile();
+}
+
+function createDefaultDbFile() {
   const defaultData = {
     items: [],
     movements: [],
@@ -60,7 +63,8 @@ function getAllData() {
  */
 function apiUpsert(collectionName, entity) {
   const data = getAllData();
-  const collection = data[collectionName.toLowerCase()] || [];
+  const key = collectionName.toLowerCase();
+  const collection = data[key] || [];
   
   const index = collection.findIndex(item => item.id.toString() === entity.id.toString());
   
@@ -70,7 +74,7 @@ function apiUpsert(collectionName, entity) {
     collection.push(entity);
   }
   
-  data[collectionName.toLowerCase()] = collection;
+  data[key] = collection;
   getDbFile().setContent(JSON.stringify(data));
   return { success: true };
 }
@@ -87,6 +91,18 @@ function syncFullDatabase(fullData) {
   }
 }
 
+/**
+ * Performs a factory reset by recreating the default database file
+ */
+function factoryReset() {
+  const files = DriveApp.getFilesByName(DB_FILE_NAME);
+  while (files.hasNext()) {
+    files.next().setTrashed(true);
+  }
+  createDefaultDbFile();
+  return { success: true, message: "System reset to defaults. Admin password is admin123." };
+}
+
 function getCollection(collectionName) {
   const data = getAllData();
   return data[collectionName.toLowerCase()] || [];
@@ -94,9 +110,10 @@ function getCollection(collectionName) {
 
 function apiDelete(collectionName, id) {
   const data = getAllData();
-  const collection = data[collectionName.toLowerCase()] || [];
+  const key = collectionName.toLowerCase();
+  const collection = data[key] || [];
   const filtered = collection.filter(item => item.id.toString() !== id.toString());
-  data[collectionName.toLowerCase()] = filtered;
+  data[key] = filtered;
   getDbFile().setContent(JSON.stringify(data));
   return { success: true };
 }
@@ -110,5 +127,5 @@ function apiLogin(username, password) {
 
 function setupDatabase() {
   getDbFile(); // Triggers file creation if missing
-  return "SmartStock Drive Storage initialized.";
+  return { success: true, message: "SmartStock Drive Storage initialized." };
 }
