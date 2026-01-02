@@ -30,7 +30,6 @@ const SettingsModule: React.FC<SettingsModuleProps> = ({ settings, onUpdate }) =
     software_logo: settings.software_logo || 'fa-warehouse'
   });
   const [loading, setLoading] = useState(false);
-  const [initLoading, setInitLoading] = useState(false);
   const [portabilityLoading, setPortabilityLoading] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -56,7 +55,7 @@ const SettingsModule: React.FC<SettingsModuleProps> = ({ settings, onUpdate }) =
       const url = URL.createObjectURL(blob);
       const link = document.createElement('a');
       link.href = url;
-      link.download = `smartstock_global_backup_${new Date().toISOString().split('T')[0]}.json`;
+      link.download = `smartstock_backup_${new Date().toISOString().split('T')[0]}.json`;
       document.body.appendChild(link);
       link.click();
       document.body.removeChild(link);
@@ -76,7 +75,7 @@ const SettingsModule: React.FC<SettingsModuleProps> = ({ settings, onUpdate }) =
       const url = URL.createObjectURL(blob);
       const link = document.createElement('a');
       link.href = url;
-      link.download = `smartstock_inventory_${new Date().toISOString().split('T')[0]}.csv`;
+      link.download = `inventory_registry_${new Date().toISOString().split('T')[0]}.csv`;
       document.body.appendChild(link);
       link.click();
       document.body.removeChild(link);
@@ -96,7 +95,7 @@ const SettingsModule: React.FC<SettingsModuleProps> = ({ settings, onUpdate }) =
     const file = e.target.files?.[0];
     if (!file) return;
 
-    const confirmImport = window.confirm("SECURITY WARNING: Importing this file will PERMANENTLY OVERWRITE all current data (Assets, Users, Logs, and Settings). This action cannot be undone. Proceed?");
+    const confirmImport = window.confirm("SECURITY WARNING: This will overwrite your current BROWSER cache with data from the file. Server data is not automatically affected by this action. Proceed?");
     if (!confirmImport) {
         e.target.value = '';
         return;
@@ -108,10 +107,10 @@ const SettingsModule: React.FC<SettingsModuleProps> = ({ settings, onUpdate }) =
       try {
         const json = JSON.parse(event.target?.result as string);
         await apiService.importFullDataSnapshot(json);
-        alert("System Restore Complete. The application will now reload to synchronize all data.");
+        alert("Restoration Complete. Reloading environment.");
         window.location.reload();
       } catch (err) {
-        alert("Import failed: The file format is invalid or corrupted.");
+        alert("Import failed: The file format is invalid.");
       } finally {
         setPortabilityLoading(false);
       }
@@ -119,29 +118,17 @@ const SettingsModule: React.FC<SettingsModuleProps> = ({ settings, onUpdate }) =
     reader.readAsText(file);
   };
 
-  const handleInitializeDb = async () => {
-    setInitLoading(true);
-    try {
-      const res = await apiService.initDatabase();
-      alert("Cloud database handshake successful.");
-    } catch (e) {
-      alert("Handshake failed: " + e);
-    } finally {
-      setInitLoading(false);
-    }
-  };
-
   const handleFactoryReset = async () => {
-    const confirm1 = window.confirm("CRITICAL ALERT: You are about to initiate a Factory Reset. This will WIPE all hardware records, staff entries, and audit logs. Continue?");
+    const confirm1 = window.confirm("CRITICAL: This will PERMANENTLY ERASE the server database and all inventory records. Are you authorized to proceed?");
     if (!confirm1) return;
 
-    const confirm2 = window.confirm("FINAL CONFIRMATION: Are you absolutely certain you want to destroy all system data? This cannot be undone.");
+    const confirm2 = window.confirm("FINAL WARNING: All data in MariaDB will be destroyed. This is IRREVERSIBLE.");
     if (!confirm2) return;
 
     setLoading(true);
     try {
       await apiService.factoryReset();
-      alert("System Wiped. Reloading to defaults...");
+      alert("System Wiped. Reloading...");
       window.location.reload();
     } catch (err) {
       alert("Reset failed: " + err);
@@ -161,17 +148,17 @@ const SettingsModule: React.FC<SettingsModuleProps> = ({ settings, onUpdate }) =
                 <i className="fas fa-sliders-h"></i>
              </div>
              <div>
-                <h3 className="text-xl font-bold text-slate-800 poppins">Branding Hub</h3>
-                <p className="text-xs text-slate-400 font-bold uppercase tracking-widest">Global Identity & Themes</p>
+                <h3 className="text-xl font-bold text-slate-800 poppins">Software Identity</h3>
+                <p className="text-xs text-slate-400 font-bold uppercase tracking-widest">Global Branding & UI Themes</p>
              </div>
           </div>
           
           <div className="p-8 space-y-8">
             <div className="space-y-6">
-              <h4 className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] border-l-4 border-slate-200 pl-3">Platform Name</h4>
+              <h4 className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] border-l-4 border-slate-200 pl-3">Nomenclature</h4>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 <div className="space-y-1.5">
-                  <label className="text-xs font-bold text-slate-500 ml-1">Software Title</label>
+                  <label className="text-xs font-bold text-slate-500 ml-1">Platform Name</label>
                   <input 
                     required 
                     type="text" 
@@ -181,7 +168,7 @@ const SettingsModule: React.FC<SettingsModuleProps> = ({ settings, onUpdate }) =
                   />
                 </div>
                 <div className="space-y-1.5">
-                  <label className="text-xs font-bold text-slate-500 ml-1">System Description</label>
+                  <label className="text-xs font-bold text-slate-500 ml-1">Slogan / Descriptor</label>
                   <input 
                     type="text" 
                     className="w-full px-5 py-3.5 bg-slate-50 border border-slate-100 rounded-2xl focus:ring-2 focus:ring-indigo-500 outline-none font-medium text-slate-600" 
@@ -195,7 +182,7 @@ const SettingsModule: React.FC<SettingsModuleProps> = ({ settings, onUpdate }) =
             <div className="space-y-6">
               <h4 className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] border-l-4 border-slate-200 pl-3">Visual Style</h4>
               <div className="space-y-4">
-                <label className="text-xs font-bold text-slate-500 ml-1">Color Palette</label>
+                <label className="text-xs font-bold text-slate-500 ml-1">Core Accent Color</label>
                 <div className="grid grid-cols-4 md:grid-cols-8 gap-3">
                   {COLORS.map(c => (
                     <button
@@ -218,38 +205,33 @@ const SettingsModule: React.FC<SettingsModuleProps> = ({ settings, onUpdate }) =
               disabled={loading}
               className={`px-10 py-4 bg-${themeColor}-600 hover:bg-${themeColor}-700 text-white rounded-2xl font-bold shadow-xl shadow-${themeColor}-100 transition transform active:scale-95 disabled:opacity-50`}
             >
-              {loading ? <i className="fas fa-spinner animate-spin"></i> : <><i className="fas fa-save mr-2"></i> Save Visual Identity</>}
+              {loading ? <i className="fas fa-spinner animate-spin"></i> : <><i className="fas fa-save mr-2"></i> Update Platform Identity</>}
             </button>
           </div>
         </form>
 
-        {/* Data Import & Export Hub */}
+        {/* Portability */}
         <div className="bg-white rounded-[32px] border border-slate-100 shadow-sm overflow-hidden">
-           <div className="p-8 border-b border-slate-100 flex items-center justify-between bg-indigo-50/20">
+           <div className="p-8 border-b border-slate-100 flex items-center justify-between bg-slate-50/50">
               <div className="flex items-center gap-4">
-                 <div className="w-12 h-12 bg-white rounded-2xl flex items-center justify-center text-indigo-600 shadow-sm border border-indigo-100">
-                    <i className="fas fa-database"></i>
+                 <div className="w-12 h-12 bg-white rounded-2xl flex items-center justify-center text-slate-600 shadow-sm border border-slate-100">
+                    <i className="fas fa-file-export"></i>
                  </div>
                  <div>
-                    <h3 className="text-xl font-bold text-slate-800 poppins">Data Control Center</h3>
-                    <p className="text-xs text-slate-400 font-bold uppercase tracking-widest">Import, Export & Backups</p>
+                    <h3 className="text-xl font-bold text-slate-800 poppins">Data Management</h3>
+                    <p className="text-xs text-slate-400 font-bold uppercase tracking-widest">Backup & Portability Tools</p>
                  </div>
               </div>
            </div>
            
            <div className="p-8 grid grid-cols-1 md:grid-cols-2 gap-8">
-              {/* Export Side */}
               <div className="space-y-6">
                  <div>
-                    <h5 className="font-bold text-slate-800 flex items-center gap-2">
-                       <i className="fas fa-cloud-download-alt text-indigo-500"></i>
-                       Export System Data
-                    </h5>
+                    <h5 className="font-bold text-slate-800">Export Registry</h5>
                     <p className="text-xs text-slate-500 mt-1 leading-relaxed">
-                       Generate a secure snapshot of your entire database for migration or compliance audits.
+                       Generate snapshots of your current inventory and user data.
                     </p>
                  </div>
-                 
                  <div className="space-y-3">
                     <button 
                       type="button"
@@ -257,8 +239,8 @@ const SettingsModule: React.FC<SettingsModuleProps> = ({ settings, onUpdate }) =
                       disabled={portabilityLoading}
                       className="w-full py-4 bg-slate-800 hover:bg-slate-900 text-white rounded-2xl font-bold text-sm shadow-lg transition flex items-center justify-center gap-3"
                     >
-                       {portabilityLoading ? <i className="fas fa-spinner animate-spin"></i> : <i className="fas fa-file-code text-amber-400"></i>}
-                       Export as Global JSON
+                       <i className="fas fa-file-code text-amber-400"></i>
+                       Export Global JSON
                     </button>
                     <button 
                       type="button"
@@ -266,109 +248,75 @@ const SettingsModule: React.FC<SettingsModuleProps> = ({ settings, onUpdate }) =
                       disabled={portabilityLoading}
                       className="w-full py-4 bg-white border border-slate-200 text-slate-700 hover:bg-slate-50 rounded-2xl font-bold text-sm shadow-sm transition flex items-center justify-center gap-3"
                     >
-                       {portabilityLoading ? <i className="fas fa-spinner animate-spin"></i> : <i className="fas fa-file-excel text-emerald-500"></i>}
+                       <i className="fas fa-file-excel text-emerald-500"></i>
                        Export Assets to CSV
                     </button>
                  </div>
               </div>
 
-              {/* Import Side */}
               <div className="space-y-6 border-l border-slate-50 md:pl-8">
                  <div>
-                    <h5 className="font-bold text-slate-800 flex items-center gap-2">
-                       <i className="fas fa-cloud-upload-alt text-emerald-500"></i>
-                       Restore / Import
-                    </h5>
+                    <h5 className="font-bold text-slate-800">Import / Restore</h5>
                     <p className="text-xs text-slate-500 mt-1 leading-relaxed">
-                       Load a previously exported backup file to restore your system state or merge environments.
+                       Migrate browser sessions or restore from a JSON snapshot.
                     </p>
                  </div>
-
                  <div className="space-y-3">
-                    <input 
-                      type="file" 
-                      ref={fileInputRef} 
-                      className="hidden" 
-                      accept=".json" 
-                      onChange={onFileChange} 
-                    />
+                    <input type="file" ref={fileInputRef} className="hidden" accept=".json" onChange={onFileChange} />
                     <button 
                       type="button"
                       onClick={handleImportData}
                       disabled={portabilityLoading}
-                      className="w-full py-4 bg-emerald-600 hover:bg-emerald-700 text-white rounded-2xl font-bold text-sm shadow-lg shadow-emerald-100 transition flex items-center justify-center gap-3"
+                      className="w-full py-4 bg-indigo-600 hover:bg-indigo-700 text-white rounded-2xl font-bold text-sm shadow-lg shadow-indigo-100 transition flex items-center justify-center gap-3"
                     >
-                       {portabilityLoading ? <i className="fas fa-spinner animate-spin"></i> : <i className="fas fa-upload"></i>}
-                       Import System JSON
+                       <i className="fas fa-upload"></i>
+                       Import Snapshot
                     </button>
-                    <p className="text-[10px] text-center text-rose-500 font-bold uppercase tracking-tight">
-                       <i className="fas fa-exclamation-triangle mr-1"></i>
-                       Warning: This will overwrite current data
-                    </p>
                  </div>
               </div>
            </div>
         </div>
 
-        {/* Maintenance Utilities */}
+        {/* Maintenance */}
         <div className="bg-white rounded-[32px] border border-slate-100 shadow-sm overflow-hidden">
-           <div className="p-8 border-b border-slate-50 flex items-center gap-4 bg-slate-50/50">
-              <div className="w-12 h-12 bg-white rounded-2xl flex items-center justify-center text-slate-400 shadow-sm border border-slate-100">
-                 <i className="fas fa-tools"></i>
-              </div>
-              <div>
-                 <h3 className="text-xl font-bold text-slate-800 poppins">System Maintenance</h3>
-                 <p className="text-xs text-slate-400 font-bold uppercase tracking-widest">Advanced Integrity Tools</p>
+           <div className="p-8 border-b border-slate-100 bg-rose-50/20">
+              <div className="flex items-center gap-4">
+                 <div className="w-12 h-12 bg-white rounded-2xl flex items-center justify-center text-rose-600 shadow-sm border border-rose-100">
+                    <i className="fas fa-exclamation-triangle"></i>
+                 </div>
+                 <div>
+                    <h3 className="text-xl font-bold text-slate-800 poppins">Danger Zone</h3>
+                    <p className="text-xs text-slate-400 font-bold uppercase tracking-widest">Irreversible System Operations</p>
+                 </div>
               </div>
            </div>
            
-           <div className="p-8 space-y-4">
-              <div className="flex items-center justify-between p-6 bg-indigo-50/20 border border-indigo-100 rounded-3xl group transition hover:bg-indigo-50/40">
+           <div className="p-8">
+              <div className="flex flex-col md:flex-row items-center justify-between p-6 border border-rose-100 rounded-3xl group transition hover:bg-rose-50/30">
                  <div className="flex items-center gap-4">
-                    <div className="w-10 h-10 bg-white rounded-xl flex items-center justify-center text-indigo-600 border border-indigo-100">
-                       <i className="fas fa-link"></i>
+                    <div className="w-10 h-10 bg-white rounded-xl flex items-center justify-center text-rose-600 border border-rose-100 shadow-sm">
+                       <i className="fas fa-radiation"></i>
                     </div>
                     <div>
-                       <h5 className="font-bold text-slate-800 text-sm">Force Cloud Re-sync</h5>
-                       <p className="text-[11px] text-slate-500">Push all local changes to the Google Drive database.</p>
-                    </div>
-                 </div>
-                 <button 
-                   onClick={handleInitializeDb}
-                   disabled={initLoading}
-                   className="px-5 py-2 bg-indigo-600 text-white rounded-xl font-bold text-[11px] uppercase tracking-wider transition hover:bg-indigo-700"
-                 >
-                    {initLoading ? 'Syncing...' : 'Sync Now'}
-                 </button>
-              </div>
-
-              <div className="flex items-center justify-between p-6 bg-rose-50/20 border border-rose-100 rounded-3xl group transition hover:bg-rose-50/40">
-                 <div className="flex items-center gap-4">
-                    <div className="w-10 h-10 bg-white rounded-xl flex items-center justify-center text-rose-600 border border-rose-100">
-                       <i className="fas fa-skull-crossbones"></i>
-                    </div>
-                    <div>
-                       <h5 className="font-bold text-slate-800 text-sm">Initiate WIPE Sequence</h5>
-                       <p className="text-[11px] text-slate-500">Permanently erase all production records.</p>
+                       <h5 className="font-bold text-slate-800 text-sm uppercase">Full System Factory Reset</h5>
+                       <p className="text-[11px] text-slate-500">Destroys all server records and resets to default credentials.</p>
                     </div>
                  </div>
                  <button 
                    onClick={handleFactoryReset}
                    disabled={loading}
-                   className="px-5 py-2 bg-rose-600 text-white rounded-xl font-bold text-[11px] uppercase tracking-wider transition hover:bg-rose-700 shadow-lg shadow-rose-100"
+                   className="mt-4 md:mt-0 px-6 py-3 bg-rose-600 text-white rounded-xl font-bold text-[11px] uppercase tracking-wider transition hover:bg-rose-700 shadow-lg shadow-rose-100"
                  >
-                    Factory Reset
+                    Execute Reset
                  </button>
               </div>
            </div>
         </div>
       </div>
 
-      {/* Sidebar Live Preview */}
       <div className="space-y-8">
         <div className="bg-white p-8 rounded-[32px] border border-slate-100 shadow-sm sticky top-10">
            <h4 className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] mb-6">Live Branding Preview</h4>
-           
            <div className="space-y-8">
               <div className="p-4 bg-slate-50 border border-slate-100 rounded-2xl flex items-center gap-3">
                  <div className={`w-10 h-10 bg-${themeColor}-600 rounded-xl flex items-center justify-center text-white`}>
@@ -376,24 +324,22 @@ const SettingsModule: React.FC<SettingsModuleProps> = ({ settings, onUpdate }) =
                  </div>
                  <div>
                     <p className="font-bold text-sm text-slate-800">{formData.software_name}</p>
-                    <p className="text-[10px] text-slate-400 font-medium">Global Display Name</p>
+                    <p className="text-[10px] text-slate-400 font-medium">Enterprise Display Name</p>
                  </div>
               </div>
-
               <div className="rounded-3xl border border-slate-100 overflow-hidden shadow-xl shadow-slate-100">
                  <div className={`bg-${themeColor}-600 p-6 text-white text-center`}>
-                    <h5 className="font-bold text-sm">Login Card Preview</h5>
+                    <h5 className="font-bold text-sm">Dashboard Theme</h5>
                  </div>
                  <div className="p-6 bg-white space-y-3">
                     <div className="h-2 w-full bg-slate-100 rounded-full"></div>
                     <div className="h-2 w-3/4 bg-slate-100 rounded-full"></div>
                  </div>
               </div>
-
-              <div className="p-4 bg-amber-50 rounded-2xl border border-amber-100 flex items-start gap-3">
-                 <i className="fas fa-info-circle text-amber-500 mt-1"></i>
-                 <p className="text-[11px] text-amber-700 leading-relaxed font-medium">
-                    Changes apply immediately to all connected browsers. Backup files are encrypted in standard JSON format.
+              <div className="p-4 bg-blue-50 rounded-2xl border border-blue-100 flex items-start gap-3">
+                 <i className="fas fa-server text-blue-500 mt-1"></i>
+                 <p className="text-[11px] text-blue-700 leading-relaxed font-medium">
+                    This system is operating on a MariaDB backend. Database schema is strictly enforced.
                  </p>
               </div>
            </div>

@@ -2,223 +2,199 @@
 import { InventoryItem, Movement, Supplier, LocationRecord, MaintenanceLog, License, Category, Employee, Department, PersonalBudget, AssetRequest, User, UserLog, AttendanceRecord, LeaveRequest, Role, Notification, SystemSettings } from './types.ts';
 import { dbService } from './db.ts';
 
-declare var google: any;
-
-const isGAS = typeof google !== 'undefined' && google.script && google.script.run;
-
-const gasRequest = <T>(funcName: string, ...args: any[]): Promise<T> => {
-  return new Promise((resolve, reject) => {
-    google.script.run
-      .withSuccessHandler((res: T) => resolve(res))
-      .withFailureHandler((err: Error) => reject(err))
-      [funcName](...args);
-  });
-};
+// No longer using Google Apps Script - Pure MariaDB Mode
+const API_BASE = '/api';
 
 export const apiService = {
-  // Authentication
+  // Authentication - Strictly Remote (MariaDB)
   async login(username, password): Promise<User> {
-    try {
-      if (isGAS) {
-        const user = await gasRequest<User>('apiLogin', username, password);
-        await dbService.saveUser(user);
-        return user;
-      } else {
-        const response = await fetch('/api/login', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ username, password })
-        });
-        if (response.ok) {
-          const user = await response.json();
-          await dbService.saveUser(user);
-          return user;
-        }
-      }
-    } catch (e) {
-      console.warn("Backend login failed, attempting local fallback...");
+    const response = await fetch(`${API_BASE}/login`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ username, password })
+    });
+
+    if (!response.ok) {
+      const errorData = await response.json();
+      throw new Error(errorData.error || "Invalid Credentials");
     }
 
-    const users = await dbService.getUsers();
-    const user = users.find(u => u.username === username && u.password === password);
-    
-    if (user) {
-      if (user.is_active === false) throw new Error("Account is disabled. Contact administrator.");
-      return user;
-    }
-    throw new Error("Invalid Credentials or Backend Unreachable");
+    const user = await response.json();
+    await dbService.saveUser(user); // Cache for session persistence
+    return user;
   },
 
-  // Snapshot Features for Import/Export
-  async getFullDataSnapshot() {
-    return {
-      items: await dbService.getAllItems(),
-      movements: await dbService.getAllMovements(),
-      suppliers: await dbService.getAllSuppliers(),
-      locations: await dbService.getAllLocations(),
-      maintenance: await dbService.getAllMaintenance(),
-      licenses: await dbService.getAllLicenses(),
-      categories: await dbService.getAllCategories(),
-      employees: await dbService.getAllEmployees(),
-      departments: await dbService.getAllDepartments(),
-      budgets: await dbService.getAll<PersonalBudget>('budgets'),
-      users: await dbService.getUsers(),
-      settings: await dbService.getSettings(),
-      attendance: await dbService.getAttendance(),
-      leaves: await dbService.getLeaveRequests(),
-      roles: await dbService.getRoles(),
-      notifications: await dbService.getNotifications('ADMIN')
-    };
-  },
-
-  async exportInventoryToCSV() {
-    const items = await dbService.getAllItems();
-    if (items.length === 0) return "";
-    
-    const headers = ["ID", "Name", "Category", "Serial", "Status", "Assigned To", "Department", "Purchase Date", "Cost", "Location"];
-    const rows = items.map(i => [
-      i.id,
-      i.name,
-      i.category,
-      i.serial,
-      i.status,
-      i.assignedTo,
-      i.department,
-      i.purchaseDate,
-      i.cost || 0,
-      i.location || ""
-    ]);
-    
-    const csvContent = [
-      headers.join(","),
-      ...rows.map(row => row.map(val => `"${val}"`).join(","))
-    ].join("\n");
-    
-    return csvContent;
-  },
-
-  async importFullDataSnapshot(data: any) {
-    // 1. Bulk write to local IndexedDB
-    await dbService.bulkImport(data);
-    
-    // 2. If Cloud enabled, push the whole thing to cloud too
-    if (isGAS) {
-      await gasRequest('syncFullDatabase', data);
-    }
-    return { success: true };
-  },
-
-  // Cloud Sync Feature
-  async syncToCloud() {
-    if (!isGAS) return { success: false, error: "Cloud sync only available in Google Drive mode." };
-    const fullData = await this.getFullDataSnapshot();
-    // Wrap settings in array for GAS collection consistency if needed
-    const cloudPayload = { ...fullData, settings: [fullData.settings] };
-    return gasRequest<any>('syncFullDatabase', cloudPayload);
-  },
-
-  // Settings
+  // Global Settings - Source of Truth is the MariaDB 'settings' table
   async getSettings(): Promise<SystemSettings> {
     try {
-      if (isGAS) {
-        const arr = await gasRequest<SystemSettings[]>('getCollection', 'Settings');
-        if (arr && arr.length > 0) {
-          const s = arr[0];
+      const res = await fetch(`${API_BASE}/settings`);
+      if (res.ok) {
+        const s = await res.json();
+        if (s.id) {
           await dbService.saveSettings(s);
           return s;
         }
-      } else {
-        const res = await fetch('/api/settings');
-        if (res.ok) {
-          const s = await res.json();
-          if (s.id) {
-            await dbService.saveSettings(s);
-            return s;
-          }
-        }
       }
     } catch (e) {
-      console.warn("Could not fetch remote settings, using local.");
+      console.warn("Backend settings unreachable, using local cache.");
     }
     return dbService.getSettings();
   },
 
   async updateSettings(s: SystemSettings) {
-    if (isGAS) {
-      await gasRequest<void>('apiUpsert', 'Settings', s);
-    } else {
-      await fetch('/api/settings', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(s)
-      });
-    }
+    await fetch(`${API_BASE}/settings`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(s)
+    });
     return dbService.saveSettings(s);
   },
 
-  // Generic CRUD
-  async getAllItems(): Promise<InventoryItem[]> { return isGAS ? gasRequest('getCollection', 'Items') : dbService.getAllItems(); },
-  async saveItem(item: InventoryItem) { if (isGAS) await gasRequest('apiUpsert', 'Items', item); return dbService.saveItem(item); },
-  async deleteItem(id: string) { if (isGAS) await gasRequest('apiDelete', 'Items', id); return dbService.deleteItem(id); },
-  async getEmployees(): Promise<Employee[]> { return isGAS ? gasRequest('getCollection', 'Employees') : dbService.getAllEmployees(); },
-  async saveEmployee(e: Employee) { if (isGAS) await gasRequest('apiUpsert', 'Employees', e); return dbService.saveEmployee(e); },
-  async deleteEmployee(id: string) { if (isGAS) await gasRequest('apiDelete', 'Employees', id); return dbService.deleteEmployee(id); },
-  async getDepartments(): Promise<Department[]> { return isGAS ? gasRequest('getCollection', 'Departments') : dbService.getAllDepartments(); },
-  async saveDepartment(d: Department) { if (isGAS) await gasRequest('apiUpsert', 'Departments', d); return dbService.saveDepartment(d); },
-  async getBudgets(): Promise<PersonalBudget[]> { return isGAS ? gasRequest('getCollection', 'Budgets') : dbService.getAll<PersonalBudget>('budgets'); },
-  async saveBudget(b: PersonalBudget) { if (isGAS) await gasRequest('apiUpsert', 'Budgets', b); return dbService.put('budgets', b); },
-  async getCategories(): Promise<Category[]> { return isGAS ? gasRequest('getCollection', 'Categories') : dbService.getAllCategories(); },
-  async getAllMovements(): Promise<Movement[]> { return isGAS ? gasRequest('getCollection', 'Movements') : dbService.getAllMovements(); },
-  async getAllSuppliers(): Promise<Supplier[]> { return isGAS ? gasRequest('getCollection', 'Suppliers') : dbService.getAllSuppliers(); },
-  async getAllLocations(): Promise<LocationRecord[]> { return isGAS ? gasRequest('getCollection', 'Locations') : dbService.getAllLocations(); },
-  async getAllMaintenance(): Promise<MaintenanceLog[]> { return isGAS ? gasRequest('getCollection', 'Maintenance') : dbService.getAllMaintenance(); },
-  async getAllLicenses(): Promise<License[]> { return isGAS ? gasRequest('getCollection', 'Licenses') : dbService.getAllLicenses(); },
-  async getAllRequests(): Promise<AssetRequest[]> { return isGAS ? gasRequest('getCollection', 'Requests') : dbService.getAllRequests(); },
-  async getUsers(): Promise<User[]> { 
-    if (isGAS) return gasRequest<User[]>('getCollection', 'Users').then(async users => {
-      for (const u of users) await dbService.saveUser(u);
-      return users;
-    });
-    return dbService.getUsers(); 
+  // Snapshot Features for Local Browser Migration
+  async getFullDataSnapshot() {
+    return {
+      items: await this.getAllItems(),
+      movements: await this.getAllMovements(),
+      suppliers: await this.getAllSuppliers(),
+      locations: await this.getAllLocations(),
+      maintenance: await this.getAllMaintenance(),
+      licenses: await this.getAllLicenses(),
+      categories: await this.getCategories(),
+      employees: await this.getEmployees(),
+      departments: await this.getDepartments(),
+      budgets: await this.getBudgets(),
+      users: await this.getUsers(),
+      settings: await this.getSettings(),
+      attendance: await this.getAttendance(),
+      leaves: await this.getLeaveRequests(),
+      roles: await this.getRoles()
+    };
   },
-  async saveUser(u: User) { if (isGAS) await gasRequest('apiUpsert', 'Users', u); return dbService.saveUser(u); },
-  async getRoles(): Promise<Role[]> { return isGAS ? gasRequest('getCollection', 'Roles') : dbService.getRoles(); },
-  async getNotifications(uid: string): Promise<Notification[]> { return isGAS ? gasRequest('getCollection', 'Notifications') : dbService.getNotifications(uid); },
-  async getAttendance(): Promise<AttendanceRecord[]> { return isGAS ? gasRequest('getCollection', 'Attendance') : dbService.getAttendance(); },
-  async saveAttendance(r: AttendanceRecord) { if (isGAS) await gasRequest('apiUpsert', 'Attendance', r); return dbService.saveAttendance(r); },
-  async getLeaveRequests(): Promise<LeaveRequest[]> { return isGAS ? gasRequest('getCollection', 'Leaves') : dbService.getLeaveRequests(); },
-  async saveLeaveRequest(l: LeaveRequest) { if (isGAS) await gasRequest('apiUpsert', 'Leaves', l); return dbService.saveLeaveRequest(l); },
-  async deleteLicense(id: any) { if (isGAS) await gasRequest('apiDelete', 'Licenses', id); return dbService.deleteLicense(id); },
-  async deleteUser(id: string) { if (isGAS) await gasRequest('apiDelete', 'Users', id); return dbService.deleteUser(id); },
-  async deleteAttendance(id: string) { if (isGAS) await gasRequest('apiDelete', 'Attendance', id); return dbService.deleteAttendance(id); },
-  async deleteLeaveRequest(id: string) { if (isGAS) await gasRequest('apiDelete', 'Leaves', id); return dbService.deleteLeaveRequest(id); },
-  async createNotification(notif: any) { if (isGAS) await gasRequest('apiUpsert', 'Notifications', notif); return dbService.saveNotification(notif); },
-  async genericSave(store: string, data: any) { if (isGAS) await gasRequest('apiUpsert', store, data); return dbService.put(store, data); },
-  async genericDelete(store: string, id: any) { if (isGAS) await gasRequest('apiDelete', store, id); return dbService.delete(store, id); },
-  async markNotificationsAsRead(ids: number[]) {
-    if (isGAS) return gasRequest('markNotificationsRead', ids);
-    for (const id of ids) {
-      const n = await dbService.getNotification(id);
-      if (n) {
-        n.is_read = true;
-        await dbService.put('notifications', n);
-      }
-    }
-  },
-  async factoryReset() { 
-    localStorage.removeItem('smartstock_user');
-    await dbService.clearAllData();
-    if (isGAS) return gasRequest('factoryReset'); 
+
+  async importFullDataSnapshot(data: any) {
+    // For MariaDB mode, we process local overwrite and could theoretically 
+    // trigger a server-side bulk import if an endpoint existed.
+    await dbService.bulkImport(data);
     return { success: true };
   },
+
+  // Core Data APIs (MariaDB standard fetch)
+  // Removed invalid 'private' modifier from object literal method
+  async get<T>(path: string): Promise<T[]> {
+    const res = await fetch(`${API_BASE}/${path}`);
+    if (!res.ok) throw new Error(`Server Error: ${res.statusText}`);
+    return res.json();
+  },
+
+  // Removed invalid 'private' modifier from object literal method
+  async post(path: string, data: any): Promise<any> {
+    const userStr = localStorage.getItem('smartstock_user');
+    const user = userStr ? JSON.parse(userStr) : null;
+    
+    const res = await fetch(`${API_BASE}/${path}`, {
+      method: 'POST',
+      headers: { 
+        'Content-Type': 'application/json',
+        'x-user-id': user?.id || 'SYSTEM',
+        'x-username': user?.username || 'SYSTEM'
+      },
+      body: JSON.stringify(data)
+    });
+    return res.json();
+  },
+
+  // Removed invalid 'private' modifier from object literal method
+  async del(path: string, id: string | number): Promise<any> {
+    const userStr = localStorage.getItem('smartstock_user');
+    const user = userStr ? JSON.parse(userStr) : null;
+
+    const res = await fetch(`${API_BASE}/${path}/${id}`, {
+      method: 'DELETE',
+      headers: {
+        'x-user-id': user?.id || 'SYSTEM',
+        'x-username': user?.username || 'SYSTEM'
+      }
+    });
+    return res.json();
+  },
+
+  async getAllItems(): Promise<InventoryItem[]> { return this.get('items'); },
+  async saveItem(item: InventoryItem) { return this.post('items', item); },
+  async deleteItem(id: string) { return this.del('items', id); },
+  
+  async getEmployees(): Promise<Employee[]> { return this.get('employees'); },
+  async saveEmployee(e: Employee) { return this.post('employees', e); },
+  async deleteEmployee(id: string) { return this.del('employees', id); },
+  
+  async getDepartments(): Promise<Department[]> { return this.get('departments'); },
+  async saveDepartment(d: Department) { return this.post('departments', d); },
+  
+  async getBudgets(): Promise<PersonalBudget[]> { return this.get('salaries'); }, // Map to backend table if needed
+  async saveBudget(b: PersonalBudget) { return this.post('salaries', b); },
+  
+  async getCategories(): Promise<Category[]> { return this.get('categories'); },
+  async getAllMovements(): Promise<Movement[]> { return this.get('movements'); },
+  async getAllSuppliers(): Promise<Supplier[]> { return this.get('suppliers'); },
+  async getAllLocations(): Promise<LocationRecord[]> { return this.get('locations'); },
+  async getAllMaintenance(): Promise<MaintenanceLog[]> { return this.get('maintenance_logs'); },
+  async getAllLicenses(): Promise<License[]> { return this.get('licenses'); },
+  async getAllRequests(): Promise<AssetRequest[]> { return this.get('requests'); },
+  
+  async getUsers(): Promise<User[]> { return this.get('users'); },
+  async saveUser(u: User) { return this.post('users', u); },
+  async deleteUser(id: string) { return this.del('users', id); },
+  
+  async getRoles(): Promise<Role[]> { return this.get('roles'); },
+  async getNotifications(uid: string): Promise<Notification[]> { return this.get(`notifications/${uid}`); },
+  async markNotificationsAsRead(ids: number[]) { return this.post('notifications/read', { ids }); },
+  
+  async getAttendance(): Promise<AttendanceRecord[]> { return this.get('attendance'); },
+  async saveAttendance(r: AttendanceRecord) { return this.post('attendance', r); },
+  async deleteAttendance(id: string) { return this.del('attendance', id); },
+  
+  async getLeaveRequests(): Promise<LeaveRequest[]> { return this.get('leave_requests'); },
+  async saveLeaveRequest(l: LeaveRequest) { return this.post('leave_requests', l); },
+  async deleteLeaveRequest(id: string) { return this.del('leave_requests', id); },
+
+  async genericSave(store: string, data: any) { 
+    const mappedStore = store === 'maintenance' ? 'maintenance_logs' : store;
+    return this.post(mappedStore, data); 
+  },
+  async genericDelete(store: string, id: any) { 
+    const mappedStore = store === 'maintenance' ? 'maintenance_logs' : store;
+    return this.del(mappedStore, id); 
+  },
+
+  async deleteLicense(id: any) { return this.del('licenses', id); },
+  async createNotification(notif: any) { return this.post('notifications', notif); },
+
+  async exportInventoryToCSV(): Promise<string> {
+    const items = await this.getAllItems();
+    if (!items || items.length === 0) return 'ID,Name,Category,Serial,Status,Location,Assigned To,Department,Purchase Date,Warranty,Cost';
+    const headers = ['id', 'name', 'category', 'serial', 'status', 'location', 'assignedTo', 'department', 'purchaseDate', 'warranty', 'cost'];
+    return [
+      headers.join(','),
+      ...items.map(item => headers.map(header => `"${String((item as any)[header] || '').replace(/"/g, '""')}"`).join(','))
+    ].join('\n');
+  },
+
+  async factoryReset() { 
+    const res = await fetch(`${API_BASE}/factory-reset`, { method: 'POST' });
+    if (res.ok) {
+        localStorage.removeItem('smartstock_user');
+        await dbService.clearAllData();
+        return { success: true };
+    }
+    throw new Error("Reset Failed");
+  },
+
   async initDatabase(): Promise<{ success: boolean }> { 
     await dbService.init(); 
-    if (isGAS) {
-      const res = await gasRequest<{ success: boolean }>('setupDatabase');
-      this.getSettings();
-      this.getUsers();
-      return res;
+    const res = await fetch(`${API_BASE}/init-db`, { method: 'POST' });
+    if (res.ok) {
+      await this.getSettings();
+      return { success: true };
     }
-    return { success: true };
+    return { success: false };
   }
 };

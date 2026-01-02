@@ -25,15 +25,15 @@ import Modal from './components/Modal.tsx';
 import PurchaseForm from './components/PurchaseForm.tsx';
 import ManagementForm from './components/ManagementForm.tsx';
 import { apiService } from './api.ts';
-import { dbService } from './db.ts';
 
 type AppTab = 'dashboard' | 'inventory' | 'maintenance' | 'suppliers' | 'locations' | 'licenses' | 'categories' | 'employees' | 'departments' | 'purchase-history' | 'requests' | 'faulty-reports' | 'budgets' | 'audit-trail' | 'system-logs' | 'attendance' | 'leaves' | 'user-mgmt' | 'role-mgmt' | 'notifications' | 'settings' | 'salaries';
 
 const App: React.FC = () => {
   const [currentUser, setCurrentUser] = useState<User | null>(null);
   const [currentRole, setCurrentRole] = useState<Role | null>(null);
-  const [settings, setSettings] = useState<SystemSettings>({ id: 'GLOBAL', software_name: 'SmartStock Pro', primary_color: 'indigo' });
+  const [settings, setSettings] = useState<SystemSettings>({ id: 'GLOBAL', software_name: 'Enterprise IMS', primary_color: 'indigo' });
   const [activeTab, setActiveTab] = useState<AppTab>('dashboard');
+  
   const [items, setItems] = useState<InventoryItem[]>([]);
   const [movements, setMovements] = useState<Movement[]>([]);
   const [suppliers, setSuppliers] = useState<Supplier[]>([]);
@@ -46,10 +46,9 @@ const App: React.FC = () => {
   const [employees, setEmployees] = useState<Employee[]>([]);
   const [departments, setDepartments] = useState<Department[]>([]);
 
-  const [loading, setLoading] = useState(true);
   const [isInitialized, setIsInitialized] = useState(false);
+  const [bootStatus, setBootStatus] = useState('Checking Server Connection...');
   const [dataLoading, setDataLoading] = useState(false);
-  const [syncing, setSyncing] = useState(false);
   
   const [isPurchaseModalOpen, setIsPurchaseModalOpen] = useState(false);
   const [isRequestModalOpen, setIsRequestModalOpen] = useState(false);
@@ -58,14 +57,18 @@ const App: React.FC = () => {
   const [viewingItem, setViewingItem] = useState<InventoryItem | null>(null);
   const [viewingEmployee, setViewingEmployee] = useState<Employee | null>(null);
 
-  useEffect(() => { document.title = `${settings.software_name} | Enterprise Portal`; }, [settings.software_name]);
+  useEffect(() => { 
+    if (settings.software_name) {
+      document.title = `${settings.software_name} | Smart Stock Pro`; 
+    }
+  }, [settings.software_name]);
 
   const fetchRoleData = useCallback(async (roleId: string) => {
     try {
       const allRoles = await apiService.getRoles();
       const role = allRoles.find(r => r.id === roleId);
       if (role) setCurrentRole(role);
-    } catch (e) { console.error(e); }
+    } catch (e) { console.error("Role lookup error:", e); }
   }, []);
 
   const fetchData = useCallback(async () => {
@@ -81,112 +84,60 @@ const App: React.FC = () => {
       setItems(fItems || []); setMovements(fMov || []); setSuppliers(fSup || []); setLocations(fLoc || []);
       setMaintenance(fMaint || []); setLicenses(fLic || []); setCategories(fCat || []);
       setEmployees(fEmp || []); setDepartments(fDept || []); setRequests(fReq || []); setUsers(fUsers || []);
-    } catch (err) { console.error(err); } finally { setDataLoading(false); }
+    } catch (err) { console.error("Data Hydration Error:", err); } finally { setDataLoading(false); }
   }, [currentUser]);
 
   useEffect(() => {
-    const initApp = async () => {
+    const startupSequence = async () => {
       try {
-        // 1. Initialize local DB
+        setBootStatus("Synchronizing System Data...");
         await apiService.initDatabase();
         
-        // 2. Fetch Global Settings from Cloud (Priority)
-        const s = await apiService.getSettings();
-        if (s) setSettings(s);
+        setBootStatus("Fetching Visual Branding...");
+        const cloudSettings = await apiService.getSettings();
+        if (cloudSettings) setSettings(cloudSettings);
         
-        // 3. Silent sync users in background for cross-browser login support
-        apiService.getUsers().then(u => setUsers(u)).catch(console.error);
-
-        // 4. Restore session
-        const saved = localStorage.getItem('smartstock_user');
-        if (saved) {
-          const user = JSON.parse(saved);
+        const sessionToken = localStorage.getItem('smartstock_user');
+        if (sessionToken) {
+          const user = JSON.parse(sessionToken);
           setCurrentUser(user);
           await fetchRoleData(user.role);
         }
       } catch (e) { 
-        console.error("Boot sequence error:", e); 
+        console.error("Boot failure:", e); 
+        setBootStatus("Server unavailable. Please check backend.");
       } finally { 
         setIsInitialized(true); 
-        setLoading(false); 
       }
     };
-    initApp();
+    startupSequence();
   }, [fetchRoleData]);
 
   useEffect(() => { if (currentUser) fetchData(); }, [currentUser, fetchData]);
 
-  const handleCloudSync = async () => {
-    setSyncing(true);
-    try {
-      const res = await apiService.syncToCloud();
-      if (res.success) alert(`Cloud Sync Successful: Data backed up to Drive at ${new Date().toLocaleTimeString()}`);
-      else alert("Cloud Sync Failed: " + res.error);
-    } catch (e) { alert("Cloud Sync Error: " + e); }
-    finally { setSyncing(false); }
-  };
-
-  const handleDeleteEmployee = async (emp: Employee) => {
-    const userToCleanup = users.find(u => u.full_name === emp.name || u.id.includes(emp.id.split('-').pop()!));
-    
-    let confirmMsg = `Are you sure you want to remove ${emp.name} from the staff directory?`;
-    if (userToCleanup) confirmMsg += `\n\nNote: The associated user account (@${userToCleanup.username}) will also be deleted.`;
-
-    if (window.confirm(confirmMsg)) {
-      try {
-        await apiService.deleteEmployee(emp.id);
-        if (userToCleanup) {
-            await apiService.deleteUser(userToCleanup.id);
-        }
-        fetchData();
-      } catch (e) { alert("Error deleting employee: " + e); }
-    }
-  };
-
   const handleManagementSubmit = async (data: any) => {
     try {
       if (managementModal.type === 'Employee') {
-        const empId = data.id;
-        await apiService.saveEmployee({
-          id: empId,
-          name: data.name,
-          email: data.email,
-          department: data.department,
-          role: data.role,
-          joining_date: data.joining_date,
-          is_active: data.is_active
-        });
-
-        if (data.create_user && data.username && data.password) {
-          const userId = `U-${empId.split('-').pop()}`;
+        await apiService.saveEmployee(data);
+        if (data.create_user) {
           await apiService.saveUser({
-            id: userId,
+            id: `U-${data.id.split('-').pop()}`,
             username: data.username,
             password: data.password,
             role: UserRole.STAFF,
             full_name: data.name,
             department: data.department,
             joining_date: data.joining_date,
-            designation: data.role,
             is_active: data.is_active
           });
         }
-        
-        const existingUser = users.find(u => u.full_name === data.name);
-        if (existingUser && data.is_active !== undefined) {
-            await apiService.saveUser({ ...existingUser, is_active: data.is_active });
-        }
       }
-      
       if (managementModal.type === 'Department') await apiService.saveDepartment(data);
-      // Fix: replace apiService.put with genericSave to correctly update category data
       if (managementModal.type === 'Category') await apiService.genericSave('categories', data);
       
       setManagementModal({ isOpen: false, type: null });
       fetchData();
-    } catch (err) {
-      alert("Error saving record: " + err);
-    }
+    } catch (err) { alert("Operation failed: " + err); }
   };
 
   const renderContent = () => {
@@ -201,26 +152,20 @@ const App: React.FC = () => {
       case 'user-mgmt': return <UserManagement usersOverride={users} />;
       case 'role-mgmt': return <RoleManagement />;
       case 'settings': return <SettingsModule settings={settings} onUpdate={setSettings} />;
-      case 'requests': return <GenericListView title="Employee Asset Requests" icon="fa-clipboard-list" items={requests} columns={['id', 'item', 'employee', 'urgency', 'status', 'request_date']} onAdd={() => setIsRequestModalOpen(true)} />;
-      case 'faulty-reports': return <GenericListView title="Damaged & Faulty Assets" icon="fa-exclamation-triangle" items={items.filter(i => i.status === ItemStatus.FAULTY)} columns={['id', 'name', 'assignedTo', 'department', 'serial']} />;
-      case 'purchase-history': return <GenericListView title="Procurement History" icon="fa-history" items={items} columns={['id', 'name', 'purchaseDate', 'cost', 'department']} />;
+      case 'requests': return <GenericListView title="Employee Requests" icon="fa-clipboard-list" items={requests} columns={['id', 'item', 'employee', 'urgency', 'status', 'request_date']} onAdd={() => setIsRequestModalOpen(true)} />;
       case 'maintenance': return <MaintenanceList logs={maintenance} items={items} onUpdate={fetchData} onAdd={() => setActiveTab('requests')} />;
       case 'suppliers': return <SupplierList suppliers={suppliers} />;
-      case 'locations': return <GenericListView title="Operational Sites" icon="fa-map-marker-alt" items={locations} columns={['id', 'building', 'room', 'manager']} />;
-      case 'licenses': return <LicenseList licenses={licenses} suppliers={suppliers} onUpdate={fetchData} onAdd={() => fetchData()} />;
-      case 'categories': return <GenericListView title="Asset Categories" icon="fa-tags" items={categories} columns={['id', 'name', 'itemCount']} />;
-      case 'employees': return <GenericListView title="Staff Directory" icon="fa-users" items={employees} columns={['id', 'name', 'email', 'department', 'role', 'is_active']} onView={setViewingEmployee} onAdd={() => setManagementModal({ isOpen: true, type: 'Employee' })} onDelete={handleDeleteEmployee} />;
-      case 'departments': return <GenericListView title="Departments & Business Units" icon="fa-building" items={departments} columns={['id', 'name', 'manager']} onAdd={() => setManagementModal({ isOpen: true, type: 'Department' })} />;
+      case 'employees': return <GenericListView title="Staff Directory" icon="fa-users" items={employees} columns={['id', 'name', 'email', 'department', 'role', 'is_active']} onView={setViewingEmployee} onAdd={() => setManagementModal({ isOpen: true, type: 'Employee' })} />;
+      case 'departments': return <GenericListView title="Business Units" icon="fa-building" items={departments} columns={['id', 'name', 'manager']} onAdd={() => setManagementModal({ isOpen: true, type: 'Department' })} />;
       case 'budgets': return <BudgetModule />;
-      case 'audit-trail': return <GenericListView title="Movement Ledger" icon="fa-history" items={movements} columns={['date', 'item', 'from', 'to', 'status']} />;
-      case 'system-logs': return <GenericListView title="Security Audit Logs" icon="fa-shield-alt" items={[]} columns={['timestamp', 'username', 'action', 'details']} />;
+      case 'audit-trail': return <GenericListView title="Movement History" icon="fa-history" items={movements} columns={['date', 'item', 'from', 'to', 'status']} />;
       default: return <Dashboard stats={stats} movements={movements} items={items} onFullAudit={() => setActiveTab('audit-trail')} onCheckIn={() => setActiveTab('attendance')} themeColor={settings.primary_color} />;
     }
   };
 
   const stats = useMemo(() => ({
     purchased: items.length,
-    assigned: items.filter(i => i.status === ItemStatus.ASSIGNED).length,
+    assigned: items.filter(i => i.status === ItemStatus.ASSIGNED || i.status === ItemStatus.IN_USE).length,
     inUse: items.filter(i => i.status === ItemStatus.IN_USE).length,
     backup: items.filter(i => i.status === ItemStatus.BACKUP).length,
     faulty: items.filter(i => i.status === ItemStatus.FAULTY).length,
@@ -231,9 +176,22 @@ const App: React.FC = () => {
 
   const themeColor = settings.primary_color || 'indigo';
 
-  if (!isInitialized || (loading && !currentUser)) return <div className="flex h-screen items-center justify-center bg-slate-50 poppins font-bold text-slate-400">Loading Enterprise Core...</div>;
+  if (!isInitialized) return (
+    <div className="flex flex-col h-screen items-center justify-center bg-white poppins">
+      <div className={`w-12 h-12 border-4 border-${themeColor}-600 border-t-transparent rounded-full animate-spin mb-4`}></div>
+      <p className="text-slate-400 font-bold text-xs uppercase tracking-widest">{bootStatus}</p>
+    </div>
+  );
   
-  if (!currentUser) return <Login onLogin={(u) => { setCurrentUser(u); localStorage.setItem('smartstock_user', JSON.stringify(u)); fetchRoleData(u.role); }} softwareName={settings.software_name} themeColor={themeColor} />;
+  if (!currentUser) return (
+    <Login 
+      onLogin={(u) => { setCurrentUser(u); localStorage.setItem('smartstock_user', JSON.stringify(u)); fetchRoleData(u.role); }} 
+      softwareName={settings.software_name} 
+      themeColor={themeColor} 
+      logoIcon={settings.software_logo}
+      description={settings.software_description}
+    />
+  );
 
   return (
     <div className={`flex min-h-screen bg-slate-50 theme-${themeColor}`}>
@@ -242,17 +200,13 @@ const App: React.FC = () => {
         <header className="mb-8 flex flex-col md:flex-row justify-between items-center gap-4">
             <div>
                 <h1 className="text-3xl font-bold text-slate-800 capitalize tracking-tight poppins">{activeTab.replace('-', ' ')}</h1>
-                <p className="text-slate-500 font-medium text-sm">Authenticated: <span className={`text-${themeColor}-600 font-bold`}>{currentUser.full_name}</span></p>
+                <p className="text-slate-500 font-medium text-sm">Operator: <span className={`text-${themeColor}-600 font-bold`}>{currentUser.full_name}</span></p>
             </div>
-            <div className="flex gap-3">
-              <button 
-                onClick={handleCloudSync} 
-                disabled={syncing}
-                className="px-4 py-2 bg-white border border-slate-200 text-slate-600 rounded-xl text-xs font-bold hover:bg-slate-50 transition shadow-sm flex items-center gap-2"
-              >
-                <i className={`fas ${syncing ? 'fa-spinner animate-spin' : 'fa-cloud-upload-alt'}`}></i>
-                {syncing ? 'Syncing...' : 'Backup to Cloud'}
-              </button>
+            <div className="flex items-center gap-3">
+               <span className="flex items-center gap-2 px-3 py-1.5 bg-emerald-50 text-emerald-600 rounded-lg text-[10px] font-bold border border-emerald-100">
+                  <span className="w-1.5 h-1.5 bg-emerald-500 rounded-full animate-pulse"></span>
+                  SERVER ONLINE
+               </span>
             </div>
         </header>
         {dataLoading ? (
@@ -263,32 +217,10 @@ const App: React.FC = () => {
       </main>
 
       {isPurchaseModalOpen && <Modal title="Execute Procurement" onClose={() => setIsPurchaseModalOpen(false)}><PurchaseForm onSubmit={async (i) => { await apiService.saveItem(i); setIsPurchaseModalOpen(false); fetchData(); }} suppliers={suppliers} locations={locations} departments={departments} /></Modal>}
-      
-      {isRequestModalOpen && (
-        <Modal title="New Asset Request" onClose={() => setIsRequestModalOpen(false)}>
-          <RequestForm 
-            employees={employees} 
-            departments={departments} 
-            categories={categories} 
-            onSubmit={async (req) => { 
-              await apiService.genericSave('requests', req); 
-              setIsRequestModalOpen(false); 
-              fetchData(); 
-            }} 
-          />
-        </Modal>
-      )}
-
-      {managementModal.isOpen && (
-        <Modal title={`Manage ${managementModal.type}`} onClose={() => setManagementModal({ isOpen: false, type: null })}>
-          <ManagementForm type={managementModal.type!} onSubmit={handleManagementSubmit} />
-        </Modal>
-      )}
-
-      {viewingItem && <Modal title="Asset DNA Profile" onClose={() => setViewingItem(null)}><ItemDetails item={viewingItem} /></Modal>}
-      {viewingEmployee && <Modal title="Employee Record" onClose={() => setViewingEmployee(null)}><EmployeeDetails employee={viewingEmployee} items={items} allUsers={users} /></Modal>}
-      
-      {/* Integrating the AI assistant component */}
+      {isRequestModalOpen && <Modal title="New Asset Request" onClose={() => setIsRequestModalOpen(false)}><RequestForm employees={employees} departments={departments} categories={categories} onSubmit={async (req) => { await apiService.genericSave('requests', req); setIsRequestModalOpen(false); fetchData(); }} /></Modal>}
+      {managementModal.isOpen && <Modal title={`Manage ${managementModal.type}`} onClose={() => setManagementModal({ isOpen: false, type: null })}><ManagementForm type={managementModal.type!} onSubmit={handleManagementSubmit} /></Modal>}
+      {viewingItem && <Modal title="Asset Profile" onClose={() => setViewingItem(null)}><ItemDetails item={viewingItem} /></Modal>}
+      {viewingEmployee && <Modal title="Staff Profile" onClose={() => setViewingEmployee(null)}><EmployeeDetails employee={viewingEmployee} items={items} allUsers={users} /></Modal>}
       <Chatbot items={items} stats={stats} />
     </div>
   );
