@@ -66,12 +66,12 @@ const ManagementForm: React.FC<ManagementFormProps> = ({ type, onSubmit, initial
         {type === 'Department' && (
           <>
             <div className="space-y-2">
-              <label className="text-xs font-bold text-slate-500 uppercase tracking-wider ml-1">Department Name</label>
-              <input name="name" type="text" required className="w-full px-4 py-3 bg-slate-50 border border-slate-100 rounded-xl outline-none focus:ring-2 focus:ring-indigo-500 font-bold" value={formData.name || ''} onChange={handleChange} placeholder="e.g. Operations" />
+              <label className="text-xs font-bold text-slate-500 uppercase tracking-wider ml-1">Business Unit / Department Name</label>
+              <input name="name" type="text" required className="w-full px-4 py-3 bg-slate-50 border border-slate-100 rounded-xl outline-none focus:ring-2 focus:ring-indigo-500 font-bold" value={formData.name || ''} onChange={handleChange} placeholder="e.g. Operations & Logistics" />
             </div>
             <div className="space-y-2">
-              <label className="text-xs font-bold text-slate-500 uppercase tracking-wider ml-1">Department Manager</label>
-              <input name="manager" type="text" required className="w-full px-4 py-3 bg-slate-50 border border-slate-100 rounded-xl outline-none focus:ring-2 focus:ring-indigo-500" value={formData.manager || ''} onChange={handleChange} placeholder="Enter Manager Name" />
+              <label className="text-xs font-bold text-slate-500 uppercase tracking-wider ml-1">Unit Manager</label>
+              <input name="manager" type="text" required className="w-full px-4 py-3 bg-slate-50 border border-slate-100 rounded-xl outline-none focus:ring-2 focus:ring-indigo-500 font-bold" value={formData.manager || ''} onChange={handleChange} placeholder="Enter full name of manager" />
             </div>
           </>
         )}
@@ -80,7 +80,7 @@ const ManagementForm: React.FC<ManagementFormProps> = ({ type, onSubmit, initial
       <div className="pt-6 border-t border-slate-50">
         <button type="submit" className="w-full py-4 bg-indigo-600 hover:bg-indigo-700 text-white rounded-2xl font-bold transition shadow-lg shadow-indigo-100 flex items-center justify-center gap-2">
           <i className="fas fa-save"></i>
-          <span>Save {type}</span>
+          <span>Save {type} Information</span>
         </button>
       </div>
     </form>

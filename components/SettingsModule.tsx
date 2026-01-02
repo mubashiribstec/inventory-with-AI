@@ -30,6 +30,7 @@ const SettingsModule: React.FC<SettingsModuleProps> = ({ settings, onUpdate }) =
     software_logo: settings.software_logo || 'fa-warehouse'
   });
   const [loading, setLoading] = useState(false);
+  const [initLoading, setInitLoading] = useState(false);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -42,6 +43,18 @@ const SettingsModule: React.FC<SettingsModuleProps> = ({ settings, onUpdate }) =
       alert("Error saving settings: " + err);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleInitializeDb = async () => {
+    setInitLoading(true);
+    try {
+      const res = await apiService.initDatabase();
+      alert("Database structure verification complete. Cloud storage is ready.");
+    } catch (e) {
+      alert("Database initialization failed: " + e);
+    } finally {
+      setInitLoading(false);
     }
   };
 
@@ -156,22 +169,40 @@ const SettingsModule: React.FC<SettingsModuleProps> = ({ settings, onUpdate }) =
           </div>
         </form>
 
-        {/* Danger Zone */}
-        <div className="bg-white rounded-[32px] border border-rose-100 shadow-sm overflow-hidden">
-           <div className="p-8 border-b border-rose-50 flex items-center gap-4 bg-rose-50/30">
-              <div className="w-12 h-12 bg-rose-500 rounded-2xl flex items-center justify-center text-white shadow-lg shadow-rose-100">
-                 <i className="fas fa-exclamation-triangle"></i>
+        {/* Maintenance & Data */}
+        <div className="bg-white rounded-[32px] border border-slate-100 shadow-sm overflow-hidden">
+           <div className="p-8 border-b border-slate-50 flex items-center gap-4 bg-slate-50/50">
+              <div className="w-12 h-12 bg-indigo-100 rounded-2xl flex items-center justify-center text-indigo-600 shadow-sm">
+                 <i className="fas fa-database"></i>
               </div>
               <div>
-                 <h3 className="text-xl font-bold text-rose-600 poppins">Danger Zone</h3>
-                 <p className="text-xs text-rose-400 font-bold uppercase tracking-widest">Destructive Actions & Maintenance</p>
+                 <h3 className="text-xl font-bold text-slate-800 poppins">Data Maintenance</h3>
+                 <p className="text-xs text-slate-400 font-bold uppercase tracking-widest">Database Tools & Integrity</p>
               </div>
            </div>
            
            <div className="p-8 space-y-6">
+              <div className="flex flex-col md:flex-row items-center justify-between gap-6 p-6 bg-indigo-50/20 border border-indigo-100 rounded-2xl">
+                 <div className="flex-1">
+                    <h5 className="font-bold text-slate-800">Initialize Cloud Storage</h5>
+                    <p className="text-sm text-slate-500 mt-1 leading-relaxed">
+                       Ensures the required file structure exists in your Google Drive. Use this if your cloud database file was accidentally moved or deleted.
+                    </p>
+                 </div>
+                 <button 
+                   type="button"
+                   onClick={handleInitializeDb}
+                   disabled={initLoading || loading}
+                   className="px-6 py-3 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl font-bold text-xs shadow-lg shadow-indigo-100 transition whitespace-nowrap flex items-center gap-2"
+                 >
+                    {initLoading ? <i className="fas fa-sync animate-spin"></i> : <i className="fas fa-bolt"></i>}
+                    {initLoading ? 'Working...' : 'Run DB Initializer'}
+                 </button>
+              </div>
+
               <div className="flex flex-col md:flex-row items-center justify-between gap-6 p-6 bg-rose-50/20 border border-rose-100 rounded-2xl">
                  <div className="flex-1">
-                    <h5 className="font-bold text-slate-800">Factory Software Reset</h5>
+                    <h5 className="font-bold text-slate-800 text-rose-700">Factory Software Reset</h5>
                     <p className="text-sm text-slate-500 mt-1 leading-relaxed">
                        Wipes all software license data, inventory items, movements, and attendance logs. This action is <b>permanent</b> and cannot be undone.
                     </p>
@@ -179,18 +210,12 @@ const SettingsModule: React.FC<SettingsModuleProps> = ({ settings, onUpdate }) =
                  <button 
                    type="button"
                    onClick={handleFactoryReset}
-                   disabled={loading}
-                   className="px-6 py-3 bg-rose-600 hover:bg-rose-700 text-white rounded-xl font-bold text-xs shadow-lg shadow-rose-100 transition whitespace-nowrap"
+                   disabled={loading || initLoading}
+                   className="px-6 py-3 bg-rose-600 hover:bg-rose-700 text-white rounded-xl font-bold text-xs shadow-lg shadow-rose-100 transition whitespace-nowrap flex items-center gap-2"
                  >
-                    <i className="fas fa-trash-alt mr-2"></i> Reset Software Data
+                    <i className="fas fa-trash-alt"></i>
+                    Reset System Data
                  </button>
-              </div>
-
-              <div className="p-4 bg-amber-50 rounded-2xl border border-amber-100 flex items-start gap-3">
-                 <i className="fas fa-info-circle text-amber-500 mt-0.5"></i>
-                 <p className="text-[11px] text-amber-700 leading-relaxed font-medium">
-                    Performing a reset will logout all active sessions. Ensure you have backups of your data if running in production mode.
-                 </p>
               </div>
            </div>
         </div>

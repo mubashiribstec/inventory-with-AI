@@ -1,153 +1,114 @@
 
 /**
- * SmartStock Pro Enterprise - Google Apps Script Controller
+ * SmartStock Pro Enterprise - Google Drive JSON Controller
+ * This script manages data as a JSON blob stored in a Drive file.
  */
 
-const DB_SHEETS = {
-  ITEMS: 'Items',
-  MOVEMENTS: 'Movements',
-  SUPPLIERS: 'Suppliers',
-  LOCATIONS: 'Locations',
-  LICENSES: 'Licenses',
-  MAINTENANCE: 'Maintenance',
-  CATEGORIES: 'Categories',
-  EMPLOYEES: 'Employees',
-  DEPARTMENTS: 'Departments',
-  BUDGETS: 'Budgets',
-  REQUESTS: 'Requests',
-  USERS: 'Users',
-  SETTINGS: 'Settings',
-  LOGS: 'Logs',
-  ATTENDANCE: 'Attendance',
-  LEAVES: 'Leaves',
-  ROLES: 'Roles',
-  NOTIFICATIONS: 'Notifications'
-};
+const DB_FILE_NAME = "smartstock_db.json";
 
 function doGet(e) {
   return HtmlService.createTemplateFromFile('index')
     .evaluate()
-    .setTitle('SmartStock Pro | Enterprise ERP')
+    .setTitle('SmartStock Pro | Cloud Inventory')
     .addMetaTag('viewport', 'width=device-width, initial-scale=1')
     .setXFrameOptionsMode(HtmlService.XFrameOptionsMode.ALLOWALL);
 }
 
-function setupDatabase() {
-  const ss = SpreadsheetApp.getActiveSpreadsheet();
-  
-  const schema = {
-    [DB_SHEETS.ITEMS]: ['id', 'name', 'category', 'serial', 'status', 'location', 'assignedTo', 'department', 'purchaseDate', 'warranty', 'cost'],
-    [DB_SHEETS.MOVEMENTS]: ['id', 'date', 'item', 'from', 'to', 'employee', 'department', 'status'],
-    [DB_SHEETS.SUPPLIERS]: ['id', 'name', 'contact_person', 'email', 'rating'],
-    [DB_SHEETS.LOCATIONS]: ['id', 'building', 'floor', 'room', 'manager'],
-    [DB_SHEETS.LICENSES]: ['id', 'software_name', 'product_key', 'total_seats', 'assigned_seats', 'expiration_date', 'supplier_id'],
-    [DB_SHEETS.MAINTENANCE]: ['id', 'item_id', 'issue_type', 'description', 'status', 'cost', 'start_date'],
-    [DB_SHEETS.CATEGORIES]: ['id', 'name', 'icon'],
-    [DB_SHEETS.EMPLOYEES]: ['id', 'name', 'email', 'department', 'role', 'joining_date'],
-    [DB_SHEETS.DEPARTMENTS]: ['id', 'name', 'manager'],
-    [DB_SHEETS.BUDGETS]: ['id', 'person_name', 'total_limit', 'spent_amount', 'category', 'notes'],
-    [DB_SHEETS.REQUESTS]: ['id', 'item', 'employee', 'department', 'urgency', 'status', 'request_date', 'notes'],
-    [DB_SHEETS.USERS]: ['id', 'username', 'password', 'role', 'full_name', 'department', 'shift_start_time', 'team_lead_id', 'manager_id'],
-    [DB_SHEETS.SETTINGS]: ['id', 'software_name', 'primary_color', 'software_description', 'software_logo'],
-    [DB_SHEETS.ROLES]: ['id', 'label', 'description', 'permissions', 'color', 'icon'],
-    [DB_SHEETS.ATTENDANCE]: ['id', 'user_id', 'username', 'date', 'check_in', 'check_out', 'status', 'location'],
-    [DB_SHEETS.LEAVES]: ['id', 'user_id', 'username', 'start_date', 'end_date', 'leave_type', 'reason', 'status'],
-    [DB_SHEETS.LOGS]: ['id', 'user_id', 'username', 'action', 'target_type', 'target_id', 'details', 'timestamp'],
-    [DB_SHEETS.NOTIFICATIONS]: ['id', 'recipient_id', 'sender_name', 'message', 'type', 'is_read', 'timestamp']
+/**
+ * Finds or creates the JSON database file in Google Drive
+ */
+function getDbFile() {
+  const files = DriveApp.getFilesByName(DB_FILE_NAME);
+  if (files.hasNext()) {
+    return files.next();
+  }
+  // Create default structure if file doesn't exist
+  const defaultData = {
+    items: [],
+    movements: [],
+    suppliers: [],
+    locations: [],
+    licenses: [],
+    maintenance: [],
+    categories: [],
+    employees: [],
+    departments: [],
+    budgets: [],
+    requests: [],
+    users: [{id: 'U-001', username: 'admin', password: 'admin123', role: 'ADMIN', full_name: 'System Admin', department: 'IT'}],
+    settings: { id: 'GLOBAL', software_name: 'SmartStock Pro', primary_color: 'indigo' },
+    logs: [],
+    attendance: [],
+    leaves: [],
+    roles: [],
+    notifications: []
   };
-
-  Object.keys(schema).forEach(sheetName => {
-    let sheet = ss.getSheetByName(sheetName);
-    if (!sheet) {
-      sheet = ss.insertSheet(sheetName);
-    }
-    sheet.getRange(1, 1, 1, schema[sheetName].length)
-         .setValues([schema[sheetName]])
-         .setFontWeight('bold')
-         .setBackground('#f3f3f3');
-    sheet.setFrozenRows(1);
-  });
-
-  const userSheet = ss.getSheetByName(DB_SHEETS.USERS);
-  if (userSheet.getLastRow() === 1) {
-    userSheet.appendRow(['U-001', 'admin', 'admin123', 'ADMIN', 'System Administrator', 'IT', '09:00', '', '']);
-  }
-
-  const settingsSheet = ss.getSheetByName(DB_SHEETS.SETTINGS);
-  if (settingsSheet.getLastRow() === 1) {
-    settingsSheet.appendRow(['GLOBAL', 'SmartStock Pro', 'indigo', 'Enterprise Resource Planning', 'fa-warehouse']);
-  }
-  
-  return "SmartStock Database initialized.";
+  return DriveApp.createFile(DB_FILE_NAME, JSON.stringify(defaultData), MimeType.PLAIN_TEXT);
 }
 
-function apiUpsert(sheetName, entity) {
-  const ss = SpreadsheetApp.getActiveSpreadsheet();
-  const sheet = ss.getSheetByName(sheetName);
-  if (!sheet) return { success: false, error: 'Sheet not found' };
+/**
+ * Retrieves all data from the Drive JSON file
+ */
+function getAllData() {
+  const file = getDbFile();
+  const content = file.getBlob().getDataAsString();
+  return JSON.parse(content);
+}
 
-  const data = sheet.getDataRange().getValues();
-  const headers = data[0];
-  const idCol = headers.indexOf('id');
+/**
+ * Saves a specific collection to the Drive JSON file
+ */
+function apiUpsert(collectionName, entity) {
+  const data = getAllData();
+  const collection = data[collectionName.toLowerCase()] || [];
   
-  let rowIndex = -1;
-  if (data.length > 1) {
-    for (let i = 1; i < data.length; i++) {
-      if (data[i][idCol].toString() === entity.id.toString()) {
-        rowIndex = i + 1;
-        break;
-      }
-    }
-  }
-
-  const rowData = headers.map(h => entity[h] !== undefined ? entity[h] : '');
+  const index = collection.findIndex(item => item.id.toString() === entity.id.toString());
   
-  if (rowIndex > 0) {
-    sheet.getRange(rowIndex, 1, 1, rowData.length).setValues([rowData]);
+  if (index > -1) {
+    collection[index] = entity;
   } else {
-    sheet.appendRow(rowData);
+    collection.push(entity);
   }
+  
+  data[collectionName.toLowerCase()] = collection;
+  getDbFile().setContent(JSON.stringify(data));
   return { success: true };
 }
 
-function getSheetData(sheetName) {
-  const ss = SpreadsheetApp.getActiveSpreadsheet();
-  const sheet = ss.getSheetByName(sheetName);
-  if (!sheet) return [];
-  
-  const data = sheet.getDataRange().getValues();
-  if (data.length <= 1) return []; 
-  
-  const headers = data.shift();
-  return data.map(row => {
-    const obj = {};
-    headers.forEach((h, i) => {
-      let val = row[i];
-      if (val instanceof Date) val = val.toISOString().split('T')[0];
-      obj[h] = val;
-    });
-    return obj;
-  });
+/**
+ * Replaces the entire cloud database (Bulk Sync)
+ */
+function syncFullDatabase(fullData) {
+  try {
+    getDbFile().setContent(JSON.stringify(fullData));
+    return { success: true, timestamp: new Date().toISOString() };
+  } catch (e) {
+    return { success: false, error: e.toString() };
+  }
 }
 
-function apiDelete(sheetName, id) {
-  const ss = SpreadsheetApp.getActiveSpreadsheet();
-  const sheet = ss.getSheetByName(sheetName);
-  const data = sheet.getDataRange().getValues();
-  const idCol = data[0].indexOf('id');
-  
-  for (let i = 1; i < data.length; i++) {
-    if (data[i][idCol].toString() === id.toString()) {
-      sheet.deleteRow(i + 1);
-      return { success: true };
-    }
-  }
-  return { success: false, error: 'Not found' };
+function getCollection(collectionName) {
+  const data = getAllData();
+  return data[collectionName.toLowerCase()] || [];
+}
+
+function apiDelete(collectionName, id) {
+  const data = getAllData();
+  const collection = data[collectionName.toLowerCase()] || [];
+  const filtered = collection.filter(item => item.id.toString() !== id.toString());
+  data[collectionName.toLowerCase()] = filtered;
+  getDbFile().setContent(JSON.stringify(data));
+  return { success: true };
 }
 
 function apiLogin(username, password) {
-  const users = getSheetData(DB_SHEETS.USERS);
-  const user = users.find(u => u.username === username && u.password === password);
+  const data = getAllData();
+  const user = data.users.find(u => u.username === username && u.password === password);
   if (!user) throw new Error("Invalid credentials");
   return user;
+}
+
+function setupDatabase() {
+  getDbFile(); // Triggers file creation if missing
+  return "SmartStock Drive Storage initialized.";
 }

@@ -1,3 +1,4 @@
+
 import { InventoryItem, Movement, Supplier, LocationRecord, License, MaintenanceLog, Category, Employee, Department, AssetRequest, User, UserRole, AttendanceRecord, LeaveRequest, Role, Notification, UserLog } from './types.ts';
 import { initialItems, initialMovements } from './services/mockData.ts';
 
@@ -109,7 +110,7 @@ export class DatabaseService {
 
   // Leave requests management fallback
   async getLeaveRequests(): Promise<LeaveRequest[]> { return this.getAll<LeaveRequest>('leave_requests'); }
-  async saveLeaveRequest(request: LeaveRequest): Promise<void> { return this.put('leave_requests', request); }
+  async saveLeaveRequest(id: LeaveRequest): Promise<void> { return this.put('leave_requests', id); }
   async deleteLeaveRequest(id: string): Promise<void> { return this.delete('leave_requests', id); }
 
   // Role management fallback
@@ -150,7 +151,8 @@ export class DatabaseService {
   }
   async saveSettings(settings: any): Promise<void> { return this.put('settings', settings); }
 
-  private async getAll<T>(storeName: string): Promise<T[]> {
+  /* Fixed: Changed getAll to public so it can be used for budgets and other dynamic stores in apiService */
+  public async getAll<T>(storeName: string): Promise<T[]> {
     return new Promise((resolve, reject) => {
       if (!this.db) return resolve([]);
       const transaction = this.db.transaction(storeName, 'readonly');
