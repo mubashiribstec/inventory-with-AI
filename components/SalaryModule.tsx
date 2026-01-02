@@ -7,8 +7,8 @@ interface SalaryModuleProps {
 
 const SalaryModule: React.FC<SalaryModuleProps> = ({ employees }) => {
   const calculateSalaryInfo = (emp: Employee) => {
-    const baseSalary = 3000; 
-    const bonusPerYear = 250; 
+    const baseSalary = 30000; // Adjusted for PKR typical base scale
+    const bonusPerYear = 2500; 
     
     if (!emp.joining_date) return { base: baseSalary, bonus: 0, total: baseSalary, tenureYears: 0 };
     
@@ -48,7 +48,7 @@ const SalaryModule: React.FC<SalaryModuleProps> = ({ employees }) => {
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
         <div className="bg-white p-6 rounded-3xl border border-slate-100 shadow-sm">
           <h4 className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">Monthly Payroll</h4>
-          <p className="text-3xl font-bold text-slate-800 poppins">${payrollSummary.totalPayable.toLocaleString()}</p>
+          <p className="text-3xl font-bold text-slate-800 poppins">Rs. {payrollSummary.totalPayable.toLocaleString()}</p>
         </div>
         <div className="bg-white p-6 rounded-3xl border border-slate-100 shadow-sm">
           <h4 className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">Active Staff</h4>
@@ -56,7 +56,7 @@ const SalaryModule: React.FC<SalaryModuleProps> = ({ employees }) => {
         </div>
         <div className="bg-indigo-600 p-6 rounded-3xl shadow-lg shadow-indigo-100 text-white">
           <h4 className="text-[10px] font-bold text-indigo-100 uppercase tracking-widest mb-1">Tenure Bonus Cap</h4>
-          <p className="text-3xl font-bold poppins">$250 <span className="text-sm font-medium opacity-60">/ year</span></p>
+          <p className="text-3xl font-bold poppins">Rs. 2,500 <span className="text-sm font-medium opacity-60">/ year</span></p>
         </div>
       </div>
 
@@ -96,9 +96,9 @@ const SalaryModule: React.FC<SalaryModuleProps> = ({ employees }) => {
                         {emp.salary.tenureYears} Years
                      </span>
                   </td>
-                  <td className="px-6 py-4 text-sm font-medium text-slate-600 text-right">${emp.salary.base.toLocaleString()}</td>
-                  <td className="px-6 py-4 text-sm font-bold text-emerald-600 text-right">+${emp.salary.bonus.toLocaleString()}</td>
-                  <td className="px-6 py-4 text-sm font-black text-slate-800 text-right">${emp.salary.total.toLocaleString()}</td>
+                  <td className="px-6 py-4 text-sm font-medium text-slate-600 text-right">Rs. {emp.salary.base.toLocaleString()}</td>
+                  <td className="px-6 py-4 text-sm font-bold text-emerald-600 text-right">+Rs. {emp.salary.bonus.toLocaleString()}</td>
+                  <td className="px-6 py-4 text-sm font-black text-slate-800 text-right">Rs. {emp.salary.total.toLocaleString()}</td>
                   <td className="px-6 py-4 text-center">
                      <button className="w-8 h-8 rounded-lg bg-slate-50 text-slate-400 hover:bg-indigo-600 hover:text-white transition flex items-center justify-center mx-auto shadow-sm">
                         <i className="fas fa-ellipsis-h"></i>
@@ -116,7 +116,7 @@ const SalaryModule: React.FC<SalaryModuleProps> = ({ employees }) => {
             <i className="fas fa-info-circle"></i>
          </div>
          <p className="text-xs text-amber-800 leading-relaxed">
-            <b>Tenure Calculation Policy:</b> Employees receive a seniority bonus of $250 for every completed year of service starting from their official joining date. This bonus is automatically added to the base salary of $3,000. For custom appraisals, please visit the Employee Profile.
+            <b>Tenure Calculation Policy:</b> Employees receive a seniority bonus of Rs. 2,500 for every completed year of service starting from their official joining date. This bonus is automatically added to the base salary. For custom appraisals, please visit the Employee Profile.
          </p>
       </div>
     </div>

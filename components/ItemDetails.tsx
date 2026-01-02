@@ -1,4 +1,3 @@
-
 import React from 'react';
 import { InventoryItem, ItemStatus } from '../types';
 
@@ -69,7 +68,7 @@ const ItemDetails: React.FC<ItemDetailsProps> = ({ item }) => {
         </div>
         <div>
           <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest block mb-1">Estimated Cost</label>
-          <p className="text-sm font-bold text-slate-700">${item.cost?.toLocaleString() || '0.00'}</p>
+          <p className="text-sm font-bold text-slate-700">Rs. {item.cost?.toLocaleString() || '0.00'}</p>
         </div>
       </div>
 

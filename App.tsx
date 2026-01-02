@@ -231,7 +231,7 @@ const App: React.FC = () => {
       case 'licenses': return !hasPermission('inventory.view') ? null : <LicenseList licenses={licenses} suppliers={suppliers} onUpdate={fetchData} onAdd={() => fetchData()} />;
       case 'categories': return !hasPermission('inventory.view') ? null : <GenericListView title="Asset Categories" icon="fa-tags" items={categories} columns={['id', 'name', 'itemCount']} />;
       case 'employees': return !hasPermission('hr.view') ? null : <GenericListView title="Staff Directory" icon="fa-users" items={employees} columns={['id', 'name', 'email', 'department', 'role', 'joining_date']} onView={(emp) => setViewingEmployee(emp)} onAdd={() => setManagementModal({ isOpen: true, type: 'Employee' })} />;
-      case 'departments': return !hasPermission('hr.view') ? null : <GenericListView title="Departmental Overview" icon="fa-building" items={departments} columns={['id', 'name', 'head']} />;
+      case 'departments': return !hasPermission('hr.view') ? null : <GenericListView title="Departmental Overview" icon="fa-building" items={departments} columns={['id', 'name', 'head']} onAdd={() => setManagementModal({ isOpen: true, type: 'Department' })} />;
       case 'purchase-history': return !hasPermission('inventory.procure') ? null : <GenericListView title="Procurement History" icon="fa-history" items={movements.filter(m => m.status === 'PURCHASED')} columns={['date', 'item', 'from', 'to']} />;
       case 'requests': return <GenericListView title="Asset Requests" icon="fa-clipboard-list" items={requests} columns={['item', 'employee', 'urgency', 'status', 'request_date']} />;
       case 'audit-trail': return !hasPermission('analytics.logs') ? null : <GenericListView title="Movement Ledger" icon="fa-history" items={movements} columns={['date', 'item', 'from', 'to', 'employee', 'department', 'status']} />;
@@ -335,6 +335,7 @@ const App: React.FC = () => {
         <Modal title={`Add ${managementModal.type}`} onClose={() => setManagementModal({ isOpen: false, type: null })}>
           <ManagementForm type={managementModal.type!} onSubmit={async (data) => {
             if (managementModal.type === 'Employee') await apiService.saveEmployee(data);
+            if (managementModal.type === 'Department') await apiService.saveDepartment(data);
             setManagementModal({ isOpen: false, type: null });
             fetchData();
           }} />

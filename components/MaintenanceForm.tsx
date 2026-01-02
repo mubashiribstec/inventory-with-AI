@@ -1,4 +1,3 @@
-
 import React, { useState } from 'react';
 import { InventoryItem, MaintenanceLog } from '../types';
 
@@ -72,7 +71,7 @@ const MaintenanceForm: React.FC<MaintenanceFormProps> = ({ items, onSubmit, init
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
         <div className="space-y-2">
-          <label className="text-xs font-bold text-slate-500 uppercase tracking-wider ml-1">Estimated Cost ($)</label>
+          <label className="text-xs font-bold text-slate-500 uppercase tracking-wider ml-1">Estimated Cost (Rs.)</label>
           <input 
             type="number" 
             className="w-full px-4 py-3 bg-slate-50 border border-slate-100 rounded-xl outline-none focus:ring-2 focus:ring-indigo-500"

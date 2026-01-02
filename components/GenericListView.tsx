@@ -1,4 +1,3 @@
-
 import React from 'react';
 
 interface GenericListViewProps {
@@ -28,13 +27,13 @@ const GenericListView: React.FC<GenericListViewProps> = ({ title, icon, items, c
           onClick={() => onView && onView(item)}
           className={`font-bold text-left transition ${onView ? 'text-indigo-600 hover:text-indigo-800 hover:underline' : 'text-slate-800'}`}
         >
-          ${(Number(val) || 0).toLocaleString()}
+          Rs. {(Number(val) || 0).toLocaleString()}
         </button>
       );
     }
 
     if (col === 'budget' || col === 'cost' || col === 'remaining') {
-      return <span className={`font-bold ${col === 'remaining' && val < 0 ? 'text-rose-600' : 'text-slate-800'}`}>${(Number(val) || 0).toLocaleString()}</span>;
+      return <span className={`font-bold ${col === 'remaining' && val < 0 ? 'text-rose-600' : 'text-slate-800'}`}>Rs. {(Number(val) || 0).toLocaleString()}</span>;
     }
     
     if (col === 'utilization') {

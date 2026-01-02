@@ -1,4 +1,3 @@
-
 import { InventoryItem, Movement, Supplier, LocationRecord, License, MaintenanceLog, Category, Employee, Department, AssetRequest, User, UserRole, AttendanceRecord, LeaveRequest, Role, Notification, UserLog } from './types.ts';
 import { initialItems, initialMovements } from './services/mockData.ts';
 
@@ -100,6 +99,7 @@ export class DatabaseService {
   async getAllCategories(): Promise<Category[]> { return this.getAll<Category>('categories'); }
   async getAllEmployees(): Promise<Employee[]> { return this.getAll<Employee>('employees'); }
   async getAllDepartments(): Promise<Department[]> { return this.getAll<Department>('departments'); }
+  async saveDepartment(dept: Department): Promise<void> { return this.put('departments', dept); }
   async getAllRequests(): Promise<AssetRequest[]> { return this.getAll<AssetRequest>('requests'); }
 
   // Attendance management fallback

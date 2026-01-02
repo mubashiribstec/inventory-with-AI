@@ -80,7 +80,7 @@ const ManagementForm: React.FC<ManagementFormProps> = ({ type, onSubmit, initial
                <p className="text-[10px] text-indigo-400 font-bold uppercase mb-2 tracking-widest">Optional Metadata</p>
                <div className="grid grid-cols-2 gap-4">
                   <div className="space-y-1">
-                    <label className="text-[9px] font-bold text-slate-400 uppercase">Budget Reference ($)</label>
+                    <label className="text-[9px] font-bold text-slate-400 uppercase">Budget Reference (Rs.)</label>
                     <input name="budget" type="number" className="w-full px-3 py-2 bg-white border border-slate-200 rounded-lg text-xs" value={formData.budget || ''} onChange={handleChange} placeholder="0" />
                   </div>
                   <div className="space-y-1">

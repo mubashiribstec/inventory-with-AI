@@ -1,4 +1,3 @@
-
 import React, { useState } from 'react';
 import { ItemStatus, InventoryItem, Supplier, LocationRecord, Department } from '../types';
 
@@ -119,7 +118,7 @@ const PurchaseForm: React.FC<PurchaseFormProps> = ({ onSubmit, suppliers, locati
           </select>
         </div>
         <div className="space-y-2">
-          <label className="text-xs font-bold text-slate-500 uppercase tracking-wider ml-1">Purchase Cost ($)</label>
+          <label className="text-xs font-bold text-slate-500 uppercase tracking-wider ml-1">Purchase Cost (Rs.)</label>
           <input 
             type="number" 
             step="0.01"

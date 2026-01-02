@@ -124,6 +124,8 @@ export const apiService = {
   async getEmployees(): Promise<Employee[]> { return handleRequest<Employee[]>(`${BASE_URL}/employees`, {}, () => dbService.getAllEmployees()); },
   
   async getDepartments(): Promise<Department[]> { return handleRequest<Department[]>(`${BASE_URL}/departments`, {}, () => dbService.getAllDepartments()); },
+  async saveDepartment(dept: Department): Promise<void> { return handleRequest<void>(`${BASE_URL}/departments`, { method: 'POST', body: JSON.stringify(dept) }, () => dbService.saveDepartment(dept)); },
+
   async getAllMaintenance(): Promise<MaintenanceLog[]> { return handleRequest<MaintenanceLog[]>(`${BASE_URL}/maintenance_logs`, {}, () => dbService.getAllMaintenance()); },
   
   async getAllLicenses(): Promise<License[]> { return handleRequest<License[]>(`${BASE_URL}/licenses`, {}, () => dbService.getAllLicenses()); },

@@ -1,4 +1,3 @@
-
 import React from 'react';
 import { MaintenanceLog, InventoryItem } from '../types';
 
@@ -19,7 +18,7 @@ const MaintenanceList: React.FC<MaintenanceProps> = ({ logs, items, onUpdate, on
         </div>
         <div className="bg-white p-6 rounded-2xl border border-slate-100 shadow-sm">
           <h4 className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-1">Total Maintenance Cost</h4>
-          <p className="text-3xl font-bold text-slate-800">${logs.reduce((acc, l) => acc + Number(l.cost), 0).toFixed(2)}</p>
+          <p className="text-3xl font-bold text-slate-800">Rs. {logs.reduce((acc, l) => acc + Number(l.cost), 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
         </div>
         <div className="bg-white p-6 rounded-2xl border border-slate-100 shadow-sm">
           <h4 className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-1">Fixed Assets</h4>
@@ -55,7 +54,7 @@ const MaintenanceList: React.FC<MaintenanceProps> = ({ logs, items, onUpdate, on
                   <td className="px-6 py-4 text-xs font-bold text-slate-800">{log.item_id}</td>
                   <td className="px-6 py-4 text-xs font-medium text-slate-600">{log.issue_type}</td>
                   <td className="px-6 py-4 text-xs text-slate-500 max-w-xs truncate">{log.description}</td>
-                  <td className="px-6 py-4 text-xs font-bold text-slate-700">${Number(log.cost).toFixed(2)}</td>
+                  <td className="px-6 py-4 text-xs font-bold text-slate-700">Rs. {Number(log.cost).toLocaleString()}</td>
                   <td className="px-6 py-4">
                     <span className={`px-2 py-1 rounded-full text-[9px] font-bold uppercase ${
                       log.status === 'FIXED' ? 'bg-emerald-50 text-emerald-600' : 

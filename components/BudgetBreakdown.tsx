@@ -1,4 +1,3 @@
-
 import React from 'react';
 import { Department, InventoryItem } from '../types.ts';
 
@@ -20,7 +19,7 @@ const BudgetBreakdown: React.FC<BudgetBreakdownProps> = ({ department, items }) 
         </div>
         <div className="text-right">
           <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Total Asset Value</p>
-          <p className="text-2xl font-bold text-indigo-600">${totalCost.toLocaleString()}</p>
+          <p className="text-2xl font-bold text-indigo-600">Rs. {totalCost.toLocaleString()}</p>
         </div>
       </div>
 
@@ -56,7 +55,7 @@ const BudgetBreakdown: React.FC<BudgetBreakdownProps> = ({ department, items }) 
                   </div>
                 </div>
                 <div className="text-right">
-                  <p className="text-sm font-bold text-slate-700">${(Number(item.cost) || 0).toLocaleString()}</p>
+                  <p className="text-sm font-bold text-slate-700">Rs. {(Number(item.cost) || 0).toLocaleString()}</p>
                   <p className="text-[9px] font-bold text-slate-400 uppercase tracking-tighter">{item.status.replace('-', ' ')}</p>
                 </div>
               </div>
