@@ -53,7 +53,8 @@ export class DatabaseService {
         password: 'admin123',
         role: UserRole.ADMIN,
         full_name: 'System Administrator',
-        department: 'IT'
+        department: 'IT',
+        is_active: true
       });
 
       // Essential system settings for UI branding
@@ -147,6 +148,7 @@ export class DatabaseService {
   async deleteUser(id: string): Promise<void> { return this.delete('users', id); }
 
   async saveEmployee(employee: Employee): Promise<void> { return this.put('employees', employee); }
+  async deleteEmployee(id: string): Promise<void> { return this.delete('employees', id); }
   async deleteLicense(id: any): Promise<void> { return this.delete('licenses', id); }
 
   async getSettings(): Promise<any> { 

@@ -38,7 +38,7 @@ function createDefaultDbFile() {
     departments: [],
     budgets: [],
     requests: [],
-    users: [{id: 'U-001', username: 'admin', password: 'admin123', role: 'ADMIN', full_name: 'System Admin', department: 'IT'}],
+    users: [{id: 'U-001', username: 'admin', password: 'admin123', role: 'ADMIN', full_name: 'System Admin', department: 'IT', joining_date: '2023-01-01', designation: 'Chief System Admin', is_active: true}],
     settings: [{ id: 'GLOBAL', software_name: 'SmartStock Pro', primary_color: 'indigo', software_description: 'Enterprise Resource Planning', software_logo: 'fa-warehouse' }],
     logs: [],
     attendance: [],
@@ -122,6 +122,7 @@ function apiLogin(username, password) {
   const data = getAllData();
   const user = data.users.find(u => u.username === username && u.password === password);
   if (!user) throw new Error("Invalid credentials");
+  if (user.is_active === false) throw new Error("Account disabled");
   return user;
 }
 

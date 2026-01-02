@@ -114,6 +114,15 @@ const App: React.FC = () => {
     finally { setSyncing(false); }
   };
 
+  const handleDeleteEmployee = async (emp: Employee) => {
+    if (window.confirm(`Are you sure you want to remove ${emp.name} from the staff directory?`)) {
+      try {
+        await apiService.deleteEmployee(emp.id);
+        fetchData();
+      } catch (e) { alert("Error deleting employee: " + e); }
+    }
+  };
+
   const renderContent = () => {
     if (!currentUser) return null;
     switch (activeTab) {
@@ -134,7 +143,7 @@ const App: React.FC = () => {
       case 'locations': return <GenericListView title="Operational Sites" icon="fa-map-marker-alt" items={locations} columns={['id', 'building', 'room', 'manager']} />;
       case 'licenses': return <LicenseList licenses={licenses} suppliers={suppliers} onUpdate={fetchData} onAdd={() => fetchData()} />;
       case 'categories': return <GenericListView title="Asset Categories" icon="fa-tags" items={categories} columns={['id', 'name', 'itemCount']} />;
-      case 'employees': return <GenericListView title="Staff Directory" icon="fa-users" items={employees} columns={['id', 'name', 'email', 'department']} onView={setViewingEmployee} onAdd={() => setManagementModal({ isOpen: true, type: 'Employee' })} />;
+      case 'employees': return <GenericListView title="Staff Directory" icon="fa-users" items={employees} columns={['id', 'name', 'email', 'department', 'is_active']} onView={setViewingEmployee} onAdd={() => setManagementModal({ isOpen: true, type: 'Employee' })} onDelete={handleDeleteEmployee} />;
       case 'departments': return <GenericListView title="Departments & Business Units" icon="fa-building" items={departments} columns={['id', 'name', 'manager']} onAdd={() => setManagementModal({ isOpen: true, type: 'Department' })} />;
       case 'budgets': return <BudgetModule />;
       case 'audit-trail': return <GenericListView title="Movement Ledger" icon="fa-history" items={movements} columns={['date', 'item', 'from', 'to', 'status']} />;

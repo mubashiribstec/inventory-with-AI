@@ -1,5 +1,4 @@
 
-
 export enum ItemStatus {
   PURCHASED = 'purchased',
   ASSIGNED = 'assigned',
@@ -82,6 +81,9 @@ export interface User {
   shift_start_time?: string; 
   team_lead_id?: string;
   manager_id?: string;
+  joining_date?: string;
+  designation?: string;
+  is_active?: boolean;
 }
 
 export interface Employee {
@@ -93,6 +95,7 @@ export interface Employee {
   team_lead_id?: string;
   manager_id?: string;
   joining_date?: string;
+  is_active?: boolean;
 }
 
 export interface UserLog {
@@ -199,7 +202,6 @@ export interface Category {
   itemCount: number;
 }
 
-// Added head property to match database schema used in departmental views
 export interface Department {
   id: string;
   name: string;

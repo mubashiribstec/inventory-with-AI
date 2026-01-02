@@ -1,3 +1,4 @@
+
 import React from 'react';
 
 interface GenericListViewProps {
@@ -13,6 +14,16 @@ interface GenericListViewProps {
 
 const GenericListView: React.FC<GenericListViewProps> = ({ title, icon, items, columns, onAdd, onView, onEdit, onDelete }) => {
   const formatValue = (item: any, col: string, val: any) => {
+    // Handling is_active boolean column
+    if (col === 'is_active') {
+      const active = val !== false;
+      return (
+        <span className={`px-2 py-0.5 rounded-full text-[9px] font-bold uppercase border ${active ? 'bg-emerald-50 text-emerald-600 border-emerald-100' : 'bg-rose-50 text-rose-600 border-rose-100'}`}>
+          {active ? 'Active' : 'Disabled'}
+        </span>
+      );
+    }
+
     // Special handling for audit logs details
     if (col === 'details' && typeof val === 'string') {
         try {

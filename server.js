@@ -1,3 +1,4 @@
+
 const express = require('express');
 const mariadb = require('mariadb');
 const cors = require('cors');
@@ -70,6 +71,9 @@ app.post('/api/login', async (req, res) => {
     const rows = await conn.query('SELECT * FROM users WHERE username = ? AND password = ?', [username, password]);
     if (rows.length > 0) {
       const user = rows[0];
+      if (user.is_active === 0) {
+        return sendJSON(res, { error: 'Account disabled' }, 403);
+      }
       const { password: _, ...userSafe } = user;
       await logAction(user.id, user.username, 'LOGIN', 'USER', user.id, 'User logged in successfully');
       sendJSON(res, userSafe);
@@ -123,7 +127,10 @@ const handleInitDb = async (conn) => {
       department VARCHAR(100) DEFAULT 'Unassigned',
       shift_start_time VARCHAR(5) DEFAULT '09:00',
       team_lead_id VARCHAR(50),
-      manager_id VARCHAR(50)
+      manager_id VARCHAR(50),
+      joining_date DATE,
+      designation VARCHAR(100),
+      is_active BOOLEAN DEFAULT TRUE
     )`,
     `CREATE TABLE IF NOT EXISTS settings (
       id VARCHAR(50) PRIMARY KEY,
@@ -218,7 +225,8 @@ const handleInitDb = async (conn) => {
       role VARCHAR(100),
       joining_date DATE,
       team_lead_id VARCHAR(50),
-      manager_id VARCHAR(50)
+      manager_id VARCHAR(50),
+      is_active BOOLEAN DEFAULT TRUE
     )`,
     `CREATE TABLE IF NOT EXISTS suppliers (
       id INT AUTO_INCREMENT PRIMARY KEY,
@@ -287,7 +295,7 @@ const handleInitDb = async (conn) => {
     await conn.query("REPLACE INTO roles (id, label, description, permissions, color, icon) VALUES (?, ?, ?, ?, ?, ?)", r);
   }
 
-  await conn.query("REPLACE INTO users (id, username, password, role, full_name, shift_start_time, department) VALUES ('U-001', 'admin', 'admin123', 'ADMIN', 'System Administrator', '09:00', 'IT Infrastructure')");
+  await conn.query("REPLACE INTO users (id, username, password, role, full_name, shift_start_time, department, joining_date, designation, is_active) VALUES ('U-001', 'admin', 'admin123', 'ADMIN', 'System Administrator', '09:00', 'IT Infrastructure', '2023-01-01', 'Chief Systems Admin', 1)");
   
   return true;
 };

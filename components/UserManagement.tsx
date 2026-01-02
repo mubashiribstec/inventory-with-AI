@@ -26,7 +26,10 @@ const UserManagement: React.FC<UserManagementProps> = ({ usersOverride }) => {
     department: '',
     shift_start_time: '09:00',
     team_lead_id: '',
-    manager_id: ''
+    manager_id: '',
+    joining_date: new Date().toISOString().split('T')[0],
+    designation: '',
+    is_active: true
   });
 
   const fetchData = async () => {
@@ -69,7 +72,10 @@ const UserManagement: React.FC<UserManagementProps> = ({ usersOverride }) => {
         department: user.department || '',
         shift_start_time: user.shift_start_time || '09:00',
         team_lead_id: user.team_lead_id || '',
-        manager_id: user.manager_id || ''
+        manager_id: user.manager_id || '',
+        joining_date: user.joining_date || new Date().toISOString().split('T')[0],
+        designation: user.designation || '',
+        is_active: user.is_active !== false
       });
     } else {
       setEditingUser(null);
@@ -82,7 +88,10 @@ const UserManagement: React.FC<UserManagementProps> = ({ usersOverride }) => {
         department: departments[0]?.name || '',
         shift_start_time: '09:00',
         team_lead_id: '',
-        manager_id: ''
+        manager_id: '',
+        joining_date: new Date().toISOString().split('T')[0],
+        designation: '',
+        is_active: true
       });
     }
     setIsModalOpen(true);
@@ -101,7 +110,10 @@ const UserManagement: React.FC<UserManagementProps> = ({ usersOverride }) => {
         department: formData.department,
         shift_start_time: formData.shift_start_time,
         team_lead_id: formData.team_lead_id || undefined,
-        manager_id: formData.manager_id || undefined
+        manager_id: formData.manager_id || undefined,
+        joining_date: formData.joining_date,
+        designation: formData.designation || undefined,
+        is_active: formData.is_active
       };
       
       if (formData.password) {
@@ -111,19 +123,19 @@ const UserManagement: React.FC<UserManagementProps> = ({ usersOverride }) => {
       await apiService.saveUser(userToSave);
 
       // Sync to Staff Directory
-      if (!editingUser || formData.email) {
-        const employeeId = editingUser ? `IBS-EMP-${userId}` : `IBS-EMP-${Math.floor(1000 + Math.random() * 9000)}`;
-        const employeeToSave: Employee = {
-          id: employeeId,
-          name: formData.full_name,
-          email: formData.email || '',
-          department: formData.department,
-          role: formData.role.replace('_', ' ').toLowerCase(),
-          team_lead_id: formData.team_lead_id || undefined,
-          manager_id: formData.manager_id || undefined
-        };
-        await apiService.saveEmployee(employeeToSave);
-      }
+      const employeeId = editingUser ? `IBS-EMP-${userId}` : `IBS-EMP-${Math.floor(1000 + Math.random() * 9000)}`;
+      const employeeToSave: Employee = {
+        id: employeeId,
+        name: formData.full_name,
+        email: formData.email || '',
+        department: formData.department,
+        role: formData.designation || formData.role.replace('_', ' ').toLowerCase(),
+        team_lead_id: formData.team_lead_id || undefined,
+        manager_id: formData.manager_id || undefined,
+        joining_date: formData.joining_date,
+        is_active: formData.is_active
+      };
+      await apiService.saveEmployee(employeeToSave);
 
       setIsModalOpen(false);
       fetchData();
@@ -186,7 +198,7 @@ const UserManagement: React.FC<UserManagementProps> = ({ usersOverride }) => {
             <thead>
               <tr className="bg-slate-50 text-slate-500 text-[10px] font-bold uppercase tracking-wider">
                 <th className="px-6 py-5">Full Name</th>
-                <th className="px-6 py-5">Role</th>
+                <th className="px-6 py-5">Role / Designation</th>
                 <th className="px-6 py-5">Department</th>
                 <th className="px-6 py-5">Reporting To</th>
                 <th className="px-6 py-5 text-center">Actions</th>
@@ -196,16 +208,25 @@ const UserManagement: React.FC<UserManagementProps> = ({ usersOverride }) => {
               {filteredUsers.map(u => {
                 const lead = users.find(tl => tl.id === u.team_lead_id);
                 const manager = users.find(m => m.id === u.manager_id);
+                const isActive = u.is_active !== false;
                 return (
-                  <tr key={u.id} className="hover:bg-slate-50 transition">
+                  <tr key={u.id} className={`hover:bg-slate-50 transition ${!isActive ? 'opacity-60 bg-slate-50/50' : ''}`}>
                     <td className="px-6 py-4">
-                        <p className="text-xs font-bold text-slate-800">{u.full_name}</p>
-                        <p className="text-[10px] text-slate-400 font-medium">@{u.username}</p>
+                        <div className="flex items-center gap-2">
+                           {!isActive && <i className="fas fa-user-slash text-rose-400 text-[10px]" title="Disabled"></i>}
+                           <div>
+                              <p className="text-xs font-bold text-slate-800">{u.full_name}</p>
+                              <p className="text-[10px] text-slate-400 font-medium">@{u.username}</p>
+                           </div>
+                        </div>
                     </td>
                     <td className="px-6 py-4">
-                      <span className={`px-2 py-0.5 rounded-lg text-[10px] font-bold uppercase border bg-slate-50 text-slate-500`}>
-                        {u.role.replace('_', ' ')}
-                      </span>
+                      <div className="space-y-1">
+                        <span className={`px-2 py-0.5 rounded-lg text-[10px] font-bold uppercase border bg-slate-50 text-slate-500`}>
+                          {u.role.replace('_', ' ')}
+                        </span>
+                        {u.designation && <p className="text-[10px] font-bold text-indigo-600">{u.designation}</p>}
+                      </div>
                     </td>
                     <td className="px-6 py-4 text-xs font-bold text-slate-700">{u.department}</td>
                     <td className="px-6 py-4">
@@ -261,6 +282,17 @@ const UserManagement: React.FC<UserManagementProps> = ({ usersOverride }) => {
 
               <div className="grid grid-cols-2 gap-5">
                 <div className="space-y-1">
+                  <label className="text-xs font-bold text-slate-500">Designation (Optional)</label>
+                  <input type="text" className="w-full px-4 py-3 bg-slate-50 border border-slate-100 rounded-xl font-bold text-indigo-600" value={formData.designation} onChange={e => setFormData({...formData, designation: e.target.value})} placeholder="e.g. Senior Backend Lead" />
+                </div>
+                <div className="space-y-1">
+                  <label className="text-xs font-bold text-slate-500">Joining Date</label>
+                  <input required type="date" className="w-full px-4 py-3 bg-slate-50 border border-slate-100 rounded-xl font-bold" value={formData.joining_date} onChange={e => setFormData({...formData, joining_date: e.target.value})} />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-5">
+                <div className="space-y-1">
                     <label className="text-xs font-bold text-slate-500">System Role</label>
                     <select className="w-full px-4 py-3 bg-slate-50 border border-slate-100 rounded-xl font-bold" value={formData.role} onChange={e => setFormData({...formData, role: e.target.value as any})}>
                         <option value={UserRole.STAFF}>STAFF</option>
@@ -273,6 +305,23 @@ const UserManagement: React.FC<UserManagementProps> = ({ usersOverride }) => {
                   <label className="text-xs font-bold text-slate-500">Shift Start Time</label>
                   <input required type="time" className="w-full px-4 py-3 bg-slate-50 border border-slate-100 rounded-xl font-bold" value={formData.shift_start_time} onChange={e => setFormData({...formData, shift_start_time: e.target.value})} />
                 </div>
+              </div>
+
+              <div className="p-6 bg-slate-50 rounded-2xl border border-slate-100 flex items-center justify-between">
+                  <div>
+                    <p className="text-xs font-bold text-slate-700">Account Authorization Status</p>
+                    <p className="text-[10px] text-slate-400 font-medium">Disable account to prevent system login</p>
+                  </div>
+                  <label className="relative inline-flex items-center cursor-pointer">
+                    <input 
+                      type="checkbox" 
+                      className="sr-only peer" 
+                      checked={formData.is_active} 
+                      onChange={e => setFormData({...formData, is_active: e.target.checked})}
+                      disabled={formData.username === 'admin'}
+                    />
+                    <div className="w-11 h-6 bg-slate-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full rtl:peer-checked:after:-translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:start-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-emerald-500"></div>
+                  </label>
               </div>
 
               <div className="bg-indigo-50/50 p-6 rounded-2xl border border-indigo-100 space-y-4">

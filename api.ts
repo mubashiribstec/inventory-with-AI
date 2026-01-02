@@ -25,7 +25,11 @@ export const apiService = {
     if (isGAS) return gasRequest<User>('apiLogin', username, password);
     const users = await dbService.getUsers();
     const user = users.find(u => u.username === username && u.password === password);
-    if (user) return user;
+    
+    if (user) {
+      if (user.is_active === false) throw new Error("Account is disabled. Contact administrator.");
+      return user;
+    }
     throw new Error("Invalid Credentials");
   },
 
@@ -92,6 +96,7 @@ export const apiService = {
   
   async getEmployees(): Promise<Employee[]> { return isGAS ? gasRequest('getCollection', 'Employees') : dbService.getAllEmployees(); },
   async saveEmployee(e: Employee) { if (isGAS) await gasRequest('apiUpsert', 'Employees', e); return dbService.saveEmployee(e); },
+  async deleteEmployee(id: string) { if (isGAS) await gasRequest('apiDelete', 'Employees', id); return dbService.deleteEmployee(id); },
 
   async getCategories(): Promise<Category[]> { return isGAS ? gasRequest('getCollection', 'Categories') : dbService.getAllCategories(); },
   async getAllMovements(): Promise<Movement[]> { return isGAS ? gasRequest('getCollection', 'Movements') : dbService.getAllMovements(); },
