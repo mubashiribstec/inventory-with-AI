@@ -1,4 +1,5 @@
-import { InventoryItem, Movement, Supplier, LocationRecord, MaintenanceLog, License, Category, Employee, Department, AssetRequest, User, UserLog, AttendanceRecord, LeaveRequest, Role, Notification, SystemSettings } from './types.ts';
+
+import { InventoryItem, Movement, Supplier, LocationRecord, MaintenanceLog, License, Category, Employee, Department, PersonalBudget, AssetRequest, User, UserLog, AttendanceRecord, LeaveRequest, Role, Notification, SystemSettings } from './types.ts';
 import { dbService } from './db.ts';
 
 declare var google: any;
@@ -20,15 +21,11 @@ const gasRequest = <T>(funcName: string, ...args: any[]): Promise<T> => {
   });
 };
 
-/**
- * Handle requests with deep fallback to IndexedDB if server is offline
- */
 const handleRequest = async <T>(url: string, options: RequestInit = {}, fallbackAction?: () => Promise<T>): Promise<T> => {
   if (isGAS) {
     const parts = url.split('/');
     const endpoint = parts[parts.length - 1];
     
-    // Custom Handlers for Special Endpoints
     if (url.includes('/login')) return gasRequest<T>('apiLogin', JSON.parse(options.body as string).username, JSON.parse(options.body as string).password);
     if (url.includes('/init-db')) return gasRequest<T>('setupDatabase');
     if (url.includes('/factory-reset')) return gasRequest<T>('apiFactoryReset');
@@ -54,118 +51,67 @@ const handleRequest = async <T>(url: string, options: RequestInit = {}, fallback
   };
 
   try {
-    const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 2000); // Fail fast for local testing
-    
-    const res = await fetch(url, { ...options, headers, signal: controller.signal });
-    clearTimeout(timeoutId);
-
+    const res = await fetch(url, { ...options, headers });
     if (!res.ok) {
       if (fallbackAction) return await fallbackAction();
       throw new Error(`Server Error (${res.status})`);
     }
     return await res.json();
   } catch (e) {
-    // Detect server downtime (Failed to fetch)
-    if (fallbackAction) {
-      console.warn(`[API] Server offline at ${url}. Falling back to local data.`);
-      return await fallbackAction();
-    }
-    throw new Error(`Backend Unreachable. Use Demo Mode.`);
+    if (fallbackAction) return await fallbackAction();
+    throw new Error(`Backend Unreachable.`);
   }
 };
 
 export const apiService = {
-  async login(username, password): Promise<User> {
-    return handleRequest<User>(`${BASE_URL}/login`, {
-      method: 'POST',
-      body: JSON.stringify({ username, password })
-    }, async () => {
-      // Local Mock Login
-      await dbService.init();
-      const users = await dbService.getUsers();
-      const user = users.find(u => u.username === username && u.password === password);
-      if (user) return user;
-      throw new Error("Invalid credentials or database empty.");
-    });
-  },
-
-  async initDatabase(): Promise<{ success: boolean; message: string }> {
-    return handleRequest<{ success: boolean; message: string }>(`${BASE_URL}/init-db`, { method: 'POST' }, async () => {
-      await dbService.init();
-      return { success: true, message: "Local IndexedDB ready." };
-    });
-  },
-
-  async factoryReset(): Promise<void> {
-    try {
-      // Attempt to clear backend data first
-      await handleRequest<void>(`${BASE_URL}/factory-reset`, { method: 'POST' }, async () => {
-        console.log("Local Reset Mode Triggered");
-      });
-    } catch (e) {
-      console.error("Backend reset failed, proceeding with local wipe only", e);
-    }
-    // Wipe local cache regardless
-    await dbService.clearAllData();
-  },
-
+  async login(username, password): Promise<User> { return handleRequest<User>(`${BASE_URL}/login`, { method: 'POST', body: JSON.stringify({ username, password }) }, async () => { await dbService.init(); const users = await dbService.getUsers(); const user = users.find(u => u.username === username && u.password === password); if (user) return user; throw new Error("Auth failed."); }); },
+  async initDatabase() { return handleRequest<any>(`${BASE_URL}/init-db`, { method: 'POST' }); },
+  async factoryReset() { return handleRequest<any>(`${BASE_URL}/factory-reset`, { method: 'POST' }, () => dbService.clearAllData()); },
   async getSettings(): Promise<SystemSettings> { return handleRequest<SystemSettings>(`${BASE_URL}/settings`, {}, () => dbService.getSettings()); },
-  
-  async updateSettings(settings: SystemSettings): Promise<void> { return handleRequest<void>(`${BASE_URL}/settings`, { method: 'POST', body: JSON.stringify(settings) }, () => dbService.saveSettings(settings)); },
+  async updateSettings(s: SystemSettings) { return handleRequest<void>(`${BASE_URL}/settings`, { method: 'POST', body: JSON.stringify(s) }, () => dbService.saveSettings(s)); },
   
   async getAllItems(): Promise<InventoryItem[]> { return handleRequest<InventoryItem[]>(`${BASE_URL}/items`, {}, () => dbService.getAllItems()); },
-  async saveItem(item: InventoryItem): Promise<void> { return handleRequest<void>(`${BASE_URL}/items`, { method: 'POST', body: JSON.stringify(item) }, () => dbService.saveItem(item)); },
-  async deleteItem(id: string): Promise<void> { return handleRequest<void>(`${BASE_URL}/items/${id}`, { method: 'DELETE' }, () => dbService.deleteItem(id)); },
-
-  async getCategories(): Promise<Category[]> { return handleRequest<Category[]>(`${BASE_URL}/categories`, {}, () => dbService.getAllCategories()); },
-  
-  async saveEmployee(employee: Employee): Promise<void> { return handleRequest<void>(`${BASE_URL}/employees`, { method: 'POST', body: JSON.stringify(employee) }, () => dbService.saveEmployee(employee)); },
-  async getEmployees(): Promise<Employee[]> { return handleRequest<Employee[]>(`${BASE_URL}/employees`, {}, () => dbService.getAllEmployees()); },
+  async saveItem(item: InventoryItem) { return handleRequest<void>(`${BASE_URL}/items`, { method: 'POST', body: JSON.stringify(item) }, () => dbService.saveItem(item)); },
+  async deleteItem(id: string) { return handleRequest<void>(`${BASE_URL}/items/${id}`, { method: 'DELETE' }, () => dbService.deleteItem(id)); },
   
   async getDepartments(): Promise<Department[]> { return handleRequest<Department[]>(`${BASE_URL}/departments`, {}, () => dbService.getAllDepartments()); },
-  async saveDepartment(dept: Department): Promise<void> { return handleRequest<void>(`${BASE_URL}/departments`, { method: 'POST', body: JSON.stringify(dept) }, () => dbService.saveDepartment(dept)); },
+  async saveDepartment(d: Department) { return handleRequest<void>(`${BASE_URL}/departments`, { method: 'POST', body: JSON.stringify(d) }, () => dbService.saveDepartment(d)); },
+  
+  async getBudgets(): Promise<PersonalBudget[]> { return handleRequest<PersonalBudget[]>(`${BASE_URL}/budgets`, {}, () => dbService.put('budgets', []).then(() => [])); },
+  async saveBudget(b: PersonalBudget) { return handleRequest<void>(`${BASE_URL}/budgets`, { method: 'POST', body: JSON.stringify(b) }, () => dbService.put('budgets', b)); },
 
-  async getAllMaintenance(): Promise<MaintenanceLog[]> { return handleRequest<MaintenanceLog[]>(`${BASE_URL}/maintenance_logs`, {}, () => dbService.getAllMaintenance()); },
-  
-  async getAllLicenses(): Promise<License[]> { return handleRequest<License[]>(`${BASE_URL}/licenses`, {}, () => dbService.getAllLicenses()); },
-  
-  async deleteLicense(id: any): Promise<void> { return handleRequest<void>(`${BASE_URL}/licenses/${id}`, { method: 'DELETE' }, () => dbService.deleteLicense(id)); },
-  
-  async getAllRequests(): Promise<AssetRequest[]> { return handleRequest<AssetRequest[]>(`${BASE_URL}/requests`, {}, () => dbService.getAllRequests()); },
+  async getEmployees(): Promise<Employee[]> { return handleRequest<Employee[]>(`${BASE_URL}/employees`, {}, () => dbService.getAllEmployees()); },
+  async saveEmployee(e: Employee) { return handleRequest<void>(`${BASE_URL}/employees`, { method: 'POST', body: JSON.stringify(e) }, () => dbService.saveEmployee(e)); },
+
+  async getCategories(): Promise<Category[]> { return handleRequest<Category[]>(`${BASE_URL}/categories`, {}, () => dbService.getAllCategories()); },
   async getAllMovements(): Promise<Movement[]> { return handleRequest<Movement[]>(`${BASE_URL}/movements`, {}, () => dbService.getAllMovements()); },
   async getAllSuppliers(): Promise<Supplier[]> { return handleRequest<Supplier[]>(`${BASE_URL}/suppliers`, {}, () => dbService.getAllSuppliers()); },
   async getAllLocations(): Promise<LocationRecord[]> { return handleRequest<LocationRecord[]>(`${BASE_URL}/locations`, {}, () => dbService.getAllLocations()); },
-  
+  async getAllMaintenance(): Promise<MaintenanceLog[]> { return handleRequest<MaintenanceLog[]>(`${BASE_URL}/maintenance`, {}, () => dbService.getAllMaintenance()); },
+  async getAllLicenses(): Promise<License[]> { return handleRequest<License[]>(`${BASE_URL}/licenses`, {}, () => dbService.getAllLicenses()); },
+  async deleteLicense(id: any) { return handleRequest<void>(`${BASE_URL}/licenses/${id}`, { method: 'DELETE' }, () => dbService.deleteLicense(id)); },
+  async getAllRequests(): Promise<AssetRequest[]> { return handleRequest<AssetRequest[]>(`${BASE_URL}/requests`, {}, () => dbService.getAllRequests()); },
   async getUsers(): Promise<User[]> { return handleRequest<User[]>(`${BASE_URL}/users`, {}, () => dbService.getUsers()); },
-  
-  async saveUser(user: User): Promise<void> { return handleRequest<void>(`${BASE_URL}/users`, { method: 'POST', body: JSON.stringify(user) }, () => dbService.saveUser(user)); },
-  async deleteUser(id: string): Promise<void> { return handleRequest<void>(`${BASE_URL}/users/${id}`, { method: 'DELETE' }, () => dbService.deleteUser(id)); },
-  
+  async saveUser(u: User) { return handleRequest<void>(`${BASE_URL}/users`, { method: 'POST', body: JSON.stringify(u) }, () => dbService.saveUser(u)); },
+  async deleteUser(id: string) { return handleRequest<void>(`${BASE_URL}/users/${id}`, { method: 'DELETE' }, () => dbService.deleteUser(id)); },
   async getRoles(): Promise<Role[]> { return handleRequest<Role[]>(`${BASE_URL}/roles`, {}, () => dbService.getRoles()); },
-  
-  async getNotifications(userId: string): Promise<Notification[]> { return handleRequest<Notification[]>(`${BASE_URL}/notifications/${userId}`, {}, () => dbService.getNotifications(userId)); },
-  
-  async createNotification(notif: Partial<Notification>): Promise<void> { return handleRequest<void>(`${BASE_URL}/notifications`, { method: 'POST', body: JSON.stringify(notif) }, () => dbService.saveNotification(notif)); },
-  async markNotificationsAsRead(ids: number[]): Promise<void> { 
-    return handleRequest<void>(`${BASE_URL}/notifications/read`, { method: 'POST', body: JSON.stringify({ ids }) }, async () => {
-      for (const id of ids) {
-        const n = await dbService.getNotification(id);
-        if (n) await dbService.saveNotification({ ...n, is_read: true });
-      }
-    }); 
-  },
-  
+  async getNotifications(uid: string): Promise<Notification[]> { return handleRequest<Notification[]>(`${BASE_URL}/notifications/${uid}`, {}, () => dbService.getNotifications(uid)); },
+  async createNotification(n: Partial<Notification>) { return handleRequest<void>(`${BASE_URL}/notifications`, { method: 'POST', body: JSON.stringify(n) }, () => dbService.saveNotification(n)); },
+  async markNotificationsAsRead(ids: number[]) { return handleRequest<void>(`${BASE_URL}/notifications/read`, { method: 'POST', body: JSON.stringify({ ids }) }); },
   async getSystemLogs(): Promise<UserLog[]> { return handleRequest<UserLog[]>(`${BASE_URL}/system-logs`, {}, () => dbService.getSystemLogs()); },
-
   async getAttendance(): Promise<AttendanceRecord[]> { return handleRequest<AttendanceRecord[]>(`${BASE_URL}/attendance`, {}, () => dbService.getAttendance()); },
-  async saveAttendance(record: AttendanceRecord): Promise<void> { return handleRequest<void>(`${BASE_URL}/attendance`, { method: 'POST', body: JSON.stringify(record) }, () => dbService.saveAttendance(record)); },
-  async deleteAttendance(id: string): Promise<void> { return handleRequest<void>(`${BASE_URL}/attendance/${id}`, { method: 'DELETE' }, () => dbService.deleteAttendance(id)); },
-  
-  async getLeaveRequests(): Promise<LeaveRequest[]> { return handleRequest<LeaveRequest[]>(`${BASE_URL}/leave_requests`, {}, () => dbService.getLeaveRequests()); },
-  async saveLeaveRequest(request: LeaveRequest): Promise<void> { return handleRequest<void>(` ${BASE_URL}/leave_requests`, { method: 'POST', body: JSON.stringify(request) }, () => dbService.saveLeaveRequest(request)); },
-  async deleteLeaveRequest(id: string): Promise<void> { return handleRequest<void>(`${BASE_URL}/leave_requests/${id}`, { method: 'DELETE' }, () => dbService.deleteLeaveRequest(id)); },
+  async saveAttendance(r: AttendanceRecord) { return handleRequest<void>(`${BASE_URL}/attendance`, { method: 'POST', body: JSON.stringify(r) }, () => dbService.saveAttendance(r)); },
+  async deleteAttendance(id: string) { return handleRequest<void>(`${BASE_URL}/attendance/${id}`, { method: 'DELETE' }, () => dbService.deleteAttendance(id)); },
+  async getLeaveRequests(): Promise<LeaveRequest[]> { return handleRequest<LeaveRequest[]>(`${BASE_URL}/leaves`, {}, () => dbService.getLeaveRequests()); },
+  async saveLeaveRequest(l: LeaveRequest) { return handleRequest<void>(`${BASE_URL}/leaves`, { method: 'POST', body: JSON.stringify(l) }, () => dbService.saveLeaveRequest(l)); },
+  async deleteLeaveRequest(id: string) { return handleRequest<void>(`${BASE_URL}/leaves/${id}`, { method: 'DELETE' }, () => dbService.deleteLeaveRequest(id)); },
 
-  async genericSave(tableName: string, data: any): Promise<void> { return handleRequest<void>(`${BASE_URL}/${tableName}`, { method: 'POST', body: JSON.stringify(data) }, () => dbService.put(tableName, data)); },
-  async genericDelete(tableName: string, id: any): Promise<void> { return handleRequest<void>(`${BASE_URL}/${tableName}/${id}`, { method: 'DELETE' }, () => dbService.delete(tableName, id)); }
+  // Added generic persistence helper for dynamic tables
+  async genericSave(tableName: string, data: any) { 
+    return handleRequest<void>(`${BASE_URL}/${tableName}`, { method: 'POST', body: JSON.stringify(data) }, () => dbService.put(tableName, data)); 
+  },
+  // Added generic deletion helper for dynamic tables
+  async genericDelete(tableName: string, id: string) { 
+    return handleRequest<void>(`${BASE_URL}/${tableName}/${id}`, { method: 'DELETE' }, () => dbService.delete(tableName, id)); 
+  }
 };

@@ -1,6 +1,6 @@
+
 /**
  * SmartStock Pro Enterprise - Google Apps Script Controller
- * Backend logic for Google Sheets deployment.
  */
 
 const DB_SHEETS = {
@@ -13,6 +13,7 @@ const DB_SHEETS = {
   CATEGORIES: 'Categories',
   EMPLOYEES: 'Employees',
   DEPARTMENTS: 'Departments',
+  BUDGETS: 'Budgets',
   REQUESTS: 'Requests',
   USERS: 'Users',
   SETTINGS: 'Settings',
@@ -20,31 +21,17 @@ const DB_SHEETS = {
   ATTENDANCE: 'Attendance',
   LEAVES: 'Leaves',
   ROLES: 'Roles',
-  NOTIFICATIONS: 'Notifications',
-  SALARIES: 'Salaries'
+  NOTIFICATIONS: 'Notifications'
 };
 
-/**
- * Serves the React Web App
- */
 function doGet(e) {
   return HtmlService.createTemplateFromFile('index')
     .evaluate()
-    .setTitle('SmartStock Pro | Enterprise Inventory')
+    .setTitle('SmartStock Pro | Enterprise ERP')
     .addMetaTag('viewport', 'width=device-width, initial-scale=1')
     .setXFrameOptionsMode(HtmlService.XFrameOptionsMode.ALLOWALL);
 }
 
-/**
- * Utility to include HTML/JS files in the template
- */
-function include(filename) {
-  return HtmlService.createHtmlOutputFromFile(filename).getContent();
-}
-
-/**
- * Initializes the Spreadsheet Database Structure
- */
 function setupDatabase() {
   const ss = SpreadsheetApp.getActiveSpreadsheet();
   
@@ -57,8 +44,8 @@ function setupDatabase() {
     [DB_SHEETS.MAINTENANCE]: ['id', 'item_id', 'issue_type', 'description', 'status', 'cost', 'start_date'],
     [DB_SHEETS.CATEGORIES]: ['id', 'name', 'icon'],
     [DB_SHEETS.EMPLOYEES]: ['id', 'name', 'email', 'department', 'role', 'joining_date'],
-    [DB_SHEETS.SALARIES]: ['id', 'employee_id', 'base_salary', 'tenure_bonus', 'total_payable', 'status', 'month'],
-    [DB_SHEETS.DEPARTMENTS]: ['id', 'name', 'head', 'budget', 'budget_month'],
+    [DB_SHEETS.DEPARTMENTS]: ['id', 'name', 'manager'],
+    [DB_SHEETS.BUDGETS]: ['id', 'person_name', 'total_limit', 'spent_amount', 'category', 'notes'],
     [DB_SHEETS.REQUESTS]: ['id', 'item', 'employee', 'department', 'urgency', 'status', 'request_date', 'notes'],
     [DB_SHEETS.USERS]: ['id', 'username', 'password', 'role', 'full_name', 'department', 'shift_start_time', 'team_lead_id', 'manager_id'],
     [DB_SHEETS.SETTINGS]: ['id', 'software_name', 'primary_color', 'software_description', 'software_logo'],
@@ -81,89 +68,35 @@ function setupDatabase() {
     sheet.setFrozenRows(1);
   });
 
-  // Seed default admin if missing
   const userSheet = ss.getSheetByName(DB_SHEETS.USERS);
   if (userSheet.getLastRow() === 1) {
     userSheet.appendRow(['U-001', 'admin', 'admin123', 'ADMIN', 'System Administrator', 'IT', '09:00', '', '']);
   }
 
-  // Seed default settings if missing
   const settingsSheet = ss.getSheetByName(DB_SHEETS.SETTINGS);
   if (settingsSheet.getLastRow() === 1) {
     settingsSheet.appendRow(['GLOBAL', 'SmartStock Pro', 'indigo', 'Enterprise Resource Planning', 'fa-warehouse']);
   }
   
-  return "SmartStock Database initialized with all " + Object.keys(schema).length + " tables.";
+  return "SmartStock Database initialized.";
 }
 
-/**
- * Deep Reset - Wipes all sheets and re-initializes
- */
-function apiFactoryReset() {
-  const ss = SpreadsheetApp.getActiveSpreadsheet();
-  const sheets = ss.getSheets();
-  
-  sheets.forEach(sheet => {
-    const lastRow = sheet.getLastRow();
-    if (lastRow > 1) {
-      sheet.deleteRows(2, lastRow - 1);
-    }
-  });
-  
-  return setupDatabase();
-}
-
-/**
- * Authentication Logic
- */
-function apiLogin(username, password) {
-  const users = getSheetData(DB_SHEETS.USERS);
-  const user = users.find(u => u.username === username && u.password === password);
-  if (!user) throw new Error("Invalid credentials");
-  
-  const { password: _, ...safeUser } = user;
-  logAction(user.id, user.username, 'LOGIN', 'USER', user.id, { message: 'Web app login successful' });
-  return safeUser;
-}
-
-/**
- * Generic Read Data
- */
-function getSheetData(sheetName) {
-  const ss = SpreadsheetApp.getActiveSpreadsheet();
-  const sheet = ss.getSheetByName(sheetName);
-  if (!sheet) return [];
-  
-  const data = sheet.getDataRange().getValues();
-  if (data.length <= 1) return []; 
-  
-  const headers = data.shift();
-  return data.map(row => {
-    const obj = {};
-    headers.forEach((h, i) => {
-      let val = row[i];
-      if (val instanceof Date) val = val.toISOString();
-      obj[h] = val;
-    });
-    return obj;
-  });
-}
-
-/**
- * Generic Upsert (Update or Insert)
- */
 function apiUpsert(sheetName, entity) {
   const ss = SpreadsheetApp.getActiveSpreadsheet();
   const sheet = ss.getSheetByName(sheetName);
+  if (!sheet) return { success: false, error: 'Sheet not found' };
+
   const data = sheet.getDataRange().getValues();
   const headers = data[0];
   const idCol = headers.indexOf('id');
   
   let rowIndex = -1;
-  for (let i = 1; i < data.length; i++) {
-    if (data[i][idCol].toString() === entity.id.toString()) {
-      rowIndex = i + 1;
-      break;
+  if (data.length > 1) {
+    for (let i = 1; i < data.length; i++) {
+      if (data[i][idCol].toString() === entity.id.toString()) {
+        rowIndex = i + 1;
+        break;
+      }
     }
   }
 
@@ -177,9 +110,26 @@ function apiUpsert(sheetName, entity) {
   return { success: true };
 }
 
-/**
- * Generic Delete
- */
+function getSheetData(sheetName) {
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const sheet = ss.getSheetByName(sheetName);
+  if (!sheet) return [];
+  
+  const data = sheet.getDataRange().getValues();
+  if (data.length <= 1) return []; 
+  
+  const headers = data.shift();
+  return data.map(row => {
+    const obj = {};
+    headers.forEach((h, i) => {
+      let val = row[i];
+      if (val instanceof Date) val = val.toISOString().split('T')[0];
+      obj[h] = val;
+    });
+    return obj;
+  });
+}
+
 function apiDelete(sheetName, id) {
   const ss = SpreadsheetApp.getActiveSpreadsheet();
   const sheet = ss.getSheetByName(sheetName);
@@ -195,19 +145,9 @@ function apiDelete(sheetName, id) {
   return { success: false, error: 'Not found' };
 }
 
-/**
- * System Audit Logging
- */
-function logAction(userId, username, action, targetType, targetId, details) {
-  const sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(DB_SHEETS.LOGS);
-  sheet.appendRow([
-    Date.now(), 
-    userId, 
-    username, 
-    action, 
-    targetType, 
-    targetId, 
-    JSON.stringify(details), 
-    new Date().toISOString()
-  ]);
+function apiLogin(username, password) {
+  const users = getSheetData(DB_SHEETS.USERS);
+  const user = users.find(u => u.username === username && u.password === password);
+  if (!user) throw new Error("Invalid credentials");
+  return user;
 }

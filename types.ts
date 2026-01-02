@@ -1,4 +1,5 @@
 
+
 export enum ItemStatus {
   PURCHASED = 'purchased',
   ASSIGNED = 'assigned',
@@ -92,16 +93,6 @@ export interface Employee {
   team_lead_id?: string;
   manager_id?: string;
   joining_date?: string;
-}
-
-export interface SalaryRecord {
-  id: string;
-  employee_id: string;
-  base_salary: number;
-  tenure_bonus: number;
-  total_payable: number;
-  status: 'DRAFT' | 'PAID' | 'PENDING';
-  month: string;
 }
 
 export interface UserLog {
@@ -208,16 +199,21 @@ export interface Category {
   itemCount: number;
 }
 
+// Added head property to match database schema used in departmental views
 export interface Department {
   id: string;
   name: string;
-  head: string;
-  budget: number;
-  spent: number;
-  budget_month?: string;
-  remaining?: number;
-  utilization?: number;
-  budget_status?: string;
+  manager: string;
+  head?: string;
+}
+
+export interface PersonalBudget {
+  id: string;
+  person_name: string;
+  total_limit: number;
+  spent_amount: number;
+  category: string;
+  notes?: string;
 }
 
 export interface AssetRequest {

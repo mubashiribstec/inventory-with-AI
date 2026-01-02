@@ -1,3 +1,4 @@
+
 import React, { useState } from 'react';
 
 interface ManagementFormProps {
@@ -8,8 +9,8 @@ interface ManagementFormProps {
 
 const ManagementForm: React.FC<ManagementFormProps> = ({ type, onSubmit, initialData }) => {
   const [formData, setFormData] = useState(initialData || {
-    budget_month: new Date().toISOString().substring(0, 7), 
-    budget: 0,
+    name: '',
+    manager: '',
     joining_date: new Date().toISOString().split('T')[0]
   });
 
@@ -59,10 +60,6 @@ const ManagementForm: React.FC<ManagementFormProps> = ({ type, onSubmit, initial
                 <input name="role" type="text" className="w-full px-4 py-3 bg-slate-50 border border-slate-100 rounded-xl outline-none focus:ring-2 focus:ring-indigo-500" value={formData.role || ''} onChange={handleChange} placeholder="Engineer" />
               </div>
             </div>
-            <div className="space-y-2">
-              <label className="text-xs font-bold text-slate-500 uppercase tracking-wider ml-1">Joining Date</label>
-              <input name="joining_date" type="date" required className="w-full px-4 py-3 bg-slate-50 border border-slate-100 rounded-xl outline-none focus:ring-2 focus:ring-indigo-500 font-bold" value={formData.joining_date || ''} onChange={handleChange} />
-            </div>
           </>
         )}
 
@@ -73,21 +70,8 @@ const ManagementForm: React.FC<ManagementFormProps> = ({ type, onSubmit, initial
               <input name="name" type="text" required className="w-full px-4 py-3 bg-slate-50 border border-slate-100 rounded-xl outline-none focus:ring-2 focus:ring-indigo-500 font-bold" value={formData.name || ''} onChange={handleChange} placeholder="e.g. Operations" />
             </div>
             <div className="space-y-2">
-              <label className="text-xs font-bold text-slate-500 uppercase tracking-wider ml-1">Department Head / Manager</label>
-              <input name="head" type="text" className="w-full px-4 py-3 bg-slate-50 border border-slate-100 rounded-xl outline-none focus:ring-2 focus:ring-indigo-500" value={formData.head || ''} onChange={handleChange} placeholder="Jane Smith" />
-            </div>
-            <div className="p-4 bg-indigo-50 rounded-2xl border border-indigo-100">
-               <p className="text-[10px] text-indigo-400 font-bold uppercase mb-2 tracking-widest">Optional Metadata</p>
-               <div className="grid grid-cols-2 gap-4">
-                  <div className="space-y-1">
-                    <label className="text-[9px] font-bold text-slate-400 uppercase">Budget Reference (Rs.)</label>
-                    <input name="budget" type="number" className="w-full px-3 py-2 bg-white border border-slate-200 rounded-lg text-xs" value={formData.budget || ''} onChange={handleChange} placeholder="0" />
-                  </div>
-                  <div className="space-y-1">
-                    <label className="text-[9px] font-bold text-slate-400 uppercase">Tracking Month</label>
-                    <input name="budget_month" type="month" className="w-full px-3 py-2 bg-white border border-slate-200 rounded-lg text-xs" value={formData.budget_month || ''} onChange={handleChange} />
-                  </div>
-               </div>
+              <label className="text-xs font-bold text-slate-500 uppercase tracking-wider ml-1">Department Manager</label>
+              <input name="manager" type="text" required className="w-full px-4 py-3 bg-slate-50 border border-slate-100 rounded-xl outline-none focus:ring-2 focus:ring-indigo-500" value={formData.manager || ''} onChange={handleChange} placeholder="Enter Manager Name" />
             </div>
           </>
         )}

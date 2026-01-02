@@ -8,7 +8,6 @@ import SupplierList from './components/SupplierList.tsx';
 import LicenseList from './components/LicenseList.tsx';
 import ItemDetails from './components/ItemDetails.tsx';
 import EmployeeDetails from './components/EmployeeDetails.tsx';
-import BudgetBreakdown from './components/BudgetBreakdown.tsx';
 import GenericListView from './components/GenericListView.tsx';
 import AttendanceModule from './components/AttendanceModule.tsx';
 import LeaveModule from './components/LeaveModule.tsx';
@@ -17,6 +16,7 @@ import RoleManagement from './components/RoleManagement.tsx';
 import NotificationCenter from './components/NotificationCenter.tsx';
 import SettingsModule from './components/SettingsModule.tsx';
 import SalaryModule from './components/SalaryModule.tsx';
+import BudgetModule from './components/BudgetModule.tsx';
 import Login from './components/Login.tsx';
 import { ItemStatus, UserRole, User, UserLog, InventoryItem, Movement, Supplier, LocationRecord, MaintenanceLog, Category, Employee, Department, License, AssetRequest, Notification, Role, SystemSettings } from './types.ts';
 import Modal from './components/Modal.tsx';
@@ -27,23 +27,10 @@ import { dbService } from './db.ts';
 
 type AppTab = 'dashboard' | 'inventory' | 'maintenance' | 'suppliers' | 'locations' | 'licenses' | 'categories' | 'employees' | 'departments' | 'purchase-history' | 'requests' | 'faulty-reports' | 'budgets' | 'audit-trail' | 'system-logs' | 'attendance' | 'leaves' | 'user-mgmt' | 'role-mgmt' | 'notifications' | 'settings' | 'salaries';
 
-interface Toast {
-  id: string;
-  message: string;
-  type: string;
-  sender: string;
-}
-
 const App: React.FC = () => {
   const [currentUser, setCurrentUser] = useState<User | null>(null);
   const [currentRole, setCurrentRole] = useState<Role | null>(null);
-  const [settings, setSettings] = useState<SystemSettings>({ 
-    id: 'GLOBAL', 
-    software_name: 'SmartStock Pro', 
-    primary_color: 'indigo',
-    software_description: 'Enterprise Resource Planning',
-    software_logo: 'fa-warehouse'
-  });
+  const [settings, setSettings] = useState<SystemSettings>({ id: 'GLOBAL', software_name: 'SmartStock Pro', primary_color: 'indigo' });
   const [activeTab, setActiveTab] = useState<AppTab>('dashboard');
   const [items, setItems] = useState<InventoryItem[]>([]);
   const [movements, setMovements] = useState<Movement[]>([]);
@@ -61,185 +48,86 @@ const App: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [isInitialized, setIsInitialized] = useState(false);
   const [dataLoading, setDataLoading] = useState(false);
-  const [toasts, setToasts] = useState<Toast[]>([]);
   
   const [isPurchaseModalOpen, setIsPurchaseModalOpen] = useState(false);
   const [managementModal, setManagementModal] = useState<{ isOpen: boolean, type: 'Category' | 'Employee' | 'Department' | null }>({ isOpen: false, type: null });
   
   const [viewingItem, setViewingItem] = useState<InventoryItem | null>(null);
   const [viewingEmployee, setViewingEmployee] = useState<Employee | null>(null);
-  const [viewingBudgetBreakdown, setViewingBudgetBreakdown] = useState<Department | null>(null);
 
-  useEffect(() => {
-    document.title = `${settings.software_name} | Enterprise Portal`;
-  }, [settings.software_name]);
+  useEffect(() => { document.title = `${settings.software_name} | ERP`; }, [settings.software_name]);
 
-  const getLandingTab = useCallback((user: User): AppTab => {
-    if (user.role === UserRole.ADMIN || user.role === UserRole.MANAGER) return 'dashboard';
-    return 'attendance';
-  }, []);
-
-  const hasPermission = useCallback((perm: string) => {
+  const hasPermission = (perm: string) => {
     if (currentUser?.role === UserRole.ADMIN) return true;
-    if (!currentRole?.permissions) return false;
-    return currentRole.permissions.split(',').map(p => p.trim()).includes(perm);
-  }, [currentUser, currentRole]);
+    return currentRole?.permissions?.split(',').includes(perm);
+  };
 
-  const fetchRoleData = useCallback(async (roleId: string, user: User) => {
+  const fetchRoleData = useCallback(async (roleId: string) => {
     try {
       const allRoles = await apiService.getRoles();
       const role = allRoles.find(r => r.id === roleId);
-      if (role) {
-        setCurrentRole(role);
-      }
-    } catch (e) {
-      console.error("Error fetching role info", e);
-    }
+      if (role) setCurrentRole(role);
+    } catch (e) { console.error(e); }
   }, []);
-
-  const fetchSettings = useCallback(async () => {
-    try {
-      const s = await apiService.getSettings();
-      if (s && s.software_name) {
-        setSettings(prev => ({ 
-          ...prev, 
-          ...s,
-          primary_color: (s.primary_color || prev.primary_color).toLowerCase() 
-        }));
-      }
-    } catch (e) { 
-      console.error("Settings fetch failed", e); 
-    }
-  }, []);
-
-  useEffect(() => {
-    const initApp = async () => {
-      try {
-        setLoading(true);
-        await fetchSettings();
-        const savedUserString = localStorage.getItem('smartstock_user');
-        if (savedUserString) {
-          try {
-            const savedUser = JSON.parse(savedUserString);
-            setCurrentUser(savedUser);
-            await fetchRoleData(savedUser.role, savedUser);
-          } catch (e) {
-            localStorage.removeItem('smartstock_user');
-          }
-        }
-      } catch (e) {
-        console.error("Initialization failure", e);
-      } finally {
-        setIsInitialized(true);
-        setLoading(false);
-      }
-    };
-    initApp();
-  }, [fetchSettings, fetchRoleData]);
 
   const fetchData = useCallback(async () => {
     if (!currentUser) return;
     try {
       setDataLoading(true);
       await dbService.init(); 
-      const [fItems, fMovements, fSuppliers, fLocations, fMaintenance, fLicenses, fCats, fEmps, fDepts, fRequests, fUsers] = await Promise.all([
-        apiService.getAllItems(),
-        apiService.getAllMovements(),
-        apiService.getAllSuppliers(),
-        apiService.getAllLocations(),
-        apiService.getAllMaintenance(),
-        apiService.getAllLicenses(),
-        apiService.getCategories(),
-        apiService.getEmployees(),
-        apiService.getDepartments(),
-        apiService.getAllRequests(),
-        apiService.getUsers()
+      const [fItems, fMov, fSup, fLoc, fMaint, fLic, fCat, fEmp, fDept, fReq, fUsers] = await Promise.all([
+        apiService.getAllItems(), apiService.getAllMovements(), apiService.getAllSuppliers(),
+        apiService.getAllLocations(), apiService.getAllMaintenance(), apiService.getAllLicenses(),
+        apiService.getCategories(), apiService.getEmployees(), apiService.getDepartments(),
+        apiService.getAllRequests(), apiService.getUsers()
       ]);
-      
-      setItems(fItems || []);
-      setMovements(fMovements || []);
-      setSuppliers(fSuppliers || []);
-      setLocations(fLocations || []);
-      setMaintenance(fMaintenance || []);
-      setLicenses(fLicenses || []);
-      setRequests(fRequests || []);
-      setCategories(fCats || []);
-      setEmployees(fEmps || []);
-      setUsers(fUsers || []);
-      setDepartments(fDepts || []);
-
-      if (currentUser.role === UserRole.ADMIN) {
-        const logs = await apiService.getSystemLogs();
-        setSystemLogs(logs);
-      }
-    } catch (err) { 
-      console.error("Data fetch error", err); 
-    } finally { 
-      setDataLoading(false); 
-    }
+      setItems(fItems || []); setMovements(fMov || []); setSuppliers(fSup || []); setLocations(fLoc || []);
+      setMaintenance(fMaint || []); setLicenses(fLic || []); setCategories(fCat || []);
+      setEmployees(fEmp || []); setDepartments(fDept || []); setRequests(fReq || []); setUsers(fUsers || []);
+      if (currentUser.role === UserRole.ADMIN) setSystemLogs(await apiService.getSystemLogs());
+    } catch (err) { console.error(err); } finally { setDataLoading(false); }
   }, [currentUser]);
+
+  useEffect(() => {
+    const initApp = async () => {
+      try {
+        const s = await apiService.getSettings();
+        if (s) setSettings(s);
+        const saved = localStorage.getItem('smartstock_user');
+        if (saved) {
+          const user = JSON.parse(saved);
+          setCurrentUser(user);
+          await fetchRoleData(user.role);
+        }
+      } catch (e) { console.error(e); } finally { setIsInitialized(true); setLoading(false); }
+    };
+    initApp();
+  }, [fetchRoleData]);
 
   useEffect(() => { if (currentUser) fetchData(); }, [currentUser, fetchData]);
 
-  // Derived Department Analytics for Budget Tracker
-  const enrichedDepartments = useMemo(() => {
-    return departments.map(dept => {
-      const deptItems = items.filter(i => i.department === dept.name);
-      const spent = deptItems.reduce((acc, i) => acc + (Number(i.cost) || 0), 0);
-      const budget = Number(dept.budget) || 0;
-      const remaining = budget - spent;
-      const utilization = budget > 0 ? (spent / budget) * 100 : 0;
-      
-      let budget_status = 'ON TRACK';
-      if (utilization > 100) budget_status = 'OVER BUDGET';
-      else if (utilization > 85) budget_status = 'NEAR LIMIT';
-
-      return { ...dept, spent, remaining, utilization, budget_status };
-    });
-  }, [departments, items]);
-
-  const handleLogin = (user: User) => {
-    setLoading(true);
-    setCurrentUser(user);
-    localStorage.setItem('smartstock_user', JSON.stringify(user));
-    const landing = getLandingTab(user);
-    setActiveTab(landing);
-    fetchRoleData(user.role, user).finally(() => setLoading(false));
-  };
-
-  const handleLogout = () => {
-    setCurrentUser(null);
-    setCurrentRole(null);
-    localStorage.removeItem('smartstock_user');
-  };
-
   const renderContent = () => {
     if (!currentUser) return null;
-    
     switch (activeTab) {
-      case 'dashboard': return !hasPermission('analytics.view') ? <AttendanceModule currentUser={currentUser} /> : <Dashboard stats={stats} movements={movements} items={items} onFullAudit={() => setActiveTab('audit-trail')} onCheckIn={() => setActiveTab('attendance')} themeColor={themeColor} />;
+      case 'dashboard': return <Dashboard stats={stats} movements={movements} items={items} onFullAudit={() => setActiveTab('audit-trail')} onCheckIn={() => setActiveTab('attendance')} />;
       case 'attendance': return <AttendanceModule currentUser={currentUser} />;
       case 'notifications': return <NotificationCenter currentUser={currentUser} />;
       case 'leaves': return <LeaveModule currentUser={currentUser} allUsers={users} />;
-      case 'salaries': return hasPermission('hr.salaries') ? <SalaryModule employees={employees} /> : null;
-      case 'user-mgmt': return hasPermission('hr.users') ? <UserManagement usersOverride={users} /> : null;
-      case 'role-mgmt': return hasPermission('system.roles') ? <RoleManagement /> : null;
-      case 'settings': return hasPermission('system.settings') ? <SettingsModule settings={settings} onUpdate={setSettings} /> : null;
-      case 'inventory': return !hasPermission('inventory.view') ? null : <InventoryTable items={items} onUpdate={fetchData} onEdit={() => {}} onView={setViewingItem} onAddAsset={hasPermission('inventory.procure') ? () => setIsPurchaseModalOpen(true) : undefined} themeColor={themeColor} />;
-      case 'maintenance': return !hasPermission('inventory.edit') ? null : <MaintenanceList logs={maintenance} items={items} onUpdate={fetchData} onAdd={() => setActiveTab('requests')} />;
-      case 'suppliers': return !hasPermission('inventory.view') ? null : <SupplierList suppliers={suppliers} />;
-      case 'locations': return !hasPermission('inventory.view') ? null : <GenericListView title="Physical Sites" icon="fa-map-marker-alt" items={locations} columns={['id', 'building', 'floor', 'room', 'manager']} />;
-      case 'licenses': return !hasPermission('inventory.view') ? null : <LicenseList licenses={licenses} suppliers={suppliers} onUpdate={fetchData} onAdd={() => fetchData()} />;
-      case 'categories': return !hasPermission('inventory.view') ? null : <GenericListView title="Asset Categories" icon="fa-tags" items={categories} columns={['id', 'name', 'itemCount']} />;
-      case 'employees': return !hasPermission('hr.view') ? null : <GenericListView title="Staff Directory" icon="fa-users" items={employees} columns={['id', 'name', 'email', 'department', 'role', 'joining_date']} onView={(emp) => setViewingEmployee(emp)} onAdd={() => setManagementModal({ isOpen: true, type: 'Employee' })} />;
-      case 'departments': return !hasPermission('hr.view') ? null : <GenericListView title="Departmental Overview" icon="fa-building" items={departments} columns={['id', 'name', 'head']} onAdd={() => setManagementModal({ isOpen: true, type: 'Department' })} />;
-      case 'budgets': return !hasPermission('analytics.financials') ? null : <GenericListView title="Budget Tracker" icon="fa-wallet" items={enrichedDepartments} columns={['name', 'budget', 'spent', 'remaining', 'utilization', 'budget_status']} onView={(dept) => setViewingBudgetBreakdown(dept)} />;
-      case 'faulty-reports': return !hasPermission('inventory.view') ? null : <InventoryTable items={items.filter(i => i.status === ItemStatus.FAULTY)} onUpdate={fetchData} onEdit={() => {}} onView={setViewingItem} themeColor="rose" />;
-      case 'purchase-history': return !hasPermission('inventory.procure') ? null : <GenericListView title="Procurement History" icon="fa-history" items={movements.filter(m => m.status === 'PURCHASED')} columns={['date', 'item', 'from', 'to']} />;
-      case 'requests': return <GenericListView title="Asset Requests" icon="fa-clipboard-list" items={requests} columns={['item', 'employee', 'urgency', 'status', 'request_date']} />;
-      case 'audit-trail': return !hasPermission('analytics.logs') ? null : <GenericListView title="Movement Ledger" icon="fa-history" items={movements} columns={['date', 'item', 'from', 'to', 'employee', 'department', 'status']} />;
-      case 'system-logs': return hasPermission('analytics.logs') && currentUser.role === UserRole.ADMIN ? <GenericListView title="System Audit Logs" icon="fa-shield-alt" items={systemLogs} columns={['timestamp', 'username', 'action', 'target_type', 'target_id', 'details']} /> : null;
-      default: return <AttendanceModule currentUser={currentUser} />;
+      case 'salaries': return <SalaryModule employees={employees} />;
+      case 'user-mgmt': return <UserManagement usersOverride={users} />;
+      case 'role-mgmt': return <RoleManagement />;
+      case 'settings': return <SettingsModule settings={settings} onUpdate={setSettings} />;
+      case 'inventory': return <InventoryTable items={items} onUpdate={fetchData} onEdit={() => {}} onView={setViewingItem} onAddAsset={() => setIsPurchaseModalOpen(true)} />;
+      case 'maintenance': return <MaintenanceList logs={maintenance} items={items} onUpdate={fetchData} onAdd={() => setActiveTab('requests')} />;
+      case 'suppliers': return <SupplierList suppliers={suppliers} />;
+      case 'locations': return <GenericListView title="Sites" icon="fa-map-marker-alt" items={locations} columns={['id', 'building', 'room', 'manager']} />;
+      case 'licenses': return <LicenseList licenses={licenses} suppliers={suppliers} onUpdate={fetchData} onAdd={() => fetchData()} />;
+      case 'categories': return <GenericListView title="Categories" icon="fa-tags" items={categories} columns={['id', 'name', 'itemCount']} />;
+      case 'employees': return <GenericListView title="Staff" icon="fa-users" items={employees} columns={['id', 'name', 'email', 'department']} onView={setViewingEmployee} onAdd={() => setManagementModal({ isOpen: true, type: 'Employee' })} />;
+      case 'departments': return <GenericListView title="Organization Units" icon="fa-building" items={departments} columns={['id', 'name', 'manager']} onAdd={() => setManagementModal({ isOpen: true, type: 'Department' })} />;
+      case 'budgets': return <BudgetModule />;
+      case 'audit-trail': return <GenericListView title="Movement Log" icon="fa-history" items={movements} columns={['date', 'item', 'from', 'to', 'status']} />;
+      default: return <Dashboard stats={stats} movements={movements} items={items} onFullAudit={() => setActiveTab('audit-trail')} onCheckIn={() => setActiveTab('attendance')} />;
     }
   };
 
@@ -254,66 +142,27 @@ const App: React.FC = () => {
     expiring_soon: 0
   }), [items, licenses]);
 
-  const themeColor = (settings.primary_color || 'indigo').toLowerCase();
+  const themeColor = settings.primary_color || 'indigo';
 
-  if (!isInitialized || (loading && !currentUser)) {
-    return (
-      <div className="min-h-screen bg-slate-50 flex items-center justify-center">
-        <div className="flex flex-col items-center gap-4">
-          <div className={`w-12 h-12 border-4 border-${themeColor}-600 border-t-transparent rounded-full animate-spin`}></div>
-          <p className="text-slate-400 font-bold uppercase tracking-widest text-[10px]">Loading ERP Workspace...</p>
-        </div>
-      </div>
-    );
-  }
-
-  if (!currentUser) return <Login onLogin={handleLogin} softwareName={settings.software_name} themeColor={themeColor} logoIcon={settings.software_logo} description={settings.software_description} />;
+  if (!isInitialized || (loading && !currentUser)) return <div className="flex h-screen items-center justify-center">Loading...</div>;
+  if (!currentUser) return <Login onLogin={(u) => { setCurrentUser(u); localStorage.setItem('smartstock_user', JSON.stringify(u)); fetchRoleData(u.role); }} softwareName={settings.software_name} />;
 
   return (
     <div className={`flex min-h-screen bg-slate-50 theme-${themeColor}`}>
-      <Sidebar 
-        userRole={currentUser.role} 
-        activeTab={activeTab as any} 
-        setActiveTab={setActiveTab as any} 
-        onLogout={handleLogout}
-        permissions={currentRole?.permissions?.split(',').map(p => p.trim()) || []}
-        appName={settings.software_name}
-        themeColor={themeColor}
-        logoIcon={settings.software_logo}
-      />
-      <main className="flex-1 lg:ml-64 p-6 lg:p-10 transition-all duration-300 min-w-0">
-        <header className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-8">
-          <div className="flex items-center gap-4">
-             <div>
-                <h1 className="text-3xl font-bold text-slate-800 capitalize tracking-tight">{activeTab.replace('-', ' ')}</h1>
-                <p className="text-slate-500 mt-1 flex items-center gap-2">
-                   <span className={`font-bold text-${themeColor}-600`}>{currentUser.full_name}</span>
-                   <span className={`px-2 py-0.5 text-[10px] rounded-full border font-bold uppercase ${currentRole ? `bg-${currentRole.color}-50 text-${currentRole.color}-600 border-${currentRole.color}-100` : 'bg-slate-100 text-slate-500 border-slate-200'}`}>
-                    {currentRole?.label || currentUser.role.replace('_', ' ')}
-                   </span>
-                </p>
-             </div>
-          </div>
+      <Sidebar userRole={currentUser.role} activeTab={activeTab} setActiveTab={setActiveTab} onLogout={() => { setCurrentUser(null); localStorage.removeItem('smartstock_user'); }} permissions={currentRole?.permissions?.split(',') || []} appName={settings.software_name} themeColor={themeColor} logoIcon={settings.software_logo} />
+      <main className="flex-1 lg:ml-64 p-10 min-w-0">
+        <header className="mb-8 flex justify-between items-center">
+            <div>
+                <h1 className="text-3xl font-bold text-slate-800 capitalize">{activeTab.replace('-', ' ')}</h1>
+                <p className="text-slate-500 font-medium">Session: {currentUser.full_name}</p>
+            </div>
         </header>
-        {dataLoading ? (
-          <div className="flex h-64 w-full items-center justify-center">
-            <div className={`animate-spin rounded-full h-10 w-10 border-4 border-${themeColor}-600 border-t-transparent`}></div>
-          </div>
-        ) : renderContent()}
+        {dataLoading ? <div className="flex h-64 items-center justify-center">Syncing...</div> : renderContent()}
       </main>
-      
-      {isPurchaseModalOpen && (
-        <Modal title="🛒 Procurement" onClose={() => setIsPurchaseModalOpen(false)}>
-          <PurchaseForm onSubmit={async (item) => {
-            await apiService.saveItem(item);
-            setIsPurchaseModalOpen(false);
-            fetchData();
-          }} suppliers={suppliers} locations={locations} departments={departments} />
-        </Modal>
-      )}
 
+      {isPurchaseModalOpen && <Modal title="New Asset Purchase" onClose={() => setIsPurchaseModalOpen(false)}><PurchaseForm onSubmit={async (i) => { await apiService.saveItem(i); setIsPurchaseModalOpen(false); fetchData(); }} suppliers={suppliers} locations={locations} departments={departments} /></Modal>}
       {managementModal.isOpen && (
-        <Modal title={`Add ${managementModal.type}`} onClose={() => setManagementModal({ isOpen: false, type: null })}>
+        <Modal title={`Create ${managementModal.type}`} onClose={() => setManagementModal({ isOpen: false, type: null })}>
           <ManagementForm type={managementModal.type!} onSubmit={async (data) => {
             if (managementModal.type === 'Employee') await apiService.saveEmployee(data);
             if (managementModal.type === 'Department') await apiService.saveDepartment(data);
@@ -322,14 +171,8 @@ const App: React.FC = () => {
           }} />
         </Modal>
       )}
-
-      {viewingItem && <Modal title="Asset Profile" onClose={() => setViewingItem(null)}><ItemDetails item={viewingItem} /></Modal>}
-      {viewingEmployee && (
-        <Modal title="Staff Profile" onClose={() => setViewingEmployee(null)}>
-          <EmployeeDetails employee={viewingEmployee} items={items} allUsers={users} />
-        </Modal>
-      )}
-      {viewingBudgetBreakdown && <Modal title="Department Asset Breakdown" onClose={() => setViewingBudgetBreakdown(null)}><BudgetBreakdown department={viewingBudgetBreakdown} items={items} /></Modal>}
+      {viewingItem && <Modal title="Asset View" onClose={() => setViewingItem(null)}><ItemDetails item={viewingItem} /></Modal>}
+      {viewingEmployee && <Modal title="Staff Profile" onClose={() => setViewingEmployee(null)}><EmployeeDetails employee={viewingEmployee} items={items} /></Modal>}
     </div>
   );
 };
