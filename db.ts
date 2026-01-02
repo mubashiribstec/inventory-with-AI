@@ -17,7 +17,7 @@ export class DatabaseService {
           'items', 'movements', 'suppliers', 'locations', 
           'licenses', 'maintenance', 'categories', 
           'employees', 'departments', 'requests', 'users', 'settings',
-          'attendance', 'leave_requests', 'roles', 'notifications', 'user_logs'
+          'attendance', 'leave_requests', 'roles', 'notifications', 'user_logs', 'budgets'
         ];
         
         stores.forEach(store => {
@@ -37,16 +37,9 @@ export class DatabaseService {
     });
   }
 
-  /**
-   * Seeds the database with ONLY the essential admin user and settings.
-   * No demo items or movements are added.
-   */
   private async seedMinimalData(): Promise<void> {
     const users = await this.getUsers();
     if (users.length === 0) {
-      console.log("[DB] Initializing with clean system state...");
-      
-      // The ONLY user created by default
       await this.put('users', {
         id: 'U-001',
         username: 'admin',
@@ -57,16 +50,14 @@ export class DatabaseService {
         is_active: true
       });
 
-      // Essential system settings for UI branding
       await this.put('settings', { 
         id: 'GLOBAL', 
         software_name: 'SmartStock Pro', 
         primary_color: 'indigo',
         software_logo: 'fa-warehouse',
-        software_description: 'Enterprise Inventory Management'
+        software_description: 'Enterprise Resource Planning'
       });
 
-      // Minimal category to allow first entry
       await this.put('categories', { 
         id: 'CAT-01', 
         name: 'General Assets', 
@@ -76,9 +67,41 @@ export class DatabaseService {
     }
   }
 
-  /**
-   * PERMANENTLY clears all data and re-seeds the admin user
-   */
+  async bulkImport(data: any): Promise<void> {
+    if (!this.db) return;
+    const stores = Array.from(this.db.objectStoreNames);
+    const transaction = this.db.transaction(stores, 'readwrite');
+    
+    return new Promise((resolve, reject) => {
+      // Clear all existing data first
+      stores.forEach(storeName => {
+        transaction.objectStore(storeName).clear();
+      });
+
+      // Populate with new data
+      Object.keys(data).forEach(storeKey => {
+        // Map common JSON keys to store names if they differ
+        let storeName = storeKey;
+        if (storeKey === 'items') storeName = 'items';
+        if (storeKey === 'leaves') storeName = 'leave_requests';
+        if (storeKey === 'maintenance') storeName = 'maintenance';
+        
+        if (this.db!.objectStoreNames.contains(storeName)) {
+          const store = transaction.objectStore(storeName);
+          const records = Array.isArray(data[storeKey]) ? data[storeKey] : [data[storeKey]];
+          records.forEach((record: any) => {
+            if (record && record.id) {
+              store.put(record);
+            }
+          });
+        }
+      });
+
+      transaction.oncomplete = () => resolve();
+      transaction.onerror = () => reject(transaction.error);
+    });
+  }
+
   async clearAllData(): Promise<void> {
     if (!this.db) return;
     const stores = Array.from(this.db.objectStoreNames);
@@ -100,13 +123,11 @@ export class DatabaseService {
   async getAllItems(): Promise<InventoryItem[]> { return this.getAll<InventoryItem>('items'); }
   async saveItem(item: InventoryItem): Promise<void> { return this.put('items', item); }
   async deleteItem(id: string): Promise<void> { return this.delete('items', id); }
-
   async getAllMovements(): Promise<Movement[]> {
     const movements = await this.getAll<Movement>('movements');
     return movements.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
   }
   async saveMovement(movement: Movement): Promise<void> { return this.put('movements', movement); }
-
   async getAllSuppliers(): Promise<Supplier[]> { return this.getAll<Supplier>('suppliers'); }
   async getAllLocations(): Promise<LocationRecord[]> { return this.getAll<LocationRecord>('locations'); }
   async getAllLicenses(): Promise<License[]> { return this.getAll<License>('licenses'); }
@@ -116,17 +137,13 @@ export class DatabaseService {
   async getAllDepartments(): Promise<Department[]> { return this.getAll<Department>('departments'); }
   async saveDepartment(dept: Department): Promise<void> { return this.put('departments', dept); }
   async getAllRequests(): Promise<AssetRequest[]> { return this.getAll<AssetRequest>('requests'); }
-
   async getAttendance(): Promise<AttendanceRecord[]> { return this.getAll<AttendanceRecord>('attendance'); }
   async saveAttendance(record: AttendanceRecord): Promise<void> { return this.put('attendance', record); }
   async deleteAttendance(id: string): Promise<void> { return this.delete('attendance', id); }
-
   async getLeaveRequests(): Promise<LeaveRequest[]> { return this.getAll<LeaveRequest>('leave_requests'); }
   async saveLeaveRequest(id: LeaveRequest): Promise<void> { return this.put('leave_requests', id); }
   async deleteLeaveRequest(id: string): Promise<void> { return this.delete('leave_requests', id); }
-
   async getRoles(): Promise<Role[]> { return this.getAll<Role>('roles'); }
-
   async getNotifications(userId: string): Promise<Notification[]> { 
     const all = await this.getAll<Notification>('notifications');
     if (userId === 'ADMIN' || userId.startsWith('U-001')) return all;
@@ -140,17 +157,13 @@ export class DatabaseService {
     const all = await this.getAll<Notification>('notifications');
     return all.find(n => n.id === id);
   }
-
   async getSystemLogs(): Promise<UserLog[]> { return this.getAll<UserLog>('user_logs'); }
-
   async getUsers(): Promise<User[]> { return this.getAll<User>('users'); }
   async saveUser(user: User): Promise<void> { return this.put('users', user); }
   async deleteUser(id: string): Promise<void> { return this.delete('users', id); }
-
   async saveEmployee(employee: Employee): Promise<void> { return this.put('employees', employee); }
   async deleteEmployee(id: string): Promise<void> { return this.delete('employees', id); }
   async deleteLicense(id: any): Promise<void> { return this.delete('licenses', id); }
-
   async getSettings(): Promise<any> { 
     const all = await this.getAll<any>('settings');
     return all[0] || { id: 'GLOBAL', software_name: 'SmartStock Pro', primary_color: 'indigo' };
@@ -160,6 +173,7 @@ export class DatabaseService {
   public async getAll<T>(storeName: string): Promise<T[]> {
     return new Promise((resolve, reject) => {
       if (!this.db) return resolve([]);
+      if (!this.db.objectStoreNames.contains(storeName)) return resolve([]);
       const transaction = this.db.transaction(storeName, 'readonly');
       const store = transaction.objectStore(storeName);
       const request = store.getAll();
