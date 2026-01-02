@@ -26,10 +26,10 @@ export interface SystemSettings {
 }
 
 export interface Role {
-  id: string; // Maps to UserRole enum values or custom strings
+  id: string; 
   label: string;
   description: string;
-  permissions: string; // Comma separated tags (e.g., "inventory.view,inventory.edit")
+  permissions: string; 
   color: string;
   icon?: string;
   updated_at?: string;
@@ -46,6 +46,7 @@ export const PERMISSION_GROUPS = {
     { key: 'hr.attendance', label: 'Manage Attendance', desc: 'Edit or delete attendance logs' },
     { key: 'hr.leaves', label: 'Approve Leaves', desc: 'Approve or reject leave applications' },
     { key: 'hr.users', label: 'Manage Accounts', desc: 'Create and configure user credentials' },
+    { key: 'hr.salaries', label: 'Salary Management', desc: 'Access to payroll and tenure-based earnings' },
   ],
   ANALYTICS: [
     { key: 'analytics.view', label: 'View Dashboards', desc: 'Access to high-level metric summaries' },
@@ -80,6 +81,27 @@ export interface User {
   shift_start_time?: string; 
   team_lead_id?: string;
   manager_id?: string;
+}
+
+export interface Employee {
+  id: string;
+  name: string;
+  email: string;
+  department: string;
+  role: string;
+  team_lead_id?: string;
+  manager_id?: string;
+  joining_date?: string;
+}
+
+export interface SalaryRecord {
+  id: string;
+  employee_id: string;
+  base_salary: number;
+  tenure_bonus: number;
+  total_payable: number;
+  status: 'DRAFT' | 'PAID' | 'PENDING';
+  month: string;
 }
 
 export interface UserLog {
@@ -184,16 +206,6 @@ export interface Category {
   name: string;
   icon: string;
   itemCount: number;
-}
-
-export interface Employee {
-  id: string;
-  name: string;
-  email: string;
-  department: string;
-  role: string;
-  team_lead_id?: string;
-  manager_id?: string;
 }
 
 export interface Department {

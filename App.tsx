@@ -15,6 +15,7 @@ import UserManagement from './components/UserManagement.tsx';
 import RoleManagement from './components/RoleManagement.tsx';
 import NotificationCenter from './components/NotificationCenter.tsx';
 import SettingsModule from './components/SettingsModule.tsx';
+import SalaryModule from './components/SalaryModule.tsx';
 import Login from './components/Login.tsx';
 import { ItemStatus, UserRole, User, UserLog, InventoryItem, Movement, Supplier, LocationRecord, MaintenanceLog, Category, Employee, Department, License, AssetRequest, Notification, Role, SystemSettings } from './types.ts';
 import Modal from './components/Modal.tsx';
@@ -23,7 +24,7 @@ import ManagementForm from './components/ManagementForm.tsx';
 import { apiService } from './api.ts';
 import { dbService } from './db.ts';
 
-type AppTab = 'dashboard' | 'inventory' | 'maintenance' | 'suppliers' | 'locations' | 'licenses' | 'categories' | 'employees' | 'departments' | 'purchase-history' | 'requests' | 'faulty-reports' | 'budgets' | 'audit-trail' | 'system-logs' | 'attendance' | 'leaves' | 'user-mgmt' | 'role-mgmt' | 'notifications' | 'settings';
+type AppTab = 'dashboard' | 'inventory' | 'maintenance' | 'suppliers' | 'locations' | 'licenses' | 'categories' | 'employees' | 'departments' | 'purchase-history' | 'requests' | 'faulty-reports' | 'budgets' | 'audit-trail' | 'system-logs' | 'attendance' | 'leaves' | 'user-mgmt' | 'role-mgmt' | 'notifications' | 'settings' | 'salaries';
 
 interface Toast {
   id: string;
@@ -219,16 +220,17 @@ const App: React.FC = () => {
       case 'attendance': return <AttendanceModule currentUser={currentUser} />;
       case 'notifications': return <NotificationCenter currentUser={currentUser} />;
       case 'leaves': return <LeaveModule currentUser={currentUser} allUsers={users} />;
+      case 'salaries': return hasPermission('hr.salaries') ? <SalaryModule employees={employees} /> : null;
       case 'user-mgmt': return hasPermission('hr.users') ? <UserManagement usersOverride={users} /> : null;
       case 'role-mgmt': return hasPermission('system.roles') ? <RoleManagement /> : null;
       case 'settings': return hasPermission('system.settings') ? <SettingsModule settings={settings} onUpdate={setSettings} /> : null;
-      case 'inventory': return !hasPermission('inventory.view') ? null : <InventoryTable items={items} onUpdate={fetchData} onEdit={hasPermission('inventory.edit') ? setEditingItem : undefined} onView={setViewingItem} />;
+      case 'inventory': return !hasPermission('inventory.view') ? null : <InventoryTable items={items} onUpdate={fetchData} onEdit={hasPermission('inventory.edit') ? setEditingItem : undefined} onView={setViewingItem} onAddAsset={hasPermission('inventory.procure') ? () => setIsPurchaseModalOpen(true) : undefined} themeColor={themeColor} />;
       case 'maintenance': return !hasPermission('inventory.edit') ? null : <MaintenanceList logs={maintenance} items={items} onUpdate={fetchData} onAdd={() => setActiveTab('requests')} />;
       case 'suppliers': return !hasPermission('inventory.view') ? null : <SupplierList suppliers={suppliers} />;
       case 'locations': return !hasPermission('inventory.view') ? null : <GenericListView title="Physical Sites" icon="fa-map-marker-alt" items={locations} columns={['id', 'building', 'floor', 'room', 'manager']} />;
       case 'licenses': return !hasPermission('inventory.view') ? null : <LicenseList licenses={licenses} suppliers={suppliers} onUpdate={fetchData} onAdd={() => fetchData()} />;
       case 'categories': return !hasPermission('inventory.view') ? null : <GenericListView title="Asset Categories" icon="fa-tags" items={categories} columns={['id', 'name', 'itemCount']} />;
-      case 'employees': return !hasPermission('hr.view') ? null : <GenericListView title="Staff Directory" icon="fa-users" items={employees} columns={['id', 'name', 'email', 'department', 'role']} onView={(emp) => setViewingEmployee(emp)} />;
+      case 'employees': return !hasPermission('hr.view') ? null : <GenericListView title="Staff Directory" icon="fa-users" items={employees} columns={['id', 'name', 'email', 'department', 'role', 'joining_date']} onView={(emp) => setViewingEmployee(emp)} onAdd={() => setManagementModal({ isOpen: true, type: 'Employee' })} />;
       case 'departments': return !hasPermission('hr.view') ? null : <GenericListView title="Departmental Overview" icon="fa-building" items={departments} columns={['id', 'name', 'head']} />;
       case 'purchase-history': return !hasPermission('inventory.procure') ? null : <GenericListView title="Procurement History" icon="fa-history" items={movements.filter(m => m.status === 'PURCHASED')} columns={['date', 'item', 'from', 'to']} />;
       case 'requests': return <GenericListView title="Asset Requests" icon="fa-clipboard-list" items={requests} columns={['item', 'employee', 'urgency', 'status', 'request_date']} />;
@@ -308,14 +310,7 @@ const App: React.FC = () => {
              </div>
           </div>
           <div className="flex items-center gap-3">
-            {hasPermission('inventory.procure') && (
-              <button 
-                onClick={() => setIsPurchaseModalOpen(true)} 
-                className={`px-4 py-2.5 bg-${themeColor}-600 text-white rounded-xl hover:bg-${themeColor}-700 transition font-bold text-sm shadow-lg shadow-${themeColor}-100 flex items-center gap-2`}
-              >
-                <i className="fas fa-plus"></i> New Asset
-              </button>
-            )}
+            {/* Global buttons removed as per request for contextual action */}
           </div>
         </header>
         
@@ -335,6 +330,17 @@ const App: React.FC = () => {
           }} suppliers={suppliers} locations={locations} departments={departments} />
         </Modal>
       )}
+
+      {managementModal.isOpen && (
+        <Modal title={`Add ${managementModal.type}`} onClose={() => setManagementModal({ isOpen: false, type: null })}>
+          <ManagementForm type={managementModal.type!} onSubmit={async (data) => {
+            if (managementModal.type === 'Employee') await apiService.saveEmployee(data);
+            setManagementModal({ isOpen: false, type: null });
+            fetchData();
+          }} />
+        </Modal>
+      )}
+
       {viewingItem && <Modal title="Asset Profile" onClose={() => setViewingItem(null)}><ItemDetails item={viewingItem} /></Modal>}
       {viewingEmployee && (
         <Modal title="Staff Profile" onClose={() => setViewingEmployee(null)}>

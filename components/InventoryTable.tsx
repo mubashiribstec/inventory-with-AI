@@ -1,4 +1,3 @@
-
 import React, { useState } from 'react';
 import { InventoryItem, ItemStatus, Employee } from '../types';
 import { apiService } from '../api.ts';
@@ -8,10 +7,12 @@ interface InventoryTableProps {
   onUpdate: () => void;
   onEdit: (item: InventoryItem) => void;
   onView: (item: InventoryItem) => void;
+  onAddAsset?: () => void;
   onViewEmployee?: (emp: Employee) => void;
+  themeColor?: string;
 }
 
-const InventoryTable: React.FC<InventoryTableProps> = ({ items, onUpdate, onEdit, onView, onViewEmployee }) => {
+const InventoryTable: React.FC<InventoryTableProps> = ({ items, onUpdate, onEdit, onView, onAddAsset, onViewEmployee, themeColor = 'indigo' }) => {
   const [search, setSearch] = useState('');
   const [filter, setFilter] = useState<ItemStatus | ''>('');
 
@@ -54,7 +55,7 @@ const InventoryTable: React.FC<InventoryTableProps> = ({ items, onUpdate, onEdit
           <input 
             type="text" 
             placeholder="Search assets..." 
-            className="w-full pl-12 pr-4 py-3 bg-slate-50 border border-slate-100 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500 transition text-sm"
+            className={`w-full pl-12 pr-4 py-3 bg-slate-50 border border-slate-100 rounded-xl focus:outline-none focus:ring-2 focus:ring-${themeColor}-500 transition text-sm`}
             value={search}
             onChange={(e) => setSearch(e.target.value)}
           />
@@ -70,6 +71,14 @@ const InventoryTable: React.FC<InventoryTableProps> = ({ items, onUpdate, onEdit
               <option key={s} value={s}>{s.replace('-', ' ')}</option>
             ))}
           </select>
+          {onAddAsset && (
+            <button 
+              onClick={onAddAsset} 
+              className={`px-4 py-3 bg-${themeColor}-600 text-white rounded-xl hover:bg-${themeColor}-700 transition font-bold text-sm shadow-lg shadow-${themeColor}-100 flex items-center gap-2 whitespace-nowrap`}
+            >
+              <i className="fas fa-plus"></i> New Asset
+            </button>
+          )}
         </div>
       </div>
 
@@ -109,12 +118,10 @@ const InventoryTable: React.FC<InventoryTableProps> = ({ items, onUpdate, onEdit
                     <button 
                       onClick={() => {
                         if (onViewEmployee && item.assignedTo !== '-') {
-                          // Note: In a real app, we'd find the full employee object
-                          // Here we create a partial or handle the mismatch
                           onViewEmployee({ name: item.assignedTo, department: item.department } as any);
                         }
                       }}
-                      className={`text-xs font-bold text-left ${item.assignedTo !== '-' ? 'text-indigo-600 hover:underline' : 'text-slate-800'}`}
+                      className={`text-xs font-bold text-left ${item.assignedTo !== '-' ? `text-${themeColor}-600 hover:underline` : 'text-slate-800'}`}
                     >
                       {item.assignedTo || '-'}
                     </button>
@@ -124,7 +131,7 @@ const InventoryTable: React.FC<InventoryTableProps> = ({ items, onUpdate, onEdit
                     <div className="flex items-center justify-center gap-2">
                       <button 
                         onClick={() => onView(item)}
-                        className="w-8 h-8 rounded-lg bg-indigo-50 text-indigo-600 hover:bg-indigo-100 transition flex items-center justify-center"
+                        className={`w-8 h-8 rounded-lg bg-${themeColor}-50 text-${themeColor}-600 hover:bg-${themeColor}-100 transition flex items-center justify-center`}
                         title="View Details"
                       >
                         <i className="fas fa-eye text-xs"></i>

@@ -56,6 +56,7 @@ const Sidebar: React.FC<SidebarProps> = ({
         { id: 'attendance', icon: 'fa-user-clock', label: 'Attendance Hub' },
         { id: 'notifications', icon: 'fa-bell', label: 'Alerts & Activity', badge: unreadCount },
         { id: 'leaves', icon: 'fa-calendar-alt', label: 'Leave Requests' },
+        { id: 'salaries', icon: 'fa-file-invoice-dollar', label: 'Salary & Payroll', permission: 'hr.salaries' },
         { id: 'employees', icon: 'fa-users', label: 'Staff Directory', permission: 'hr.view' },
         { id: 'departments', icon: 'fa-building', label: 'Departments', permission: 'hr.view' },
         { id: 'user-mgmt', icon: 'fa-user-shield', label: 'User Accounts', permission: 'hr.users' },

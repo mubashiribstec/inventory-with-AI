@@ -1,4 +1,3 @@
-
 import React, { useState } from 'react';
 
 interface ManagementFormProps {
@@ -9,8 +8,9 @@ interface ManagementFormProps {
 
 const ManagementForm: React.FC<ManagementFormProps> = ({ type, onSubmit, initialData }) => {
   const [formData, setFormData] = useState(initialData || {
-    budget_month: new Date().toISOString().substring(0, 7), // Default to current YYYY-MM
-    budget: 0
+    budget_month: new Date().toISOString().substring(0, 7), 
+    budget: 0,
+    joining_date: new Date().toISOString().split('T')[0]
   });
 
   const handleSubmit = (e: React.FormEvent) => {
@@ -58,6 +58,10 @@ const ManagementForm: React.FC<ManagementFormProps> = ({ type, onSubmit, initial
                 <label className="text-xs font-bold text-slate-500 uppercase tracking-wider ml-1">Role</label>
                 <input name="role" type="text" className="w-full px-4 py-3 bg-slate-50 border border-slate-100 rounded-xl outline-none focus:ring-2 focus:ring-indigo-500" value={formData.role || ''} onChange={handleChange} placeholder="Engineer" />
               </div>
+            </div>
+            <div className="space-y-2">
+              <label className="text-xs font-bold text-slate-500 uppercase tracking-wider ml-1">Joining Date</label>
+              <input name="joining_date" type="date" required className="w-full px-4 py-3 bg-slate-50 border border-slate-100 rounded-xl outline-none focus:ring-2 focus:ring-indigo-500 font-bold" value={formData.joining_date || ''} onChange={handleChange} />
             </div>
           </>
         )}

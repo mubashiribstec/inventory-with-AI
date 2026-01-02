@@ -1,12 +1,11 @@
-
-import React from 'react';
+import React, { useMemo } from 'react';
 import { Employee, InventoryItem, ItemStatus, User } from '../types.ts';
 
 interface EmployeeDetailsProps {
   employee: Employee;
   items: InventoryItem[];
   linkedUser?: User;
-  allUsers?: User[]; // New prop to resolve superior names
+  allUsers?: User[]; 
 }
 
 const EmployeeDetails: React.FC<EmployeeDetailsProps> = ({ employee, items, linkedUser, allUsers = [] }) => {
@@ -20,6 +19,26 @@ const EmployeeDetails: React.FC<EmployeeDetailsProps> = ({ employee, items, link
       default: return 'bg-slate-50 text-slate-600 border-slate-100';
     }
   };
+
+  const tenure = useMemo(() => {
+    if (!employee.joining_date) return 'Not available';
+    const start = new Date(employee.joining_date);
+    const end = new Date();
+    
+    let years = end.getFullYear() - start.getFullYear();
+    let months = end.getMonth() - start.getMonth();
+    
+    if (months < 0) {
+      years--;
+      months += 12;
+    }
+    
+    const parts = [];
+    if (years > 0) parts.push(`${years} ${years === 1 ? 'year' : 'years'}`);
+    if (months > 0) parts.push(`${months} ${months === 1 ? 'month' : 'months'}`);
+    
+    return parts.length > 0 ? parts.join(', ') : 'Less than a month';
+  }, [employee.joining_date]);
 
   const teamLead = allUsers.find(u => u.id === linkedUser?.team_lead_id || u.id === employee.team_lead_id);
   const manager = allUsers.find(u => u.id === linkedUser?.manager_id || u.id === employee.manager_id);
@@ -52,6 +71,23 @@ const EmployeeDetails: React.FC<EmployeeDetailsProps> = ({ employee, items, link
         </div>
       </div>
 
+      {/* Milestones & Tenure */}
+      <div className="bg-emerald-50/50 p-6 rounded-3xl border border-emerald-100 flex items-center justify-between">
+        <div className="flex items-center gap-4">
+           <div className="w-12 h-12 bg-emerald-600 rounded-2xl flex items-center justify-center text-white text-xl">
+              <i className="fas fa-birthday-cake"></i>
+           </div>
+           <div>
+              <p className="text-[10px] font-bold text-emerald-600 uppercase tracking-widest">Joining Milestone</p>
+              <p className="font-bold text-emerald-900">{employee.joining_date || 'N/A'}</p>
+           </div>
+        </div>
+        <div className="text-right">
+           <p className="text-[10px] font-bold text-emerald-600 uppercase tracking-widest">Total Service Tenure</p>
+           <p className="text-lg font-black text-emerald-900">{tenure}</p>
+        </div>
+      </div>
+
       {/* Reporting Hierarchy */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         <div className="p-5 bg-white rounded-2xl border border-indigo-50 shadow-sm flex items-center gap-4">
@@ -70,28 +106,6 @@ const EmployeeDetails: React.FC<EmployeeDetailsProps> = ({ employee, items, link
            <div>
               <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Manager</p>
               <p className="font-bold text-slate-800">{manager?.full_name || 'No Manager Assigned'}</p>
-           </div>
-        </div>
-      </div>
-
-      {/* System info if linked */}
-      <div className="grid grid-cols-2 gap-4">
-        <div className="p-5 bg-slate-50 rounded-2xl border border-slate-100 flex items-center justify-between">
-           <div>
-              <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Shift Schedule</p>
-              <p className="text-lg font-bold text-slate-800">{linkedUser?.shift_start_time || 'Not Configured'}</p>
-           </div>
-           <div className="w-10 h-10 bg-indigo-50 text-indigo-600 rounded-xl flex items-center justify-center">
-              <i className="fas fa-clock"></i>
-           </div>
-        </div>
-        <div className="p-5 bg-slate-50 rounded-2xl border border-slate-100 flex items-center justify-between">
-           <div>
-              <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">System Access</p>
-              <p className="text-lg font-bold text-slate-800 uppercase">{linkedUser?.role || 'No Account'}</p>
-           </div>
-           <div className="w-10 h-10 bg-indigo-50 text-indigo-600 rounded-xl flex items-center justify-center">
-              <i className="fas fa-user-shield"></i>
            </div>
         </div>
       </div>
@@ -145,7 +159,7 @@ const EmployeeDetails: React.FC<EmployeeDetailsProps> = ({ employee, items, link
           <i className="fas fa-envelope"></i> Send Handover Log
         </button>
         <button className="flex-1 py-3 bg-indigo-600 text-white rounded-2xl font-bold text-sm hover:bg-indigo-700 transition flex items-center justify-center gap-2 shadow-lg shadow-indigo-100">
-          <i className="fas fa-plus"></i> Assign New Asset
+          <i className="fas fa-calendar-alt"></i> Mark for Appraisal
         </button>
       </div>
     </div>

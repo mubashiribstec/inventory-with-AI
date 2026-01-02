@@ -20,7 +20,8 @@ const DB_SHEETS = {
   ATTENDANCE: 'Attendance',
   LEAVES: 'Leaves',
   ROLES: 'Roles',
-  NOTIFICATIONS: 'Notifications'
+  NOTIFICATIONS: 'Notifications',
+  SALARIES: 'Salaries'
 };
 
 /**
@@ -55,11 +56,12 @@ function setupDatabase() {
     [DB_SHEETS.LICENSES]: ['id', 'software_name', 'product_key', 'total_seats', 'assigned_seats', 'expiration_date', 'supplier_id'],
     [DB_SHEETS.MAINTENANCE]: ['id', 'item_id', 'issue_type', 'description', 'status', 'cost', 'start_date'],
     [DB_SHEETS.CATEGORIES]: ['id', 'name', 'icon'],
-    [DB_SHEETS.EMPLOYEES]: ['id', 'name', 'email', 'department', 'role'],
+    [DB_SHEETS.EMPLOYEES]: ['id', 'name', 'email', 'department', 'role', 'joining_date'],
+    [DB_SHEETS.SALARIES]: ['id', 'employee_id', 'base_salary', 'tenure_bonus', 'total_payable', 'status', 'month'],
     [DB_SHEETS.DEPARTMENTS]: ['id', 'name', 'head', 'budget', 'budget_month'],
     [DB_SHEETS.REQUESTS]: ['id', 'item', 'employee', 'department', 'urgency', 'status', 'request_date', 'notes'],
     [DB_SHEETS.USERS]: ['id', 'username', 'password', 'role', 'full_name', 'department', 'shift_start_time', 'team_lead_id', 'manager_id'],
-    [DB_SHEETS.SETTINGS]: ['id', 'software_name', 'primary_color'],
+    [DB_SHEETS.SETTINGS]: ['id', 'software_name', 'primary_color', 'software_description', 'software_logo'],
     [DB_SHEETS.ROLES]: ['id', 'label', 'description', 'permissions', 'color', 'icon'],
     [DB_SHEETS.ATTENDANCE]: ['id', 'user_id', 'username', 'date', 'check_in', 'check_out', 'status', 'location'],
     [DB_SHEETS.LEAVES]: ['id', 'user_id', 'username', 'start_date', 'end_date', 'leave_type', 'reason', 'status'],
@@ -185,19 +187,4 @@ function logAction(userId, username, action, targetType, targetId, details) {
     JSON.stringify(details), 
     new Date().toISOString()
   ]);
-}
-
-/**
- * Specialized Analytics Fetch
- */
-function getDashboardStats() {
-  const items = getSheetData(DB_SHEETS.ITEMS);
-  return {
-    purchased: items.length,
-    assigned: items.filter(i => i.status === 'assigned').length,
-    inUse: items.filter(i => i.status === 'in-use').length,
-    backup: items.filter(i => i.status === 'backup').length,
-    faulty: items.filter(i => i.status === 'faulty').length,
-    available: items.filter(i => i.status === 'available').length
-  };
 }
