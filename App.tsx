@@ -71,7 +71,6 @@ const App: React.FC = () => {
     if (!currentUser) return;
     try {
       setDataLoading(true);
-      await dbService.init(); 
       const [fItems, fMov, fSup, fLoc, fMaint, fLic, fCat, fEmp, fDept, fReq, fUsers] = await Promise.all([
         apiService.getAllItems(), apiService.getAllMovements(), apiService.getAllSuppliers(),
         apiService.getAllLocations(), apiService.getAllMaintenance(), apiService.getAllLicenses(),
@@ -87,6 +86,9 @@ const App: React.FC = () => {
   useEffect(() => {
     const initApp = async () => {
       try {
+        // Critical: Ensure DB is initialized before checking session
+        await apiService.initDatabase();
+        
         const s = await apiService.getSettings();
         if (s) setSettings(s);
         const saved = localStorage.getItem('smartstock_user');
@@ -125,6 +127,8 @@ const App: React.FC = () => {
       case 'role-mgmt': return <RoleManagement />;
       case 'settings': return <SettingsModule settings={settings} onUpdate={setSettings} />;
       case 'requests': return <GenericListView title="Employee Asset Requests" icon="fa-clipboard-list" items={requests} columns={['id', 'item', 'employee', 'urgency', 'status', 'request_date']} onAdd={() => setIsRequestModalOpen(true)} />;
+      case 'faulty-reports': return <GenericListView title="Damaged & Faulty Assets" icon="fa-exclamation-triangle" items={items.filter(i => i.status === ItemStatus.FAULTY)} columns={['id', 'name', 'assignedTo', 'department', 'serial']} />;
+      case 'purchase-history': return <GenericListView title="Procurement History" icon="fa-history" items={items} columns={['id', 'name', 'purchaseDate', 'cost', 'department']} />;
       case 'maintenance': return <MaintenanceList logs={maintenance} items={items} onUpdate={fetchData} onAdd={() => setActiveTab('requests')} />;
       case 'suppliers': return <SupplierList suppliers={suppliers} />;
       case 'locations': return <GenericListView title="Operational Sites" icon="fa-map-marker-alt" items={locations} columns={['id', 'building', 'room', 'manager']} />;
@@ -134,6 +138,7 @@ const App: React.FC = () => {
       case 'departments': return <GenericListView title="Departments & Business Units" icon="fa-building" items={departments} columns={['id', 'name', 'manager']} onAdd={() => setManagementModal({ isOpen: true, type: 'Department' })} />;
       case 'budgets': return <BudgetModule />;
       case 'audit-trail': return <GenericListView title="Movement Ledger" icon="fa-history" items={movements} columns={['date', 'item', 'from', 'to', 'status']} />;
+      case 'system-logs': return <GenericListView title="Security Audit Logs" icon="fa-shield-alt" items={[]} columns={['timestamp', 'username', 'action', 'details']} />;
       default: return <Dashboard stats={stats} movements={movements} items={items} onFullAudit={() => setActiveTab('audit-trail')} onCheckIn={() => setActiveTab('attendance')} />;
     }
   };

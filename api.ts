@@ -19,6 +19,9 @@ const gasRequest = <T>(funcName: string, ...args: any[]): Promise<T> => {
 export const apiService = {
   // Authentication
   async login(username, password): Promise<User> {
+    // Ensure DB is ready before trying to login locally
+    if (!isGAS) await dbService.init();
+
     if (isGAS) return gasRequest<User>('apiLogin', username, password);
     const users = await dbService.getUsers();
     const user = users.find(u => u.username === username && u.password === password);
@@ -39,7 +42,7 @@ export const apiService = {
       categories: await dbService.getAllCategories(),
       employees: await dbService.getAllEmployees(),
       departments: await dbService.getAllDepartments(),
-      budgets: await dbService.put('budgets', []), // Placeholder to ensure collection exists
+      budgets: await dbService.getAll<PersonalBudget>('budgets' as any),
       users: await dbService.getUsers(),
       settings: await dbService.getSettings(),
       attendance: await dbService.getAttendance(),
@@ -74,7 +77,6 @@ export const apiService = {
   // Personal Budget Management (Independent)
   async getBudgets(): Promise<PersonalBudget[]> {
     if (isGAS) return gasRequest<PersonalBudget[]>('getCollection', 'Budgets');
-    /* Fixed: getAll is now public in dbService */
     return dbService.getAll<PersonalBudget>('budgets' as any);
   },
 
@@ -108,7 +110,6 @@ export const apiService = {
   async getLeaveRequests(): Promise<LeaveRequest[]> { return isGAS ? gasRequest('getCollection', 'Leaves') : dbService.getLeaveRequests(); },
   async saveLeaveRequest(l: LeaveRequest) { if (isGAS) await gasRequest('apiUpsert', 'Leaves', l); return dbService.saveLeaveRequest(l); },
 
-  /* Fixed: Added missing methods needed by components */
   async deleteLicense(id: any) { if (isGAS) await gasRequest('apiDelete', 'Licenses', id); return dbService.deleteLicense(id); },
   async deleteUser(id: string) { if (isGAS) await gasRequest('apiDelete', 'Users', id); return dbService.deleteUser(id); },
   async deleteAttendance(id: string) { if (isGAS) await gasRequest('apiDelete', 'Attendance', id); return dbService.deleteAttendance(id); },
@@ -126,13 +127,21 @@ export const apiService = {
       }
     }
   },
-  async factoryReset() { if (isGAS) return gasRequest('factoryReset'); return dbService.clearAllData(); },
+  
+  // Cleanly resets both cloud and local storage
+  async factoryReset() { 
+    localStorage.removeItem('smartstock_user');
+    await dbService.clearAllData();
+    if (isGAS) return gasRequest('factoryReset'); 
+    return { success: true };
+  },
+
   async put(store: string, data: any) { if (isGAS) await gasRequest('apiUpsert', store, data); return dbService.put(store, data); },
   
-  /* Fixed: initDatabase now returns a typed result with success property to avoid TS errors in Login.tsx */
   async initDatabase(): Promise<{ success: boolean }> { 
-    if (isGAS) return gasRequest<{ success: boolean }>('setupDatabase');
+    // Always initialize local DB first
     await dbService.init(); 
+    if (isGAS) return gasRequest<{ success: boolean }>('setupDatabase');
     return { success: true };
   }
 };
