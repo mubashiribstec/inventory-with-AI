@@ -63,6 +63,26 @@ export class DatabaseService {
     }
   }
 
+  /**
+   * PERMANENTLY clears all data from all object stores
+   */
+  async clearAllData(): Promise<void> {
+    if (!this.db) return;
+    const stores = Array.from(this.db.objectStoreNames);
+    const transaction = this.db.transaction(stores, 'readwrite');
+    
+    return new Promise((resolve, reject) => {
+      stores.forEach(storeName => {
+        transaction.objectStore(storeName).clear();
+      });
+      transaction.oncomplete = () => {
+        localStorage.removeItem('smartstock_user');
+        resolve();
+      };
+      transaction.onerror = () => reject(transaction.error);
+    });
+  }
+
   async getAllItems(): Promise<InventoryItem[]> { return this.getAll<InventoryItem>('items'); }
   async saveItem(item: InventoryItem): Promise<void> { return this.put('items', item); }
   async deleteItem(id: string): Promise<void> { return this.delete('items', id); }

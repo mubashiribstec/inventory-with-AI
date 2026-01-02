@@ -1,3 +1,4 @@
+
 import React, { useState } from 'react';
 import { SystemSettings } from '../types.ts';
 import { apiService } from '../api.ts';
@@ -44,10 +45,28 @@ const SettingsModule: React.FC<SettingsModuleProps> = ({ settings, onUpdate }) =
     }
   };
 
+  const handleFactoryReset = async () => {
+    const confirm1 = window.confirm("CRITICAL WARNING: This will permanently ERASE all local data, software licenses, inventory records, and user accounts. Are you absolutely sure?");
+    if (!confirm1) return;
+
+    const confirm2 = window.confirm("FINAL WARNING: All unsaved changes will be lost and the system will return to factory defaults. Proceed with WIPE?");
+    if (!confirm2) return;
+
+    setLoading(true);
+    try {
+      await apiService.factoryReset();
+      alert("System reset successful. The application will now reload.");
+      window.location.reload();
+    } catch (err) {
+      alert("Reset failed: " + err);
+      setLoading(false);
+    }
+  };
+
   const themeColor = formData.primary_color || 'indigo';
 
   return (
-    <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 animate-fadeIn max-w-6xl mx-auto">
+    <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 animate-fadeIn max-w-6xl mx-auto pb-20">
       {/* Configuration Form */}
       <div className="lg:col-span-2 space-y-8">
         <form onSubmit={handleSubmit} className="bg-white rounded-[32px] border border-slate-100 shadow-sm overflow-hidden">
@@ -136,6 +155,45 @@ const SettingsModule: React.FC<SettingsModuleProps> = ({ settings, onUpdate }) =
             </button>
           </div>
         </form>
+
+        {/* Danger Zone */}
+        <div className="bg-white rounded-[32px] border border-rose-100 shadow-sm overflow-hidden">
+           <div className="p-8 border-b border-rose-50 flex items-center gap-4 bg-rose-50/30">
+              <div className="w-12 h-12 bg-rose-500 rounded-2xl flex items-center justify-center text-white shadow-lg shadow-rose-100">
+                 <i className="fas fa-exclamation-triangle"></i>
+              </div>
+              <div>
+                 <h3 className="text-xl font-bold text-rose-600 poppins">Danger Zone</h3>
+                 <p className="text-xs text-rose-400 font-bold uppercase tracking-widest">Destructive Actions & Maintenance</p>
+              </div>
+           </div>
+           
+           <div className="p-8 space-y-6">
+              <div className="flex flex-col md:flex-row items-center justify-between gap-6 p-6 bg-rose-50/20 border border-rose-100 rounded-2xl">
+                 <div className="flex-1">
+                    <h5 className="font-bold text-slate-800">Factory Software Reset</h5>
+                    <p className="text-sm text-slate-500 mt-1 leading-relaxed">
+                       Wipes all software license data, inventory items, movements, and attendance logs. This action is <b>permanent</b> and cannot be undone.
+                    </p>
+                 </div>
+                 <button 
+                   type="button"
+                   onClick={handleFactoryReset}
+                   disabled={loading}
+                   className="px-6 py-3 bg-rose-600 hover:bg-rose-700 text-white rounded-xl font-bold text-xs shadow-lg shadow-rose-100 transition whitespace-nowrap"
+                 >
+                    <i className="fas fa-trash-alt mr-2"></i> Reset Software Data
+                 </button>
+              </div>
+
+              <div className="p-4 bg-amber-50 rounded-2xl border border-amber-100 flex items-start gap-3">
+                 <i className="fas fa-info-circle text-amber-500 mt-0.5"></i>
+                 <p className="text-[11px] text-amber-700 leading-relaxed font-medium">
+                    Performing a reset will logout all active sessions. Ensure you have backups of your data if running in production mode.
+                 </p>
+              </div>
+           </div>
+        </div>
       </div>
 
       {/* Live Preview Sidebar */}

@@ -92,9 +92,14 @@ export const apiService = {
     });
   },
 
+  async factoryReset(): Promise<void> {
+    // Note: For real servers, you might need a restricted backend endpoint.
+    // For local/GAS fallback, we wipe the local IndexedDB.
+    await dbService.clearAllData();
+  },
+
   async getSettings(): Promise<SystemSettings> { return handleRequest<SystemSettings>(`${BASE_URL}/settings`, {}, () => dbService.getSettings()); },
   
-  // Fix: Added updateSettings for branding customization
   async updateSettings(settings: SystemSettings): Promise<void> { return handleRequest<void>(`${BASE_URL}/settings`, { method: 'POST', body: JSON.stringify(settings) }, () => dbService.saveSettings(settings)); },
   
   async getAllItems(): Promise<InventoryItem[]> { return handleRequest<InventoryItem[]>(`${BASE_URL}/items`, {}, () => dbService.getAllItems()); },
@@ -103,7 +108,6 @@ export const apiService = {
 
   async getCategories(): Promise<Category[]> { return handleRequest<Category[]>(`${BASE_URL}/categories`, {}, () => dbService.getAllCategories()); },
   
-  // Fix: Added saveEmployee for staff synchronization
   async saveEmployee(employee: Employee): Promise<void> { return handleRequest<void>(`${BASE_URL}/employees`, { method: 'POST', body: JSON.stringify(employee) }, () => dbService.saveEmployee(employee)); },
   async getEmployees(): Promise<Employee[]> { return handleRequest<Employee[]>(`${BASE_URL}/employees`, {}, () => dbService.getAllEmployees()); },
   
@@ -112,7 +116,6 @@ export const apiService = {
   
   async getAllLicenses(): Promise<License[]> { return handleRequest<License[]>(`${BASE_URL}/licenses`, {}, () => dbService.getAllLicenses()); },
   
-  // Fix: Added deleteLicense for software management
   async deleteLicense(id: any): Promise<void> { return handleRequest<void>(`${BASE_URL}/licenses/${id}`, { method: 'DELETE' }, () => dbService.deleteLicense(id)); },
   
   async getAllRequests(): Promise<AssetRequest[]> { return handleRequest<AssetRequest[]>(`${BASE_URL}/requests`, {}, () => dbService.getAllRequests()); },
@@ -122,7 +125,6 @@ export const apiService = {
   
   async getUsers(): Promise<User[]> { return handleRequest<User[]>(`${BASE_URL}/users`, {}, () => dbService.getUsers()); },
   
-  // Fix: Added user management operations
   async saveUser(user: User): Promise<void> { return handleRequest<void>(`${BASE_URL}/users`, { method: 'POST', body: JSON.stringify(user) }, () => dbService.saveUser(user)); },
   async deleteUser(id: string): Promise<void> { return handleRequest<void>(`${BASE_URL}/users/${id}`, { method: 'DELETE' }, () => dbService.deleteUser(id)); },
   
@@ -130,7 +132,6 @@ export const apiService = {
   
   async getNotifications(userId: string): Promise<Notification[]> { return handleRequest<Notification[]>(`${BASE_URL}/notifications/${userId}`, {}, () => dbService.getNotifications(userId)); },
   
-  // Fix: Added notification helpers
   async createNotification(notif: Partial<Notification>): Promise<void> { return handleRequest<void>(`${BASE_URL}/notifications`, { method: 'POST', body: JSON.stringify(notif) }, () => dbService.saveNotification(notif)); },
   async markNotificationsAsRead(ids: number[]): Promise<void> { 
     return handleRequest<void>(`${BASE_URL}/notifications/read`, { method: 'POST', body: JSON.stringify({ ids }) }, async () => {
@@ -143,17 +144,14 @@ export const apiService = {
   
   async getSystemLogs(): Promise<UserLog[]> { return handleRequest<UserLog[]>(`${BASE_URL}/system-logs`, {}, () => dbService.getSystemLogs()); },
 
-  // Fix: Added Attendance management methods
   async getAttendance(): Promise<AttendanceRecord[]> { return handleRequest<AttendanceRecord[]>(`${BASE_URL}/attendance`, {}, () => dbService.getAttendance()); },
   async saveAttendance(record: AttendanceRecord): Promise<void> { return handleRequest<void>(`${BASE_URL}/attendance`, { method: 'POST', body: JSON.stringify(record) }, () => dbService.saveAttendance(record)); },
   async deleteAttendance(id: string): Promise<void> { return handleRequest<void>(`${BASE_URL}/attendance/${id}`, { method: 'DELETE' }, () => dbService.deleteAttendance(id)); },
   
-  // Fix: Added Leave request management methods
   async getLeaveRequests(): Promise<LeaveRequest[]> { return handleRequest<LeaveRequest[]>(`${BASE_URL}/leave_requests`, {}, () => dbService.getLeaveRequests()); },
-  async saveLeaveRequest(request: LeaveRequest): Promise<void> { return handleRequest<void>(`${BASE_URL}/leave_requests`, { method: 'POST', body: JSON.stringify(request) }, () => dbService.saveLeaveRequest(request)); },
+  async saveLeaveRequest(request: LeaveRequest): Promise<void> { return handleRequest<void>(` ${BASE_URL}/leave_requests`, { method: 'POST', body: JSON.stringify(request) }, () => dbService.saveLeaveRequest(request)); },
   async deleteLeaveRequest(id: string): Promise<void> { return handleRequest<void>(`${BASE_URL}/leave_requests/${id}`, { method: 'DELETE' }, () => dbService.deleteLeaveRequest(id)); },
 
-  // Fix: Added Generic CRUD methods for specialized modules like Role Config
   async genericSave(tableName: string, data: any): Promise<void> { return handleRequest<void>(`${BASE_URL}/${tableName}`, { method: 'POST', body: JSON.stringify(data) }, () => dbService.put(tableName, data)); },
   async genericDelete(tableName: string, id: any): Promise<void> { return handleRequest<void>(`${BASE_URL}/${tableName}/${id}`, { method: 'DELETE' }, () => dbService.delete(tableName, id)); }
 };
