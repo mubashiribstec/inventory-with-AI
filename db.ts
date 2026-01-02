@@ -43,7 +43,7 @@ export class DatabaseService {
       await this.put('users', {
         id: 'U-001',
         username: 'admin',
-        password: 'admin123',
+        password: 'admin', // Updated default password
         role: UserRole.ADMIN,
         full_name: 'System Administrator',
         department: 'IT',
