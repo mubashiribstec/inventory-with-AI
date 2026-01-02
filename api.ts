@@ -14,7 +14,6 @@ export const apiService = {
         body: JSON.stringify({ username, password })
       });
 
-      // Handle Service Unavailable (503) or Server Error (500)
       if (!response.ok) {
         if (response.status >= 500) {
             throw new Error("Authentication server unreachable. Check your connection.");
@@ -32,7 +31,6 @@ export const apiService = {
       await dbService.saveUser(user); // Cache for session persistence
       return user;
     } catch (e) {
-      // Catch network failures (TypeError: Failed to fetch)
       if (e instanceof TypeError) {
           throw new Error("Authentication server unreachable. Check your connection.");
       }
@@ -213,17 +211,28 @@ export const apiService = {
 
   async initDatabase(): Promise<{ success: boolean }> { 
     await dbService.init(); 
-    for (let i = 0; i < 3; i++) {
+    let lastError = "Initialization timed out.";
+    
+    for (let i = 0; i < 5; i++) {
         try {
             const res = await fetch(`${API_BASE}/init-db`, { method: 'POST' });
+            const data = await res.json().catch(() => ({}));
+            
             if (res.ok) {
                 await this.getSettings();
                 return { success: true };
+            } else {
+                lastError = data.error || data.details || `Server Error ${res.status}`;
+                // If the error is not "Initializing", it might be a hard failure
+                if (res.status !== 503) {
+                    throw new Error(lastError);
+                }
             }
-        } catch (e) {
-            await new Promise(r => setTimeout(r, 2000));
+        } catch (e: any) {
+            lastError = e.message;
+            if (i < 4) await new Promise(r => setTimeout(r, 2000));
         }
     }
-    return { success: false };
+    throw new Error(lastError);
   }
 };

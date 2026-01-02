@@ -216,14 +216,13 @@ const handleInitDb = async (conn) => {
     await conn.query("REPLACE INTO roles (id, label, description, permissions, color, icon) VALUES (?, ?, ?, ?, ?, ?)", r);
   }
 
-  // Ensure default admin exists with password 'admin'
   await conn.query("REPLACE INTO users (id, username, password, role, full_name, shift_start_time, department, joining_date, designation, is_active) VALUES ('U-001', 'admin', 'admin', 'ADMIN', 'System Administrator', '09:00', 'IT Infrastructure', '2023-01-01', 'Chief Systems Admin', 1)");
   
   console.log('[DATABASE] Auto-initialization complete. Default Login: admin / admin');
   return true;
 };
 
-const initDbWithRetry = async (retries = 15, delay = 3000) => {
+const initDbWithRetry = async (retries = 20, delay = 5000) => {
   for (let i = 0; i < retries; i++) {
     let conn;
     try {
@@ -235,7 +234,7 @@ const initDbWithRetry = async (retries = 15, delay = 3000) => {
       dbError = null;
       return;
     } catch (err) {
-      dbError = err.message;
+      dbError = `Connection attempt failed: ${err.message}. Ensure the MariaDB container is running and the credentials match.`;
       console.error(`[DATABASE ERROR] Attempt ${i + 1} failed: ${err.message}`);
       if (i < retries - 1) {
         await new Promise(res => setTimeout(res, delay));
@@ -244,18 +243,18 @@ const initDbWithRetry = async (retries = 15, delay = 3000) => {
       if (conn) conn.release();
     }
   }
-  console.error('[DATABASE] Critical: Failed to initialize database after multiple attempts.');
+  dbError = `CRITICAL: Failed to connect to database at ${dbHost} after multiple attempts. Check logs.`;
+  console.error('[DATABASE] Critical failure.');
 };
 
 initDbWithRetry();
 
 app.use('/api', (req, res, next) => {
   res.setHeader('Content-Type', 'application/json; charset=utf-8');
-  // Allow init-db route even if DB is not ready to prevent 503 loops in frontend probe
   if (!isDbReady && req.path !== '/init-db') {
     return res.status(503).json({ 
       error: 'Database Initializing', 
-      details: dbError || 'The server is currently establishing a connection to MariaDB. Please wait a few moments and try again.' 
+      details: dbError || 'The server is currently establishing a connection to MariaDB.' 
     });
   }
   next();
@@ -266,6 +265,7 @@ const sendJSON = (res, data, status = 200) => {
 };
 
 async function logAction(userId, username, action, targetType, targetId, details) {
+  if (!isDbReady) return;
   let conn;
   try {
     conn = await pool.getConnection();
@@ -335,7 +335,7 @@ app.post('/api/init-db', async (req, res) => {
     dbError = null;
     sendJSON(res, { success: true, message: 'Database initialized manually.' });
   } catch (err) {
-    sendJSON(res, { error: err.message }, 500);
+    sendJSON(res, { error: `Manual Init Failed: ${err.message}` }, 500);
   } finally {
     if (conn) conn.release();
   }
