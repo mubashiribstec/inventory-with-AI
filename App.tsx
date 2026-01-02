@@ -19,6 +19,7 @@ import SalaryModule from './components/SalaryModule.tsx';
 import BudgetModule from './components/BudgetModule.tsx';
 import Login from './components/Login.tsx';
 import RequestForm from './components/RequestForm.tsx';
+import Chatbot from './components/Chatbot.tsx';
 import { ItemStatus, UserRole, User, UserLog, InventoryItem, Movement, Supplier, LocationRecord, MaintenanceLog, Category, Employee, Department, License, AssetRequest, Notification, Role, SystemSettings } from './types.ts';
 import Modal from './components/Modal.tsx';
 import PurchaseForm from './components/PurchaseForm.tsx';
@@ -86,16 +87,29 @@ const App: React.FC = () => {
   useEffect(() => {
     const initApp = async () => {
       try {
+        // 1. Initialize local DB
         await apiService.initDatabase();
+        
+        // 2. Fetch Global Settings from Cloud (Priority)
         const s = await apiService.getSettings();
         if (s) setSettings(s);
+        
+        // 3. Silent sync users in background for cross-browser login support
+        apiService.getUsers().then(u => setUsers(u)).catch(console.error);
+
+        // 4. Restore session
         const saved = localStorage.getItem('smartstock_user');
         if (saved) {
           const user = JSON.parse(saved);
           setCurrentUser(user);
           await fetchRoleData(user.role);
         }
-      } catch (e) { console.error(e); } finally { setIsInitialized(true); setLoading(false); }
+      } catch (e) { 
+        console.error("Boot sequence error:", e); 
+      } finally { 
+        setIsInitialized(true); 
+        setLoading(false); 
+      }
     };
     initApp();
   }, [fetchRoleData]);
@@ -112,9 +126,6 @@ const App: React.FC = () => {
     finally { setSyncing(false); }
   };
 
-  /**
-   * Enhanced Deletion Logic: Cascades removal to User account if it exists
-   */
   const handleDeleteEmployee = async (emp: Employee) => {
     const userToCleanup = users.find(u => u.full_name === emp.name || u.id.includes(emp.id.split('-').pop()!));
     
@@ -146,7 +157,6 @@ const App: React.FC = () => {
           is_active: data.is_active
         });
 
-        // If 'Create User' was toggled, also save user record
         if (data.create_user && data.username && data.password) {
           const userId = `U-${empId.split('-').pop()}`;
           await apiService.saveUser({
@@ -162,7 +172,6 @@ const App: React.FC = () => {
           });
         }
         
-        // Synchronize status with existing user if editing
         const existingUser = users.find(u => u.full_name === data.name);
         if (existingUser && data.is_active !== undefined) {
             await apiService.saveUser({ ...existingUser, is_active: data.is_active });
@@ -170,7 +179,8 @@ const App: React.FC = () => {
       }
       
       if (managementModal.type === 'Department') await apiService.saveDepartment(data);
-      if (managementModal.type === 'Category') await apiService.put('categories' as any, data);
+      // Fix: replace apiService.put with genericSave to correctly update category data
+      if (managementModal.type === 'Category') await apiService.genericSave('categories', data);
       
       setManagementModal({ isOpen: false, type: null });
       fetchData();
@@ -182,8 +192,8 @@ const App: React.FC = () => {
   const renderContent = () => {
     if (!currentUser) return null;
     switch (activeTab) {
-      case 'dashboard': return <Dashboard stats={stats} movements={movements} items={items} onFullAudit={() => setActiveTab('audit-trail')} onCheckIn={() => setActiveTab('attendance')} />;
-      case 'inventory': return <InventoryTable items={items} onUpdate={fetchData} onEdit={() => {}} onView={setViewingItem} onAddAsset={() => setIsPurchaseModalOpen(true)} />;
+      case 'dashboard': return <Dashboard stats={stats} movements={movements} items={items} onFullAudit={() => setActiveTab('audit-trail')} onCheckIn={() => setActiveTab('attendance')} themeColor={settings.primary_color} />;
+      case 'inventory': return <InventoryTable items={items} onUpdate={fetchData} onEdit={() => {}} onView={setViewingItem} onAddAsset={() => setIsPurchaseModalOpen(true)} themeColor={settings.primary_color} />;
       case 'attendance': return <AttendanceModule currentUser={currentUser} />;
       case 'notifications': return <NotificationCenter currentUser={currentUser} />;
       case 'leaves': return <LeaveModule currentUser={currentUser} allUsers={users} />;
@@ -204,7 +214,7 @@ const App: React.FC = () => {
       case 'budgets': return <BudgetModule />;
       case 'audit-trail': return <GenericListView title="Movement Ledger" icon="fa-history" items={movements} columns={['date', 'item', 'from', 'to', 'status']} />;
       case 'system-logs': return <GenericListView title="Security Audit Logs" icon="fa-shield-alt" items={[]} columns={['timestamp', 'username', 'action', 'details']} />;
-      default: return <Dashboard stats={stats} movements={movements} items={items} onFullAudit={() => setActiveTab('audit-trail')} onCheckIn={() => setActiveTab('attendance')} />;
+      default: return <Dashboard stats={stats} movements={movements} items={items} onFullAudit={() => setActiveTab('audit-trail')} onCheckIn={() => setActiveTab('attendance')} themeColor={settings.primary_color} />;
     }
   };
 
@@ -277,6 +287,9 @@ const App: React.FC = () => {
 
       {viewingItem && <Modal title="Asset DNA Profile" onClose={() => setViewingItem(null)}><ItemDetails item={viewingItem} /></Modal>}
       {viewingEmployee && <Modal title="Employee Record" onClose={() => setViewingEmployee(null)}><EmployeeDetails employee={viewingEmployee} items={items} allUsers={users} /></Modal>}
+      
+      {/* Integrating the AI assistant component */}
+      <Chatbot items={items} stats={stats} />
     </div>
   );
 };

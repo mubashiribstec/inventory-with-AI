@@ -4,7 +4,6 @@ import { dbService } from './db.ts';
 
 declare var google: any;
 
-const BASE_URL = '/api';
 const isGAS = typeof google !== 'undefined' && google.script && google.script.run;
 
 const gasRequest = <T>(funcName: string, ...args: any[]): Promise<T> => {
@@ -19,10 +18,30 @@ const gasRequest = <T>(funcName: string, ...args: any[]): Promise<T> => {
 export const apiService = {
   // Authentication
   async login(username, password): Promise<User> {
-    // Ensure DB is ready before trying to login locally
-    if (!isGAS) await dbService.init();
+    // 1. Always try backend login first for cross-browser support
+    try {
+      if (isGAS) {
+        const user = await gasRequest<User>('apiLogin', username, password);
+        // Sync this user locally for offline access
+        await dbService.saveUser(user);
+        return user;
+      } else {
+        const response = await fetch('/api/login', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ username, password })
+        });
+        if (response.ok) {
+          const user = await response.json();
+          await dbService.saveUser(user);
+          return user;
+        }
+      }
+    } catch (e) {
+      console.warn("Backend login failed, attempting local fallback...");
+    }
 
-    if (isGAS) return gasRequest<User>('apiLogin', username, password);
+    // 2. Fallback to local DB if backend is unreachable
     const users = await dbService.getUsers();
     const user = users.find(u => u.username === username && u.password === password);
     
@@ -30,7 +49,7 @@ export const apiService = {
       if (user.is_active === false) throw new Error("Account is disabled. Contact administrator.");
       return user;
     }
-    throw new Error("Invalid Credentials");
+    throw new Error("Invalid Credentials or Backend Unreachable");
   },
 
   // Cloud Sync Feature
@@ -48,7 +67,7 @@ export const apiService = {
       departments: await dbService.getAllDepartments(),
       budgets: await dbService.getAll<PersonalBudget>('budgets' as any),
       users: await dbService.getUsers(),
-      settings: await dbService.getSettings(),
+      settings: [await dbService.getSettings()], // Wrapped in array for GAS collection logic
       attendance: await dbService.getAttendance(),
       leaves: await dbService.getLeaveRequests(),
       roles: await dbService.getRoles()
@@ -56,37 +75,45 @@ export const apiService = {
     return gasRequest<any>('syncFullDatabase', fullData);
   },
 
-  // Settings
+  // Settings - Priority given to Backend
   async getSettings(): Promise<SystemSettings> {
-    if (isGAS) return gasRequest<SystemSettings>('getCollection', 'Settings').then(arr => (Array.isArray(arr) ? arr[0] : arr) as SystemSettings);
+    try {
+      if (isGAS) {
+        const arr = await gasRequest<SystemSettings[]>('getCollection', 'Settings');
+        if (arr && arr.length > 0) {
+          const s = arr[0];
+          await dbService.saveSettings(s); // Update local cache
+          return s;
+        }
+      } else {
+        const res = await fetch('/api/settings');
+        if (res.ok) {
+          const s = await res.json();
+          if (s.id) {
+            await dbService.saveSettings(s);
+            return s;
+          }
+        }
+      }
+    } catch (e) {
+      console.warn("Could not fetch remote settings, using local.");
+    }
     return dbService.getSettings();
   },
 
   async updateSettings(s: SystemSettings) {
-    if (isGAS) return gasRequest<void>('apiUpsert', 'Settings', s);
+    // 1. Update Remote
+    if (isGAS) {
+      await gasRequest<void>('apiUpsert', 'Settings', s);
+    } else {
+      await fetch('/api/settings', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(s)
+      });
+    }
+    // 2. Update Local Cache
     return dbService.saveSettings(s);
-  },
-
-  // Department Management
-  async getDepartments(): Promise<Department[]> {
-    if (isGAS) return gasRequest<Department[]>('getCollection', 'Departments');
-    return dbService.getAllDepartments();
-  },
-
-  async saveDepartment(d: Department) {
-    if (isGAS) await gasRequest<void>('apiUpsert', 'Departments', d);
-    return dbService.saveDepartment(d);
-  },
-
-  // Personal Budget Management (Independent)
-  async getBudgets(): Promise<PersonalBudget[]> {
-    if (isGAS) return gasRequest<PersonalBudget[]>('getCollection', 'Budgets');
-    return dbService.getAll<PersonalBudget>('budgets' as any);
-  },
-
-  async saveBudget(b: PersonalBudget) {
-    if (isGAS) await gasRequest<void>('apiUpsert', 'Budgets', b);
-    return dbService.put('budgets' as any, b);
   },
 
   // Generic Inventory & Personnel
@@ -98,6 +125,12 @@ export const apiService = {
   async saveEmployee(e: Employee) { if (isGAS) await gasRequest('apiUpsert', 'Employees', e); return dbService.saveEmployee(e); },
   async deleteEmployee(id: string) { if (isGAS) await gasRequest('apiDelete', 'Employees', id); return dbService.deleteEmployee(id); },
 
+  async getDepartments(): Promise<Department[]> { return isGAS ? gasRequest('getCollection', 'Departments') : dbService.getAllDepartments(); },
+  async saveDepartment(d: Department) { if (isGAS) await gasRequest('apiUpsert', 'Departments', d); return dbService.saveDepartment(d); },
+
+  async getBudgets(): Promise<PersonalBudget[]> { return isGAS ? gasRequest('getCollection', 'Budgets') : dbService.getAll<PersonalBudget>('budgets' as any); },
+  async saveBudget(b: PersonalBudget) { if (isGAS) await gasRequest('apiUpsert', 'Budgets', b); return dbService.put('budgets' as any, b); },
+
   async getCategories(): Promise<Category[]> { return isGAS ? gasRequest('getCollection', 'Categories') : dbService.getAllCategories(); },
   async getAllMovements(): Promise<Movement[]> { return isGAS ? gasRequest('getCollection', 'Movements') : dbService.getAllMovements(); },
   async getAllSuppliers(): Promise<Supplier[]> { return isGAS ? gasRequest('getCollection', 'Suppliers') : dbService.getAllSuppliers(); },
@@ -106,7 +139,15 @@ export const apiService = {
   async getAllLicenses(): Promise<License[]> { return isGAS ? gasRequest('getCollection', 'Licenses') : dbService.getAllLicenses(); },
   async getAllRequests(): Promise<AssetRequest[]> { return isGAS ? gasRequest('getCollection', 'Requests') : dbService.getAllRequests(); },
   
-  async getUsers(): Promise<User[]> { return isGAS ? gasRequest('getCollection', 'Users') : dbService.getUsers(); },
+  // Users fetch prioritized from backend
+  async getUsers(): Promise<User[]> { 
+    if (isGAS) return gasRequest<User[]>('getCollection', 'Users').then(async users => {
+      for (const u of users) await dbService.saveUser(u);
+      return users;
+    });
+    return dbService.getUsers(); 
+  },
+  
   async saveUser(u: User) { if (isGAS) await gasRequest('apiUpsert', 'Users', u); return dbService.saveUser(u); },
   async getRoles(): Promise<Role[]> { return isGAS ? gasRequest('getCollection', 'Roles') : dbService.getRoles(); },
   async getNotifications(uid: string): Promise<Notification[]> { return isGAS ? gasRequest('getCollection', 'Notifications') : dbService.getNotifications(uid); },
@@ -133,7 +174,6 @@ export const apiService = {
     }
   },
   
-  // Cleanly resets both cloud and local storage
   async factoryReset() { 
     localStorage.removeItem('smartstock_user');
     await dbService.clearAllData();
@@ -141,12 +181,15 @@ export const apiService = {
     return { success: true };
   },
 
-  async put(store: string, data: any) { if (isGAS) await gasRequest('apiUpsert', store, data); return dbService.put(store, data); },
-  
   async initDatabase(): Promise<{ success: boolean }> { 
-    // Always initialize local DB first
     await dbService.init(); 
-    if (isGAS) return gasRequest<{ success: boolean }>('setupDatabase');
+    if (isGAS) {
+      const res = await gasRequest<{ success: boolean }>('setupDatabase');
+      // Trigger a silent sync of users and settings on init
+      this.getSettings();
+      this.getUsers();
+      return res;
+    }
     return { success: true };
   }
 };

@@ -31,20 +31,14 @@ const Chatbot: React.FC<ChatbotProps> = ({ items, stats }) => {
   const handleSend = async () => {
     if (!input.trim() || isLoading) return;
 
-    const apiKey = process.env.API_KEY;
-    if (!apiKey) {
-      setMessages(prev => [...prev, { role: 'user', text: input.trim() }, { role: 'model', text: "Chat unavailable: No API Key configured." }]);
-      setInput('');
-      return;
-    }
-
     const userMessage = input.trim();
     setInput('');
     setMessages(prev => [...prev, { role: 'user', text: userMessage }]);
     setIsLoading(true);
 
     try {
-      const ai = new GoogleGenAI({ apiKey });
+      // Fix: Always initialize GoogleGenAI with process.env.API_KEY using named parameter
+      const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
       
       const inventoryContext = items.map(i => ({
         id: i.id,
@@ -64,13 +58,16 @@ const Chatbot: React.FC<ChatbotProps> = ({ items, stats }) => {
         Format your responses with markdown for clarity (bolding, lists).
       `;
 
+      // Fix: Move system level instruction to config.systemInstruction for better performance
       const response = await ai.models.generateContent({
         model: 'gemini-3-pro-preview',
-        contents: [
-          { role: 'user', parts: [{ text: `Context: ${systemInstruction}\n\nUser Question: ${userMessage}` }] }
-        ],
+        contents: [{ role: 'user', parts: [{ text: userMessage }] }],
+        config: {
+          systemInstruction: systemInstruction,
+        },
       });
 
+      // Fix: Use .text property directly instead of calling it as a function
       const aiText = response.text || "I'm sorry, I couldn't process that request.";
       setMessages(prev => [...prev, { role: 'model', text: aiText }]);
     } catch (error) {
