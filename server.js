@@ -10,7 +10,6 @@ const port = process.env.PORT || 3000;
 app.use(cors());
 app.use(express.json());
 
-// Enhanced Pool Configuration for Native/Docker reliability
 const dbHost = process.env.DB_HOST && process.env.DB_HOST.trim() !== '' 
   ? process.env.DB_HOST 
   : '127.0.0.1';
@@ -28,7 +27,6 @@ const pool = mariadb.createPool({
 let isDbReady = false;
 let dbError = null;
 
-// Forward Declaration of Init Logic
 const handleInitDb = async (conn) => {
   console.log('[DATABASE] Running schema check and auto-initialization...');
   const queries = [
@@ -225,8 +223,7 @@ const handleInitDb = async (conn) => {
   return true;
 };
 
-// Retry Loop for Database Connection
-const initDbWithRetry = async (retries = 10, delay = 3000) => {
+const initDbWithRetry = async (retries = 15, delay = 3000) => {
   for (let i = 0; i < retries; i++) {
     let conn;
     try {
@@ -250,11 +247,11 @@ const initDbWithRetry = async (retries = 10, delay = 3000) => {
   console.error('[DATABASE] Critical: Failed to initialize database after multiple attempts.');
 };
 
-// Start initialization
 initDbWithRetry();
 
 app.use('/api', (req, res, next) => {
   res.setHeader('Content-Type', 'application/json; charset=utf-8');
+  // Allow init-db route even if DB is not ready to prevent 503 loops in frontend probe
   if (!isDbReady && req.path !== '/init-db') {
     return res.status(503).json({ 
       error: 'Database Initializing', 

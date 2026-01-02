@@ -2,7 +2,6 @@
 import { InventoryItem, Movement, Supplier, LocationRecord, MaintenanceLog, License, Category, Employee, Department, PersonalBudget, AssetRequest, User, UserLog, AttendanceRecord, LeaveRequest, Role, Notification, SystemSettings } from './types.ts';
 import { dbService } from './db.ts';
 
-// No longer using Google Apps Script - Pure MariaDB Mode
 const API_BASE = '/api';
 
 export const apiService = {
@@ -15,7 +14,12 @@ export const apiService = {
         body: JSON.stringify({ username, password })
       });
 
+      // Handle Service Unavailable (503) or Server Error (500)
       if (!response.ok) {
+        if (response.status >= 500) {
+            throw new Error("Authentication server unreachable. Check your connection.");
+        }
+        
         let errorMsg = `Server Error (${response.status})`;
         try {
             const errorData = await response.json();
@@ -28,8 +32,9 @@ export const apiService = {
       await dbService.saveUser(user); // Cache for session persistence
       return user;
     } catch (e) {
-      if (e instanceof TypeError && e.message === 'Failed to fetch') {
-          throw new Error("Authentication server unreachable. Please check if the backend is running.");
+      // Catch network failures (TypeError: Failed to fetch)
+      if (e instanceof TypeError) {
+          throw new Error("Authentication server unreachable. Check your connection.");
       }
       throw e;
     }
@@ -46,9 +51,7 @@ export const apiService = {
           return s;
         }
       }
-    } catch (e) {
-      console.warn("Backend settings unreachable, using local cache.");
-    }
+    } catch (e) {}
     return dbService.getSettings();
   },
 
@@ -61,7 +64,6 @@ export const apiService = {
     return dbService.saveSettings(s);
   },
 
-  // Snapshot Features for Local Browser Migration
   async getFullDataSnapshot() {
     return {
       items: await this.getAllItems(),
@@ -88,12 +90,17 @@ export const apiService = {
   },
 
   async get<T>(path: string): Promise<T[]> {
-    const res = await fetch(`${API_BASE}/${path}`);
-    if (!res.ok) {
-        const errorData = await res.json().catch(() => ({}));
-        throw new Error(errorData.error || `Server Error: ${res.statusText}`);
+    try {
+      const res = await fetch(`${API_BASE}/${path}`);
+      if (!res.ok) {
+          const errorData = await res.json().catch(() => ({}));
+          throw new Error(errorData.error || `Server Error: ${res.statusText}`);
+      }
+      return res.json();
+    } catch (e) {
+      if (e instanceof TypeError) throw new Error("Connection failed. Server offline.");
+      throw e;
     }
-    return res.json();
   },
 
   async post(path: string, data: any): Promise<any> {
@@ -206,7 +213,6 @@ export const apiService = {
 
   async initDatabase(): Promise<{ success: boolean }> { 
     await dbService.init(); 
-    // Small retry for server initialization
     for (let i = 0; i < 3; i++) {
         try {
             const res = await fetch(`${API_BASE}/init-db`, { method: 'POST' });
@@ -215,7 +221,6 @@ export const apiService = {
                 return { success: true };
             }
         } catch (e) {
-            console.error(`Init attempt ${i+1} failed`, e);
             await new Promise(r => setTimeout(r, 2000));
         }
     }
