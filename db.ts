@@ -1,6 +1,5 @@
 
 import { InventoryItem, Movement, Supplier, LocationRecord, License, MaintenanceLog, Category, Employee, Department, AssetRequest, User, UserRole, AttendanceRecord, LeaveRequest, Role, Notification, UserLog } from './types.ts';
-import { initialItems, initialMovements } from './services/mockData.ts';
 
 const DB_NAME = 'SmartStockDB';
 const DB_VERSION = 6; 
@@ -30,7 +29,7 @@ export class DatabaseService {
 
       request.onsuccess = async () => {
         this.db = request.result;
-        await this.seedIfEmpty();
+        await this.seedMinimalData();
         resolve();
       };
 
@@ -39,32 +38,45 @@ export class DatabaseService {
   }
 
   /**
-   * Seeds the local database with mock data for testing purposes
+   * Seeds the database with ONLY the essential admin user and settings.
+   * No demo items or movements are added.
    */
-  private async seedIfEmpty(): Promise<void> {
-    const items = await this.getAllItems();
-    if (items.length === 0) {
-      console.log("[DB] Seeding default test data...");
-      for (const item of initialItems) await this.saveItem(item);
-      for (const mov of initialMovements) await this.saveMovement(mov);
+  private async seedMinimalData(): Promise<void> {
+    const users = await this.getUsers();
+    if (users.length === 0) {
+      console.log("[DB] Initializing with clean system state...");
       
-      // Default Admin for Demo Mode
+      // The ONLY user created by default
       await this.put('users', {
         id: 'U-001',
         username: 'admin',
         password: 'admin123',
         role: UserRole.ADMIN,
-        full_name: 'Demo Administrator',
-        department: 'IT Infrastructure'
+        full_name: 'System Administrator',
+        department: 'IT'
       });
 
-      await this.put('categories', { id: 'CAT-01', name: 'Computers', icon: 'fa-laptop', itemCount: 3 });
-      await this.put('settings', { id: 'GLOBAL', software_name: 'SmartStock Demo', primary_color: 'indigo' });
+      // Essential system settings for UI branding
+      await this.put('settings', { 
+        id: 'GLOBAL', 
+        software_name: 'SmartStock Pro', 
+        primary_color: 'indigo',
+        software_logo: 'fa-warehouse',
+        software_description: 'Enterprise Inventory Management'
+      });
+
+      // Minimal category to allow first entry
+      await this.put('categories', { 
+        id: 'CAT-01', 
+        name: 'General Assets', 
+        icon: 'fa-box', 
+        itemCount: 0 
+      });
     }
   }
 
   /**
-   * PERMANENTLY clears all data from all object stores
+   * PERMANENTLY clears all data and re-seeds the admin user
    */
   async clearAllData(): Promise<void> {
     if (!this.db) return;
@@ -75,8 +87,9 @@ export class DatabaseService {
       stores.forEach(storeName => {
         transaction.objectStore(storeName).clear();
       });
-      transaction.oncomplete = () => {
+      transaction.oncomplete = async () => {
         localStorage.removeItem('smartstock_user');
+        await this.seedMinimalData();
         resolve();
       };
       transaction.onerror = () => reject(transaction.error);
@@ -103,20 +116,16 @@ export class DatabaseService {
   async saveDepartment(dept: Department): Promise<void> { return this.put('departments', dept); }
   async getAllRequests(): Promise<AssetRequest[]> { return this.getAll<AssetRequest>('requests'); }
 
-  // Attendance management fallback
   async getAttendance(): Promise<AttendanceRecord[]> { return this.getAll<AttendanceRecord>('attendance'); }
   async saveAttendance(record: AttendanceRecord): Promise<void> { return this.put('attendance', record); }
   async deleteAttendance(id: string): Promise<void> { return this.delete('attendance', id); }
 
-  // Leave requests management fallback
   async getLeaveRequests(): Promise<LeaveRequest[]> { return this.getAll<LeaveRequest>('leave_requests'); }
   async saveLeaveRequest(id: LeaveRequest): Promise<void> { return this.put('leave_requests', id); }
   async deleteLeaveRequest(id: string): Promise<void> { return this.delete('leave_requests', id); }
 
-  // Role management fallback
   async getRoles(): Promise<Role[]> { return this.getAll<Role>('roles'); }
 
-  // Notification management fallback
   async getNotifications(userId: string): Promise<Notification[]> { 
     const all = await this.getAll<Notification>('notifications');
     if (userId === 'ADMIN' || userId.startsWith('U-001')) return all;
@@ -131,18 +140,13 @@ export class DatabaseService {
     return all.find(n => n.id === id);
   }
 
-  // System logs fallback
   async getSystemLogs(): Promise<UserLog[]> { return this.getAll<UserLog>('user_logs'); }
 
-  // User management for mock login
   async getUsers(): Promise<User[]> { return this.getAll<User>('users'); }
   async saveUser(user: User): Promise<void> { return this.put('users', user); }
   async deleteUser(id: string): Promise<void> { return this.delete('users', id); }
 
-  // Employee management fallback
   async saveEmployee(employee: Employee): Promise<void> { return this.put('employees', employee); }
-
-  // License management fallback
   async deleteLicense(id: any): Promise<void> { return this.delete('licenses', id); }
 
   async getSettings(): Promise<any> { 
@@ -151,7 +155,6 @@ export class DatabaseService {
   }
   async saveSettings(settings: any): Promise<void> { return this.put('settings', settings); }
 
-  /* Fixed: Changed getAll to public so it can be used for budgets and other dynamic stores in apiService */
   public async getAll<T>(storeName: string): Promise<T[]> {
     return new Promise((resolve, reject) => {
       if (!this.db) return resolve([]);
