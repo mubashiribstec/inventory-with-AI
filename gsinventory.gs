@@ -2,10 +2,14 @@
 /**
  * SmartStock Pro Enterprise - GAS MariaDB Connector
  * -----------------------------------------------
- * Requires the MariaDB instance to be publicly accessible.
+ * This script allows Google Apps Script to act as the backend for the 
+ * Enterprise Inventory System.
+ * 
+ * IMPORTANT: 
+ * 1. Your MariaDB instance must be publicly accessible.
+ * 2. You must whitelist Google's IP ranges in your firewall.
  */
 
-// Database Configuration - UPDATE THESE WITH YOUR ACTUAL ACCESS DETAILS
 const DB_CONFIG = {
   host: 'YOUR_PUBLIC_IP_OR_HOSTNAME', 
   port: 3306,
@@ -14,16 +18,23 @@ const DB_CONFIG = {
   pass: 'inventory_password'
 };
 
+/**
+ * Returns a JDBC Connection
+ */
 function getConnection() {
   const url = `jdbc:mysql://${DB_CONFIG.host}:${DB_CONFIG.port}/${DB_CONFIG.db}`;
-  return Jdbc.getConnection(url, DB_CONFIG.user, DB_CONFIG.pass);
+  try {
+    return Jdbc.getConnection(url, DB_CONFIG.user, DB_CONFIG.pass);
+  } catch (e) {
+    throw new Error("Database Connection Failed: " + e.message);
+  }
 }
 
 /**
- * Serves the web application
+ * Serves the React Application
  */
 function doGet(e) {
-  return HtmlService.createTemplateFromFile('inventory')
+  return HtmlService.createTemplateFromFile('index') // Matches your index.html
     .evaluate()
     .setTitle('SmartStock Pro | Enterprise')
     .addMetaTag('viewport', 'width=device-width, initial-scale=1')
@@ -31,14 +42,48 @@ function doGet(e) {
 }
 
 /**
- * Fetch Custom Settings from MariaDB
+ * API: Authentication
  */
-function getGlobalSettings() {
+function login(username, password) {
+  const conn = getConnection();
+  const stmt = conn.prepareStatement("SELECT id, username, role, full_name FROM users WHERE username = ? AND password = ?");
+  stmt.setString(1, username);
+  stmt.setString(2, password);
+  const rs = stmt.executeQuery();
+  
+  let user = null;
+  if (rs.next()) {
+    user = {
+      id: rs.getString("id"),
+      username: rs.getString("username"),
+      role: rs.getString("role"),
+      full_name: rs.getString("full_name")
+    };
+  }
+  
+  rs.close();
+  stmt.close();
+  conn.close();
+  
+  if (!user) throw new Error("Invalid Credentials");
+  return user;
+}
+
+/**
+ * API: System Settings
+ */
+function getSettings() {
   const conn = getConnection();
   const stmt = conn.createStatement();
   const rs = stmt.executeQuery("SELECT * FROM settings WHERE id = 'GLOBAL' LIMIT 1");
   
-  let settings = { id: 'GLOBAL', software_name: 'SmartStock Pro', primary_color: 'indigo' };
+  let settings = { 
+    id: 'GLOBAL', 
+    software_name: 'SmartStock Pro', 
+    primary_color: 'indigo',
+    is_db_connected: true,
+    system_id: null
+  };
   
   if (rs.next()) {
     settings = {
@@ -46,8 +91,20 @@ function getGlobalSettings() {
       software_name: rs.getString("software_name"),
       primary_color: rs.getString("primary_color"),
       software_description: rs.getString("software_description"),
-      software_logo: rs.getString("software_logo")
+      software_logo: rs.getString("software_logo"),
+      license_key: rs.getString("license_key"),
+      license_expiry: rs.getString("license_expiry"),
+      system_id: rs.getString("system_id"),
+      is_db_connected: true
     };
+  } else {
+    // Generate System ID for new installation
+    const sid = Math.random().toString(36).substring(2, 10).toUpperCase();
+    const insert = conn.prepareStatement("INSERT INTO settings (id, software_name, primary_color, system_id) VALUES ('GLOBAL', 'SmartStock Pro', 'indigo', ?)");
+    insert.setString(1, sid);
+    insert.executeUpdate();
+    insert.close();
+    settings.system_id = sid;
   }
   
   rs.close();
@@ -57,12 +114,18 @@ function getGlobalSettings() {
 }
 
 /**
- * Universal Delete from MariaDB
+ * API: Update Settings
  */
-function apiDelete(tableName, id) {
+function updateSettings(settings) {
   const conn = getConnection();
-  const stmt = conn.prepareStatement(`DELETE FROM ${tableName} WHERE id = ?`);
-  stmt.setString(1, id);
+  const keys = Object.keys(settings).filter(k => k !== 'id' && k !== 'is_db_connected');
+  const setClause = keys.map(k => `\`${k}\` = ?`).join(', ');
+  
+  const stmt = conn.prepareStatement(`UPDATE settings SET ${setClause} WHERE id = 'GLOBAL'`);
+  keys.forEach((k, i) => {
+    stmt.setObject(i + 1, settings[k]);
+  });
+  
   stmt.executeUpdate();
   stmt.close();
   conn.close();
@@ -70,38 +133,63 @@ function apiDelete(tableName, id) {
 }
 
 /**
- * Logic for Departments and other tables
+ * API: Generic Module Fetch (GET)
  */
-function apiUpsert(tableName, entity) {
+function getModuleData(tableName) {
   const conn = getConnection();
-  const id = entity.id;
+  const stmt = conn.createStatement();
+  const rs = stmt.executeQuery(`SELECT * FROM \`${tableName}\``);
+  const results = [];
+  const meta = rs.getMetaData();
+  const colCount = meta.getColumnCount();
   
-  // Check existence
-  const checkStmt = conn.prepareStatement(`SELECT 1 FROM ${tableName} WHERE id = ?`);
-  checkStmt.setString(1, id);
-  const exists = checkStmt.executeQuery().next();
-  checkStmt.close();
-
-  if (exists) {
-    // Update logic (Dynamic SQL generation)
-    const keys = Object.keys(entity).filter(k => k !== 'id');
-    const setClause = keys.map(k => `${k} = ?`).join(', ');
-    const updateStmt = conn.prepareStatement(`UPDATE ${tableName} SET ${setClause} WHERE id = ?`);
-    keys.forEach((k, i) => updateStmt.setObject(i + 1, entity[k]));
-    updateStmt.setString(keys.length + 1, id);
-    updateStmt.executeUpdate();
-    updateStmt.close();
-  } else {
-    // Insert logic
-    const keys = Object.keys(entity);
-    const cols = keys.join(', ');
-    const placeholders = keys.map(() => '?').join(', ');
-    const insertStmt = conn.prepareStatement(`INSERT INTO ${tableName} (${cols}) VALUES (${placeholders})`);
-    keys.forEach((k, i) => insertStmt.setObject(i + 1, entity[k]));
-    insertStmt.executeUpdate();
-    insertStmt.close();
+  while (rs.next()) {
+    const row = {};
+    for (let i = 1; i <= colCount; i++) {
+      const colName = meta.getColumnName(i);
+      row[colName] = rs.getObject(i);
+    }
+    results.push(row);
   }
   
+  rs.close();
+  stmt.close();
+  conn.close();
+  return results;
+}
+
+/**
+ * API: Generic Module Upsert (POST)
+ */
+function saveModuleData(tableName, entity) {
+  const conn = getConnection();
+  const keys = Object.keys(entity);
+  const cols = keys.map(k => `\`${k}\``).join(', ');
+  const placeholders = keys.map(() => '?').join(', ');
+  const updateClause = keys.map(k => `\`${k}\` = VALUES(\`${k}\`)`).join(', ');
+
+  const sql = `INSERT INTO \`${tableName}\` (${cols}) VALUES (${placeholders}) ON DUPLICATE KEY UPDATE ${updateClause}`;
+  const stmt = conn.prepareStatement(sql);
+  
+  keys.forEach((k, i) => {
+    stmt.setObject(i + 1, entity[k]);
+  });
+  
+  stmt.executeUpdate();
+  stmt.close();
+  conn.close();
+  return { success: true };
+}
+
+/**
+ * API: Generic Delete (DELETE)
+ */
+function deleteModuleData(tableName, id) {
+  const conn = getConnection();
+  const stmt = conn.prepareStatement(`DELETE FROM \`${tableName}\` WHERE id = ?`);
+  stmt.setString(1, id);
+  stmt.executeUpdate();
+  stmt.close();
   conn.close();
   return { success: true };
 }
