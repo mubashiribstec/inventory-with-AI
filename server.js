@@ -30,7 +30,7 @@ let isDbReady = false;
 const generateSignature = (payload) => crypto.createHmac('sha256', LICENSE_SECRET).update(payload).digest('hex');
 
 const verifyLicense = (licenseKey, currentSystemId) => {
-  if (!licenseKey || !licenseKey.includes('.')) return { valid: false, error: 'Malformed' };
+  if (!licenseKey || !licenseKey.includes('.')) return { valid: false, error: 'Missing' };
   const [payloadBase64, signature] = licenseKey.split('.');
   try {
     const payloadJson = Buffer.from(payloadBase64, 'base64').toString();
@@ -39,37 +39,58 @@ const verifyLicense = (licenseKey, currentSystemId) => {
     if (new Date(payload.expiry) < new Date()) return { valid: false, error: 'Expired', payload };
     if (payload.sid !== currentSystemId) return { valid: false, error: 'ID Mismatch' };
     return { valid: true, payload };
-  } catch (e) { return { valid: false, error: 'Invalid' }; }
+  } catch (e) { return { valid: false, error: 'Invalid Format' }; }
 };
 
 // --- GATEKEEPER ---
 const licenseGuard = async (req, res, next) => {
-  if (req.path === '/api/login' || req.path === '/api/init-db' || req.path === '/api/settings') return next();
+  // Paths that NEVER require a license check
+  const bypassPaths = ['/login', '/init-db'];
+  if (bypassPaths.includes(req.path)) return next();
   
+  // Allow fetching settings (GET) so frontend can see System ID and License Status
+  if (req.path === '/settings' && req.method === 'GET') return next();
+
+  if (!isDbReady) {
+    return res.status(503).json({ error: 'System is initializing database. Please wait...' });
+  }
+
   let conn;
   try {
     conn = await pool.getConnection();
     const rows = await conn.query('SELECT license_key, system_id FROM settings WHERE id = ?', ['GLOBAL']);
     const settings = rows[0];
     
+    // If it's a settings update (POST), we let it through so they can apply a key
+    if (req.path === '/settings' && req.method === 'POST') return next();
+
     const v = verifyLicense(settings?.license_key, settings?.system_id);
     if (!v.valid) {
-      return res.status(403).json({ error: 'License Required', details: v.error, code: 'LICENSE_INVALID' });
+      return res.status(403).json({ 
+        error: 'License Required', 
+        details: v.error, 
+        code: 'LICENSE_INVALID',
+        system_id: settings?.system_id 
+      });
     }
     next();
   } catch (err) { 
-    res.status(500).json({ error: 'Auth Guard Error' }); 
+    console.error("Guard Error:", err.message);
+    res.status(500).json({ error: 'Internal Security Error', details: err.message }); 
   } finally { 
     if (conn) conn.release(); 
   }
 };
-app.use('/api', licenseGuard);
+
+// Mount the guard on the /api router
+const apiRouter = express.Router();
+apiRouter.use(licenseGuard);
+app.use('/api', apiRouter);
 
 // --- DB INIT ---
 const handleInitDb = async (conn) => {
   console.log("Starting DB Schema Repair & Initialization...");
   
-  // Create tables
   await conn.query(`CREATE TABLE IF NOT EXISTS settings (
     id VARCHAR(50) PRIMARY KEY,
     software_name VARCHAR(255),
@@ -89,15 +110,12 @@ const handleInitDb = async (conn) => {
     full_name VARCHAR(100)
   )`);
 
-  // Force add system_id column if missing
   try { await conn.query("ALTER TABLE settings ADD COLUMN system_id VARCHAR(100)"); } catch(e) {}
 
-  // Ensure GLOBAL settings exist
   const rows = await conn.query("SELECT system_id FROM settings WHERE id = 'GLOBAL'");
   let sid = rows[0]?.system_id;
 
   if (!sid) {
-    console.log("Generating New System ID...");
     sid = crypto.randomBytes(4).toString('hex').toUpperCase();
     const expiry = new Date();
     expiry.setDate(expiry.getDate() + 7);
@@ -110,9 +128,9 @@ const handleInitDb = async (conn) => {
   }
 
   // FORCE RESET ADMIN USER
-  console.log("Verifying Admin Account (admin / admin)...");
   await conn.query("REPLACE INTO users (id, username, password, role, full_name) VALUES ('U-001', 'admin', 'admin', 'ADMIN', 'System Administrator')");
   
+  isDbReady = true;
   console.log("System Initialized Successfully. System ID:", sid);
 };
 
@@ -121,7 +139,6 @@ const initDbWithRetry = async () => {
   try {
     conn = await pool.getConnection();
     await handleInitDb(conn);
-    isDbReady = true;
   } catch (err) { 
     console.error("DB Connection Failed. Retrying in 5s...", err.message);
     setTimeout(initDbWithRetry, 5000); 
@@ -131,7 +148,9 @@ const initDbWithRetry = async () => {
 };
 initDbWithRetry();
 
-app.get('/api/settings', async (req, res) => {
+// --- API ENDPOINTS ---
+
+apiRouter.get('/settings', async (req, res) => {
   let conn;
   try {
     conn = await pool.getConnection();
@@ -141,7 +160,7 @@ app.get('/api/settings', async (req, res) => {
   finally { if (conn) conn.release(); }
 });
 
-app.post('/api/settings', async (req, res) => {
+apiRouter.post('/settings', async (req, res) => {
   let conn;
   try {
     conn = await pool.getConnection();
@@ -160,34 +179,27 @@ app.post('/api/settings', async (req, res) => {
   finally { if (conn) conn.release(); }
 });
 
-app.post('/api/login', async (req, res) => {
+apiRouter.post('/login', async (req, res) => {
   const { username, password } = req.body;
-  console.log(`Login Attempt: [User: ${username}]`);
-  
   let conn;
   try {
     conn = await pool.getConnection();
     const rows = await conn.query('SELECT id, username, role, full_name FROM users WHERE username=? AND password=?', [username, password]);
-    
     if (rows.length > 0) {
-      console.log(`Login Success: [User: ${username}]`);
       res.json(rows[0]);
     } else {
-      console.log(`Login Failed: [User: ${username}] - Invalid Credentials`);
       res.status(401).json({ error: 'Incorrect username or password' });
     }
   } catch (err) { 
-    console.error(`Login System Error:`, err.message);
-    res.status(500).json({ error: 'Database connection error during login' }); 
+    res.status(500).json({ error: 'Database error' }); 
   } finally { 
     if (conn) conn.release(); 
   }
 });
 
-// Minimal CRUD for other modules
 const modules = ['items', 'movements', 'departments', 'employees', 'suppliers', 'locations', 'maintenance_logs', 'licenses', 'categories', 'requests', 'users', 'roles', 'notifications', 'attendance', 'salaries', 'leave_requests'];
 modules.forEach(m => {
-  app.get(`/api/${m}`, async (req, res) => {
+  apiRouter.get(`/${m}`, async (req, res) => {
     let conn;
     try {
       conn = await pool.getConnection();
@@ -196,7 +208,7 @@ modules.forEach(m => {
     } catch (e) { res.status(500).json({ error: e.message }); }
     finally { if (conn) conn.release(); }
   });
-  app.post(`/api/${m}`, async (req, res) => {
+  apiRouter.post(`/${m}`, async (req, res) => {
     let conn;
     try {
       conn = await pool.getConnection();
@@ -211,4 +223,4 @@ modules.forEach(m => {
 const staticPath = path.join(__dirname, 'dist');
 app.use(express.static(staticPath));
 app.get('*', (req, res) => res.sendFile(path.join(staticPath, 'index.html')));
-app.listen(port, '0.0.0.0', () => console.log(`SmartStock Secure API listening on port ${port}`));
+app.listen(port, '0.0.0.0', () => console.log(`SmartStock API listening on port ${port}`));
