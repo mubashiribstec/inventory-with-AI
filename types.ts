@@ -1,5 +1,4 @@
 
-
 export enum ItemStatus {
   PURCHASED = 'purchased',
   ASSIGNED = 'assigned',
@@ -7,7 +6,8 @@ export enum ItemStatus {
   BACKUP = 'backup',
   FAULTY = 'faulty',
   AVAILABLE = 'available',
-  ARCHIVED = 'archived'
+  ARCHIVED = 'archived',
+  SCRAPPED = 'scrapped' // Non-repairable category
 }
 
 export enum UserRole {
@@ -147,6 +147,7 @@ export interface InventoryItem {
   cost?: number;
   location?: string;
   qr_code?: string;
+  is_repairable?: boolean;
 }
 
 export interface Movement {
@@ -192,6 +193,7 @@ export interface MaintenanceLog {
   issue_type: string;
   description: string;
   status: 'OPEN' | 'PENDING' | 'FIXED' | 'SCRAPPED';
+  is_repairable: boolean;
   cost: number;
   start_date: string;
 }

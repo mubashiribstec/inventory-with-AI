@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from 'react';
 import { UserRole } from '../types.ts';
 import { apiService } from '../api.ts';
@@ -51,47 +52,40 @@ const Sidebar: React.FC<SidebarProps> = ({
 
   const navGroups = [
     {
-      title: 'Human Resources',
+      title: 'Human Resources (Module 1)',
       items: [
         { id: 'attendance', icon: 'fa-user-clock', label: 'Attendance Hub' },
         { id: 'notifications', icon: 'fa-bell', label: 'Alerts & Activity', badge: unreadCount },
         { id: 'leaves', icon: 'fa-calendar-alt', label: 'Leave Requests' },
         { id: 'salaries', icon: 'fa-file-invoice-dollar', label: 'Salary & Payroll', permission: 'hr.salaries' },
-        { id: 'employees', icon: 'fa-users', label: 'Staff Directory', permission: 'hr.view' },
-        { id: 'departments', icon: 'fa-building', label: 'Departments', permission: 'hr.view' },
+        { id: 'employees', icon: 'fa-users-cog', label: 'Staff Directory', permission: 'hr.view' },
+        { id: 'departments', icon: 'fa-sitemap', label: 'Business Units', permission: 'hr.view' },
         { id: 'user-mgmt', icon: 'fa-user-shield', label: 'User Accounts', permission: 'hr.users' },
       ]
     },
     {
-      title: 'Analytics',
+      title: 'Budget & Analytics (Module 2)',
       items: [
-        { id: 'dashboard', icon: 'fa-chart-line', label: 'Overview', permission: 'analytics.view' },
-        { id: 'budgets', icon: 'fa-wallet', label: 'Budget Tracker', permission: 'analytics.financials' },
-        { id: 'audit-trail', icon: 'fa-history', label: 'Movement Ledger', permission: 'analytics.logs' },
+        { id: 'dashboard', icon: 'fa-chart-pie', label: 'Executive Overview', permission: 'analytics.view' },
+        { id: 'budgets', icon: 'fa-wallet', label: 'Budget & Consumption', permission: 'analytics.financials' },
+        { id: 'audit-trail', icon: 'fa-stream', label: 'Movement Ledger', permission: 'analytics.logs' },
       ]
     },
     {
-      title: 'Inventory Control',
+      title: 'Inventory Control (Module 3)',
       items: [
-        { id: 'inventory', icon: 'fa-boxes', label: 'Hardware Registry', permission: 'inventory.view' },
-        { id: 'categories', icon: 'fa-tags', label: 'Asset Categories', permission: 'inventory.view' },
+        { id: 'inventory', icon: 'fa-box-open', label: 'Stock Inventory', permission: 'inventory.view' },
+        { id: 'purchase-history', icon: 'fa-shopping-cart', label: 'Procurement List', permission: 'inventory.procure' },
+        { id: 'requests', icon: 'fa-hand-holding-box', label: 'Staff Assignments' },
+        { id: 'maintenance', icon: 'fa-tools', label: 'Faulty Item Hub', permission: 'inventory.edit' },
         { id: 'licenses', icon: 'fa-key', label: 'License Compliance', permission: 'inventory.view' },
-      ]
-    },
-    {
-      title: 'Procurement & Ops',
-      items: [
-        { id: 'purchase-history', icon: 'fa-history', label: 'Purchase Ledger', permission: 'inventory.procure' },
-        { id: 'requests', icon: 'fa-clipboard-list', label: 'Employee Requests' },
-        { id: 'maintenance', icon: 'fa-tools', label: 'Maintenance Hub', permission: 'inventory.edit' },
-        { id: 'faulty-reports', icon: 'fa-exclamation-triangle', label: 'Faulty Reports', permission: 'inventory.view' },
       ]
     },
     {
       title: 'Organization',
       items: [
-        { id: 'suppliers', icon: 'fa-truck', label: 'Vendor Scorecard', permission: 'inventory.view' },
-        { id: 'locations', icon: 'fa-map-marker-alt', label: 'Site Map', permission: 'inventory.view' },
+        { id: 'suppliers', icon: 'fa-truck-loading', label: 'Vendor Scorecard', permission: 'inventory.view' },
+        { id: 'locations', icon: 'fa-map-marked-alt', label: 'Site Map', permission: 'inventory.view' },
       ]
     }
   ];

@@ -1,3 +1,4 @@
+
 import React, { useState } from 'react';
 import { InventoryItem, MaintenanceLog } from '../types';
 
@@ -13,7 +14,8 @@ const MaintenanceForm: React.FC<MaintenanceFormProps> = ({ items, onSubmit, init
     issue_type: initialData?.issue_type || 'Hardware',
     description: initialData?.description || '',
     cost: initialData?.cost || 0,
-    status: initialData?.status || 'OPEN'
+    status: initialData?.status || 'OPEN',
+    is_repairable: initialData?.is_repairable ?? true
   });
 
   const handleSubmit = (e: React.FormEvent) => {
@@ -49,13 +51,38 @@ const MaintenanceForm: React.FC<MaintenanceFormProps> = ({ items, onSubmit, init
             value={formData.issue_type}
             onChange={(e) => setFormData({...formData, issue_type: e.target.value})}
           >
-            <option>Hardware</option>
-            <option>Software</option>
+            <option>Hardware Failure</option>
             <option>Physical Damage</option>
-            <option>Connectivity</option>
-            <option>Performance</option>
+            <option>Software Corruption</option>
+            <option>Screen Damage</option>
+            <option>Battery Issue</option>
           </select>
         </div>
+      </div>
+
+      <div className="p-5 bg-slate-50 rounded-2xl border border-slate-100 space-y-4">
+         <div className="flex items-center justify-between">
+            <div>
+               <p className="text-xs font-bold text-slate-800">Repair Assessment</p>
+               <p className="text-[10px] text-slate-400 font-medium">Is this asset fixable or should it be scrapped?</p>
+            </div>
+            <div className="flex bg-white p-1 rounded-xl border border-slate-200">
+               <button 
+                  type="button" 
+                  onClick={() => setFormData({...formData, is_repairable: true, status: 'OPEN'})}
+                  className={`px-4 py-2 rounded-lg text-[10px] font-bold uppercase transition ${formData.is_repairable ? 'bg-indigo-600 text-white' : 'text-slate-400 hover:text-slate-600'}`}
+               >
+                  Repairable
+               </button>
+               <button 
+                  type="button" 
+                  onClick={() => setFormData({...formData, is_repairable: false, status: 'SCRAPPED'})}
+                  className={`px-4 py-2 rounded-lg text-[10px] font-bold uppercase transition ${!formData.is_repairable ? 'bg-rose-600 text-white' : 'text-slate-400 hover:text-slate-600'}`}
+               >
+                  Non-Repairable
+               </button>
+            </div>
+         </div>
       </div>
 
       <div className="space-y-2">
@@ -64,7 +91,7 @@ const MaintenanceForm: React.FC<MaintenanceFormProps> = ({ items, onSubmit, init
           className="w-full px-4 py-3 bg-slate-50 border border-slate-100 rounded-xl outline-none focus:ring-2 focus:ring-indigo-500 min-h-[100px]"
           value={formData.description}
           onChange={(e) => setFormData({...formData, description: e.target.value})}
-          placeholder="Describe the technical issue in detail..."
+          placeholder="Describe the damage or fault..."
           required
         />
       </div>
@@ -86,18 +113,18 @@ const MaintenanceForm: React.FC<MaintenanceFormProps> = ({ items, onSubmit, init
             value={formData.status}
             onChange={(e) => setFormData({...formData, status: e.target.value as any})}
           >
-            <option value="OPEN">OPEN</option>
-            <option value="PENDING">PENDING</option>
-            <option value="FIXED">FIXED</option>
-            <option value="SCRAPPED">SCRAPPED</option>
+            <option value="OPEN">OPEN (Awaiting Action)</option>
+            <option value="PENDING">PENDING (In Workshop)</option>
+            <option value="FIXED">FIXED (Restored to Stock)</option>
+            <option value="SCRAPPED">SCRAPPED (Non-Functional)</option>
           </select>
         </div>
       </div>
 
       <div className="pt-6 border-t border-slate-50">
-        <button type="submit" className="w-full py-4 bg-rose-600 hover:bg-rose-700 text-white rounded-2xl font-bold transition shadow-lg shadow-rose-100 flex items-center justify-center gap-2">
+        <button type="submit" className={`w-full py-4 text-white rounded-2xl font-bold transition shadow-lg flex items-center justify-center gap-2 ${formData.is_repairable ? 'bg-indigo-600 hover:bg-indigo-700 shadow-indigo-100' : 'bg-rose-600 hover:bg-rose-700 shadow-rose-100'}`}>
           <i className="fas fa-tools"></i>
-          <span>Save Ticket</span>
+          <span>Save Log Entry</span>
         </button>
       </div>
     </form>
