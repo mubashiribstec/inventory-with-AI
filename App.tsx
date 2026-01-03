@@ -6,13 +6,24 @@ import InventoryTable from './components/InventoryTable.tsx';
 import Login from './components/Login.tsx';
 import SettingsModule from './components/SettingsModule.tsx';
 import AttendanceModule from './components/AttendanceModule.tsx';
-import { ItemStatus, User, InventoryItem, Movement, Supplier, LocationRecord, MaintenanceLog, License, AssetRequest, Role } from './types.ts';
+import LeaveModule from './components/LeaveModule.tsx';
+import UserManagement from './components/UserManagement.tsx';
+import SalaryModule from './components/SalaryModule.tsx';
+import BudgetModule from './components/BudgetModule.tsx';
+import NotificationCenter from './components/NotificationCenter.tsx';
+import RoleManagement from './components/RoleManagement.tsx';
+import LicenseList from './components/LicenseList.tsx';
+import MaintenanceList from './components/MaintenanceList.tsx';
+import GenericListView from './components/GenericListView.tsx';
+
+import { ItemStatus, User, InventoryItem, Movement, Supplier, License, Role } from './types.ts';
 import { apiService } from './api.ts';
 import { dbService } from './db.ts';
 
 const App: React.FC = () => {
   const [currentUser, setCurrentUser] = useState<User | null>(null);
   const [currentRole, setCurrentRole] = useState<Role | null>(null);
+  const [allUsers, setAllUsers] = useState<User[]>([]);
   const [settings, setSettings] = useState<any>({ 
     id: 'GLOBAL', 
     software_name: 'SmartStock Pro', 
@@ -30,6 +41,7 @@ const App: React.FC = () => {
   const [movements, setMovements] = useState<Movement[]>([]);
   const [suppliers, setSuppliers] = useState<Supplier[]>([]);
   const [licenses, setLicenses] = useState<License[]>([]);
+  const [employees, setEmployees] = useState<any[]>([]);
 
   const fetchSettings = useCallback(async () => {
     try {
@@ -39,7 +51,7 @@ const App: React.FC = () => {
         return cloudSettings.system_id;
       }
     } catch (e) {
-      console.warn("Retrying settings synchronization...");
+      console.warn("Retrying sync...");
     }
     return null;
   }, []);
@@ -63,52 +75,35 @@ const App: React.FC = () => {
   const handleActivate = async (e: React.FormEvent) => {
     e.preventDefault();
     if (isActivating || !activationKey) return;
-    
     setIsActivating(true);
     try {
       await apiService.updateSettings({ ...settings, license_key: activationKey });
       await fetchSettings();
-      alert("System activated successfully.");
+      alert("System activated.");
       setActivationKey('');
     } catch (err: any) { 
-      alert(err.message || "Activation Error. Please check your system ID and key."); 
-    } finally { 
-      setIsActivating(false); 
-    }
+      alert(err.message || "Activation Error."); 
+    } finally { setIsActivating(false); }
   };
 
-  const fetchRoleData = useCallback(async (roleId: string) => {
-    try {
-      const allRoles = await apiService.getRoles();
-      const role = allRoles.find(r => r.id === roleId);
-      if (role) setCurrentRole(role);
-    } catch (e) {}
-  }, []);
-
-  const fetchData = useCallback(async () => {
+  const fetchCoreData = useCallback(async () => {
     if (!currentUser || !licenseState.valid) return;
     try {
       setDataLoading(true);
-      const [fItems, fMov, fSup, fLic] = await Promise.all([
+      const [fItems, fMov, fSup, fLic, fUsers, fEmp] = await Promise.all([
         apiService.getAllItems(), apiService.getAllMovements(), 
-        apiService.getAllSuppliers(), apiService.getAllLicenses()
+        apiService.getAllSuppliers(), apiService.getAllLicenses(),
+        apiService.getUsers(), apiService.get("employees")
       ]);
-      setItems(fItems || []); setMovements(fMov || []); 
-      setSuppliers(fSup || []); setLicenses(fLic || []);
-    } catch (err) { console.warn("Background refresh failed", err); }
+      setItems(fItems || []); 
+      setMovements(fMov || []); 
+      setSuppliers(fSup || []); 
+      setLicenses(fLic || []);
+      setAllUsers(fUsers || []);
+      setEmployees(fEmp || []);
+    } catch (err) { console.warn("Refresh failed", err); }
     finally { setDataLoading(false); }
   }, [currentUser, licenseState.valid]);
-
-  // System ID Polling Strategy
-  useEffect(() => {
-    const poll = async () => {
-      const sid = await fetchSettings();
-      // If we don't have an ID yet, poll more aggressively
-      const intervalTime = sid ? 30000 : 3000;
-      setTimeout(poll, intervalTime);
-    };
-    poll();
-  }, [fetchSettings]);
 
   useEffect(() => {
     const startup = async () => {
@@ -119,15 +114,17 @@ const App: React.FC = () => {
         if (sessionToken) {
           const user = JSON.parse(sessionToken);
           setCurrentUser(user);
-          await fetchRoleData(user.role);
+          const allRoles = await apiService.getRoles();
+          const role = allRoles.find(r => r.id === user.role);
+          if (role) setCurrentRole(role);
         }
       } catch (e) { console.error("Identity Error", e); }
       finally { setIsInitialized(true); }
     };
     startup();
-  }, [fetchRoleData, fetchSettings]);
+  }, [fetchSettings]);
 
-  useEffect(() => { if (currentUser) fetchData(); }, [currentUser, fetchData]);
+  useEffect(() => { if (currentUser) fetchCoreData(); }, [currentUser, fetchCoreData]);
 
   const stats = useMemo(() => ({
     purchased: items.length,
@@ -140,79 +137,41 @@ const App: React.FC = () => {
     expiring_soon: 0
   }), [items, licenses]);
 
+  const renderModule = () => {
+    switch (activeTab) {
+      case 'dashboard': return <Dashboard stats={stats} movements={movements} items={items} onFullAudit={() => setActiveTab('audit-trail')} onCheckIn={() => setActiveTab('attendance')} themeColor={settings.primary_color} />;
+      case 'inventory': return <InventoryTable items={items} onUpdate={fetchCoreData} onEdit={() => {}} onView={() => {}} onAddAsset={() => {}} themeColor={settings.primary_color} />;
+      case 'attendance': return <AttendanceModule currentUser={currentUser!} />;
+      case 'leaves': return <LeaveModule currentUser={currentUser!} allUsers={allUsers} />;
+      case 'user-mgmt': return <UserManagement />;
+      case 'salaries': return <SalaryModule employees={employees} />;
+      case 'budgets': return <BudgetModule />;
+      case 'notifications': return <NotificationCenter currentUser={currentUser!} />;
+      case 'roles': return <RoleManagement />;
+      case 'settings': return <SettingsModule settings={settings} onUpdate={setSettings} />;
+      case 'licenses': return <LicenseList licenses={licenses} suppliers={suppliers} onAdd={() => {}} onUpdate={fetchCoreData} />;
+      case 'audit-trail': return <GenericListView title="System Audit Trail" icon="fa-stream" items={movements} columns={['date', 'item', 'from', 'to', 'status']} />;
+      default: return <div className="p-20 text-center text-slate-400">Module Under Construction</div>;
+    }
+  };
+
   if (!isInitialized) return (
     <div className="h-screen flex items-center justify-center bg-slate-50">
-      <div className="flex flex-col items-center gap-4">
-        <div className="w-12 h-12 border-4 border-slate-200 border-t-indigo-600 rounded-full animate-spin"></div>
-        <p className="text-slate-400 font-bold text-[10px] uppercase tracking-[0.3em]">Connecting to Infrastructure...</p>
-      </div>
+      <div className="w-10 h-10 border-4 border-indigo-600 border-t-transparent rounded-full animate-spin"></div>
     </div>
   );
   
   if (!currentUser) return (
-    <Login 
-      onLogin={(u) => { setCurrentUser(u); localStorage.setItem('smartstock_user', JSON.stringify(u)); fetchRoleData(u.role); }} 
-      softwareName={settings.software_name} themeColor={settings.primary_color} 
-    />
+    <Login onLogin={(u) => { setCurrentUser(u); localStorage.setItem('smartstock_user', JSON.stringify(u)); window.location.reload(); }} softwareName={settings.software_name} themeColor={settings.primary_color} />
   );
 
   if (!licenseState.valid) return (
-    <div className="min-h-screen bg-slate-900 flex items-center justify-center p-6 poppins">
-      <div className="max-w-xl w-full bg-white rounded-[40px] p-10 shadow-2xl text-center relative overflow-hidden">
-        <div className={`absolute top-0 right-0 p-6 flex items-center gap-2 text-[9px] font-bold ${settings.is_db_connected ? 'text-emerald-500' : 'text-amber-500'}`}>
-           <span className={`w-2 h-2 rounded-full ${settings.is_db_connected ? 'bg-emerald-500' : 'bg-amber-500 animate-pulse'}`}></span>
-           {settings.is_db_connected ? 'SECURE' : 'OFFLINE'}
-        </div>
-
-        <div className="w-20 h-20 bg-indigo-50 text-indigo-600 rounded-3xl flex items-center justify-center text-3xl mx-auto mb-6">
-          <i className="fas fa-lock"></i>
-        </div>
-        <h2 className="text-2xl font-bold text-slate-800 mb-2">Activation Management</h2>
-        <p className="text-slate-500 text-sm mb-8 leading-relaxed">License signature mismatch. Please activate your system instance.</p>
-
-        <div className="bg-slate-50 p-6 rounded-2xl mb-8 border border-slate-100 text-left relative">
-           <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">System Identification Key</p>
-           <p className="font-mono font-bold text-slate-700 select-all text-xl tracking-wider">
-             {settings.system_id || (
-               <span className="flex items-center gap-2 text-indigo-400 animate-pulse">
-                 <i className="fas fa-circle-notch animate-spin text-sm"></i> GENERATING IDENTITY...
-               </span>
-             )}
-           </p>
-           {settings.system_id && (
-             <div className="absolute right-6 top-1/2 -translate-y-1/2 text-[9px] font-black text-emerald-600 bg-emerald-50 px-2 py-1 rounded-md border border-emerald-100 uppercase tracking-widest">
-                Verified
-             </div>
-           )}
-        </div>
-
-        <form onSubmit={handleActivate} className="space-y-4">
-           <textarea 
-             required 
-             rows={3} 
-             placeholder="Enter Signed Activation Key..." 
-             className="w-full p-5 bg-slate-50 border border-slate-200 rounded-2xl outline-none focus:ring-2 focus:ring-indigo-500 font-mono text-xs" 
-             value={activationKey} 
-             onChange={e => setActivationKey(e.target.value)}
-             disabled={isActivating || !settings.system_id}
-           />
-           <button 
-             type="submit" 
-             disabled={isActivating || !settings.system_id} 
-             className="w-full py-4 bg-slate-800 text-white rounded-2xl font-bold hover:bg-slate-900 transition disabled:opacity-50 shadow-xl flex items-center justify-center gap-2"
-           >
-             {isActivating ? (
-               <><i className="fas fa-spinner animate-spin"></i> Processing...</>
-             ) : (
-               <><i className="fas fa-unlock-alt"></i> Apply Activation</>
-             )}
-           </button>
-        </form>
-        
-        <div className="flex items-center justify-center gap-8 mt-10">
-          <button onClick={fetchSettings} className="text-indigo-600 text-xs font-bold uppercase hover:underline">Force Identity Sync</button>
-          <button onClick={() => { setCurrentUser(null); localStorage.removeItem('smartstock_user'); }} className="text-slate-400 text-xs font-bold hover:text-slate-600 uppercase tracking-widest">Exit to Login</button>
-        </div>
+    <div className="min-h-screen bg-slate-900 flex items-center justify-center p-6">
+      <div className="max-w-xl w-full bg-white rounded-[40px] p-10 text-center shadow-2xl">
+        <h2 className="text-2xl font-bold mb-4">Activation Required</h2>
+        <div className="bg-slate-50 p-4 rounded-xl mb-6 font-mono text-sm">{settings.system_id || 'Generating ID...'}</div>
+        <textarea required rows={3} placeholder="Activation Key" className="w-full p-4 border rounded-xl mb-4 font-mono text-xs" value={activationKey} onChange={e => setActivationKey(e.target.value)} />
+        <button onClick={handleActivate} className="w-full py-4 bg-indigo-600 text-white rounded-xl font-bold">Apply Key</button>
       </div>
     </div>
   );
@@ -220,19 +179,9 @@ const App: React.FC = () => {
   return (
     <div className={`flex min-h-screen bg-slate-50 theme-${settings.primary_color}`}>
       <Sidebar userRole={currentUser.role} activeTab={activeTab} setActiveTab={setActiveTab} onLogout={() => { setCurrentUser(null); localStorage.removeItem('smartstock_user'); }} permissions={currentRole?.permissions?.split(',') || []} appName={settings.software_name} themeColor={settings.primary_color} logoIcon={settings.software_logo} licenseExpiry={licenseState.expiry} />
-      <main className="flex-1 lg:ml-64 p-6 lg:p-12 min-w-0">
-        {dataLoading ? (
-          <div className="flex h-64 items-center justify-center">
-            <div className="w-10 h-10 border-4 border-indigo-600 border-t-transparent rounded-full animate-spin"></div>
-          </div>
-        ) : (
-          <>
-            {activeTab === 'dashboard' && <Dashboard stats={stats} movements={movements} items={items} onFullAudit={() => setActiveTab('audit-trail')} onCheckIn={() => setActiveTab('attendance')} themeColor={settings.primary_color} />}
-            {activeTab === 'inventory' && <InventoryTable items={items} onUpdate={fetchData} onEdit={() => {}} onView={() => {}} onAddAsset={() => {}} themeColor={settings.primary_color} />}
-            {activeTab === 'settings' && <SettingsModule settings={settings} onUpdate={setSettings} />}
-            {activeTab === 'attendance' && <AttendanceModule currentUser={currentUser} />}
-          </>
-        )}
+      <main className="flex-1 lg:ml-64 p-6 lg:p-12">
+        {dataLoading && <div className="fixed top-0 left-0 w-full h-1 bg-indigo-600 animate-pulse z-50"></div>}
+        {renderModule()}
       </main>
     </div>
   );

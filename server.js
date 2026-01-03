@@ -14,7 +14,7 @@ const LICENSE_SECRET = process.env.LICENSE_SECRET || 'smartstock_enterprise_mast
 app.use(cors());
 app.use(express.json());
 
-// Global Memory Cache
+// Global Memory Cache for rapid access
 let MEMORY_CACHE = {
   id: 'GLOBAL',
   software_name: 'SmartStock Pro',
@@ -58,18 +58,10 @@ const verifyLicense = (licenseKey, currentSystemId) => {
 const licenseGuard = (req, res, next) => {
   const publicPaths = ['/login', '/settings', '/health'];
   if (publicPaths.some(p => req.path.includes(p))) return next();
-
-  if (!MEMORY_CACHE.system_id) {
-    return res.status(503).json({ error: 'System Identity initializing' });
-  }
+  if (!MEMORY_CACHE.system_id) return res.status(503).json({ error: 'System initializing' });
 
   const v = verifyLicense(MEMORY_CACHE.license_key, MEMORY_CACHE.system_id);
-  if (!v.valid) {
-    return res.status(403).json({ 
-      error: 'License Required', 
-      system_id: MEMORY_CACHE.system_id 
-    });
-  }
+  if (!v.valid) return res.status(403).json({ error: 'License Required', system_id: MEMORY_CACHE.system_id });
   next();
 };
 
@@ -78,16 +70,16 @@ apiRouter.use(licenseGuard);
 app.use('/api', apiRouter);
 
 /**
- * Database Initialization & Auto-Migration
- * Ensures EVERY table (HR, Settings, Inventory) is correct.
+ * Enterprise Database Schema Synchronizer
+ * Ensures HR, Inventory, and Settings tables are identical across all deployments.
  */
 const initializeDb = async () => {
   let conn;
   try {
     conn = await pool.getConnection();
-    console.log("MariaDB: Synchronizing Enterprise Schema...");
+    console.log("MariaDB: Syncing Modular Schema...");
 
-    // 1. SETTINGS Table (Self-healing columns)
+    // 1. Settings Module
     await conn.query(`CREATE TABLE IF NOT EXISTS settings (
       id VARCHAR(50) PRIMARY KEY,
       software_name VARCHAR(255) DEFAULT 'SmartStock Pro',
@@ -106,11 +98,11 @@ const initializeDb = async () => {
     for (const col of setReq) {
       if (!setColNames.includes(col.name)) {
         await conn.query(`ALTER TABLE settings ADD COLUMN ${col.name} ${col.type}`);
-        console.log(`Migration: Added ${col.name} to Settings.`);
+        console.log(`Migration: Added Settings column [${col.name}]`);
       }
     }
 
-    // 2. USERS Table (HR Critical)
+    // 2. HR Module: Users & Hierarchy
     await conn.query(`CREATE TABLE IF NOT EXISTS users (
       id VARCHAR(50) PRIMARY KEY, 
       username VARCHAR(50) UNIQUE, 
@@ -133,11 +125,11 @@ const initializeDb = async () => {
     for (const col of userReq) {
       if (!userColNames.includes(col.name)) {
         await conn.query(`ALTER TABLE users ADD COLUMN ${col.name} ${col.type}`);
-        console.log(`Migration: Added HR column ${col.name} to Users.`);
+        console.log(`Migration: Added HR column [${col.name}] to Users`);
       }
     }
 
-    // 3. ATTENDANCE & LEAVE (HR Core)
+    // 3. HR Module: Attendance & Leave
     await conn.query(`CREATE TABLE IF NOT EXISTS attendance (
       id VARCHAR(100) PRIMARY KEY,
       user_id VARCHAR(50),
@@ -160,7 +152,7 @@ const initializeDb = async () => {
       status VARCHAR(20) DEFAULT 'PENDING'
     )`);
 
-    // 4. INVENTORY & OTHERS
+    // 4. Inventory Module
     await conn.query(`CREATE TABLE IF NOT EXISTS items (
       id VARCHAR(50) PRIMARY KEY,
       name VARCHAR(255) NOT NULL,
@@ -175,7 +167,7 @@ const initializeDb = async () => {
       cost DECIMAL(15, 2)
     )`);
 
-    // 5. Initial GLOBAL Settings Fetch
+    // 5. Global Identity Logic
     const rows = await conn.query("SELECT * FROM settings WHERE id = 'GLOBAL'");
     if (rows.length > 0) {
       let dbSettings = rows[0];
@@ -198,12 +190,12 @@ const initializeDb = async () => {
       MEMORY_CACHE.is_db_connected = true;
     }
 
-    // 6. Ensure Admin
+    // 6. Root User Safety
     await conn.query("REPLACE INTO users (id, username, password, role, full_name, is_active) VALUES ('U-001', 'admin', 'admin', 'ADMIN', 'System Administrator', 1)");
 
-    console.log("MariaDB: Enterprise Integrity Verified. All systems active.");
+    console.log("MariaDB: Initialization Complete.");
   } catch (err) {
-    console.error("CRITICAL ERROR: MariaDB Sync Failed:", err.message);
+    console.error("MariaDB Setup Failed:", err.message);
     setTimeout(initializeDb, 5000); 
   } finally {
     if (conn) conn.release();
@@ -227,9 +219,9 @@ apiRouter.post('/settings', async (req, res) => {
     }
     conn = await pool.getConnection();
     const updates = Object.keys(req.body).filter(k => k !== 'id' && k !== 'is_db_connected');
-    const setClause = updates.map(k => `\`${k}\` = ?`).join(', ');
-    const values = updates.map(k => req.body[k]);
     if (updates.length > 0) {
+      const setClause = updates.map(k => `\`${k}\` = ?`).join(', ');
+      const values = updates.map(k => req.body[k]);
       await conn.query(`UPDATE settings SET ${setClause} WHERE id = 'GLOBAL'`, values);
     }
     MEMORY_CACHE = { ...MEMORY_CACHE, ...req.body };
@@ -246,7 +238,7 @@ apiRouter.post('/login', async (req, res) => {
   let conn;
   try {
     conn = await pool.getConnection();
-    const rows = await conn.query('SELECT id, username, role, full_name, department, shift_start_time FROM users WHERE username=? AND password=?', [username, password]);
+    const rows = await conn.query('SELECT * FROM users WHERE username=? AND password=?', [username, password]);
     if (rows.length > 0) res.json(rows[0]);
     else res.status(401).json({ error: 'Invalid credentials' });
   } catch (err) { res.status(500).json({ error: 'DB Error' }); }
@@ -269,7 +261,17 @@ modules.forEach(m => {
     try {
       conn = await pool.getConnection();
       const keys = Object.keys(req.body);
-      await conn.query(`REPLACE INTO \`${m}\` (${keys.map(k => `\`${k}\``).join(',')}) VALUES (${keys.map(() => '?').join(',')})`, Object.values(req.body));
+      const values = Object.values(req.body);
+      await conn.query(`REPLACE INTO \`${m}\` (${keys.map(k => `\`${k}\``).join(',')}) VALUES (${keys.map(() => '?').join(',')})`, values);
+      res.json({ success: true });
+    } catch (e) { res.status(500).json({ error: e.message }); }
+    finally { if (conn) conn.release(); }
+  });
+  apiRouter.delete(`/${m}/:id`, async (req, res) => {
+    let conn;
+    try {
+      conn = await pool.getConnection();
+      await conn.query(`DELETE FROM \`${m}\` WHERE id = ?`, [req.params.id]);
       res.json({ success: true });
     } catch (e) { res.status(500).json({ error: e.message }); }
     finally { if (conn) conn.release(); }
@@ -280,4 +282,4 @@ const staticPath = path.join(__dirname, 'dist');
 app.use(express.static(staticPath));
 app.get('*', (req, res) => res.sendFile(path.join(staticPath, 'index.html')));
 
-app.listen(port, '0.0.0.0', () => console.log(`SmartStock Enterprise Server listening on port ${port}`));
+app.listen(port, '0.0.0.0', () => console.log(`Modular Enterprise Server active on ${port}`));
