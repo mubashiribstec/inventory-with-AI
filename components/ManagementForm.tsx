@@ -42,6 +42,9 @@ const ManagementForm: React.FC<ManagementFormProps> = ({ type, onSubmit, initial
        delete (submissionData as any).role;
        delete (submissionData as any).joining_date;
        delete (submissionData as any).is_active;
+       // Clean up budget fields as they are no longer required for this section
+       delete (submissionData as any).budget;
+       delete (submissionData as any).budget_month;
     }
 
     onSubmit(submissionData);
@@ -153,16 +156,6 @@ const ManagementForm: React.FC<ManagementFormProps> = ({ type, onSubmit, initial
             <div className="space-y-2">
               <label className="text-xs font-bold text-slate-500 uppercase tracking-wider ml-1">Unit Manager</label>
               <input name="manager" type="text" required className="w-full px-4 py-3 bg-slate-50 border border-slate-100 rounded-xl outline-none focus:ring-2 focus:ring-indigo-500 font-bold" value={formData.manager || ''} onChange={handleChange} placeholder="Enter full name of manager" />
-            </div>
-            <div className="grid grid-cols-2 gap-4">
-              <div className="space-y-2">
-                <label className="text-xs font-bold text-slate-500 uppercase tracking-wider ml-1">Monthly Budget (Rs.)</label>
-                <input name="budget" type="number" className="w-full px-4 py-3 bg-slate-50 border border-slate-100 rounded-xl outline-none focus:ring-2 focus:ring-indigo-500 font-bold" value={formData.budget} onChange={handleChange} />
-              </div>
-              <div className="space-y-2">
-                <label className="text-xs font-bold text-slate-500 uppercase tracking-wider ml-1">Budget Period</label>
-                <input name="budget_month" type="month" className="w-full px-4 py-3 bg-slate-50 border border-slate-100 rounded-xl outline-none focus:ring-2 focus:ring-indigo-500 font-bold" value={formData.budget_month} onChange={handleChange} />
-              </div>
             </div>
           </>
         )}

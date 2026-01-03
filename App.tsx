@@ -125,6 +125,17 @@ const App: React.FC = () => {
     expiring_soon: 0
   }), [items, licenses]);
 
+  const handleDeleteDepartment = async (id: string) => {
+    if (window.confirm("Are you sure you want to permanently delete this department?")) {
+      try {
+        await apiService.genericDelete('departments', id);
+        fetchData();
+      } catch (err) {
+        alert("Error deleting department: " + err);
+      }
+    }
+  };
+
   const handleManagementSubmit = async (data: any) => {
     try {
       if (managementModal.type === 'Employee') {
@@ -155,9 +166,7 @@ const App: React.FC = () => {
         const departmentPayload: Department = {
           id: data.id,
           name: data.name,
-          manager: data.manager,
-          budget: parseFloat(data.budget) || 0,
-          budget_month: data.budget_month
+          manager: data.manager
         };
         await apiService.saveDepartment(departmentPayload);
       } 
@@ -192,7 +201,7 @@ const App: React.FC = () => {
       case 'maintenance': return <MaintenanceList logs={maintenance} items={items} onUpdate={fetchData} onAdd={() => setActiveTab('requests')} />;
       case 'suppliers': return <SupplierList suppliers={suppliers} />;
       case 'employees': return <GenericListView title="Staff Directory" icon="fa-users" items={employees} columns={['id', 'name', 'email', 'department', 'role', 'is_active']} onView={setViewingEmployee} onAdd={() => setManagementModal({ isOpen: true, type: 'Employee' })} />;
-      case 'departments': return <GenericListView title="Departments & Units" icon="fa-sitemap" items={departments} columns={['id', 'name', 'manager', 'budget']} onAdd={() => setManagementModal({ isOpen: true, type: 'Department' })} />;
+      case 'departments': return <GenericListView title="Departments & Units" icon="fa-sitemap" items={departments} columns={['id', 'name', 'manager']} onAdd={() => setManagementModal({ isOpen: true, type: 'Department' })} onDelete={(dept) => handleDeleteDepartment(dept.id)} />;
       case 'budgets': return <BudgetModule />;
       case 'audit-trail': return <GenericListView title="Audit Trail" icon="fa-history" items={movements} columns={['date', 'item', 'from', 'to', 'status']} />;
       default: return <Dashboard stats={stats} movements={movements} items={items} onFullAudit={() => setActiveTab('audit-trail')} onCheckIn={() => setActiveTab('attendance')} themeColor={settings.primary_color} />;
