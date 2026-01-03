@@ -39,7 +39,6 @@ const handleInitDb = async (conn, forceReset = false) => {
   console.log(`[DATABASE] Running ${forceReset ? 'FORCE RESET' : 'schema verification'}...`);
   
   if (forceReset) {
-    // Drop all tables to allow a clean slate
     for (const table of modules) {
       await conn.query(`DROP TABLE IF EXISTS \`${table}\``);
     }
@@ -151,7 +150,7 @@ const handleInitDb = async (conn, forceReset = false) => {
     `CREATE TABLE IF NOT EXISTS departments (
       id VARCHAR(50) PRIMARY KEY,
       name VARCHAR(100) NOT NULL,
-      head VARCHAR(255),
+      manager VARCHAR(255),
       budget DECIMAL(15, 2) DEFAULT 0,
       budget_month VARCHAR(20)
     )`,
@@ -219,7 +218,6 @@ const handleInitDb = async (conn, forceReset = false) => {
     await conn.query(query);
   }
 
-  // Ensure mandatory defaults
   await conn.query("REPLACE INTO settings (id, software_name, primary_color, software_description, software_logo) VALUES ('GLOBAL', 'SmartStock Pro', 'indigo', 'Enterprise Resource Planning', 'fa-warehouse')");
   
   const defaultRoles = [
@@ -261,7 +259,7 @@ initDbWithRetry();
 
 app.use('/api', (req, res, next) => {
   res.setHeader('Content-Type', 'application/json; charset=utf-8');
-  if (req.path === '/init-db') return next(); // Always allow init probe
+  if (req.path === '/init-db') return next();
   if (!isDbReady) {
     return res.status(503).json({ 
       error: 'Database Initializing', 
@@ -310,13 +308,12 @@ app.post('/api/init-db', async (req, res) => {
   }
 });
 
-// Generic CRUD handlers
 const handleCRUD = (tableName) => {
   app.get(`/api/${tableName}`, async (req, res) => {
     let conn;
     try {
       conn = await pool.getConnection();
-      const rows = await conn.query(`SELECT * FROM ${tableName}`);
+      const rows = await conn.query(`SELECT * FROM \`${tableName}\``);
       sendJSON(res, Array.from(rows));
     } catch (err) { sendJSON(res, { error: err.message }, 500); }
     finally { if (conn) conn.release(); }
@@ -331,18 +328,18 @@ const handleCRUD = (tableName) => {
       const id = req.body.id;
       let isUpdate = false;
       if (id) {
-        const existing = await conn.query(`SELECT 1 FROM ${tableName} WHERE id = ?`, [id]);
+        const existing = await conn.query(`SELECT 1 FROM \`${tableName}\` WHERE id = ?`, [id]);
         if (existing.length > 0) isUpdate = true;
       }
       if (isUpdate) {
         const setClause = keys.filter(k => k !== 'id').map(k => `\`${k}\` = ?`).join(', ');
         const updateValues = keys.filter(k => k !== 'id').map(k => req.body[k] === '' ? null : req.body[k]);
         updateValues.push(id);
-        await conn.query(`UPDATE ${tableName} SET ${setClause} WHERE id = ?`, updateValues);
+        await conn.query(`UPDATE \`${tableName}\` SET ${setClause} WHERE id = ?`, updateValues);
       } else {
         const escapedKeys = keys.map(k => `\`${k}\``);
         const placeholders = keys.map(() => '?').join(', ');
-        await conn.query(`INSERT INTO ${tableName} (${escapedKeys.join(', ')}) VALUES (${placeholders})`, values);
+        await conn.query(`INSERT INTO \`${tableName}\` (${escapedKeys.join(', ')}) VALUES (${placeholders})`, values);
       }
       sendJSON(res, { success: true });
     } catch (err) { sendJSON(res, { error: err.message }, 500); }
@@ -353,7 +350,7 @@ const handleCRUD = (tableName) => {
     let conn;
     try {
       conn = await pool.getConnection();
-      await conn.query(`DELETE FROM ${tableName} WHERE id = ?`, [req.params.id]);
+      await conn.query(`DELETE FROM \`${tableName}\` WHERE id = ?`, [req.params.id]);
       sendJSON(res, { success: true });
     } catch (err) { sendJSON(res, { error: err.message }, 500); }
     finally { if (conn) conn.release(); }
@@ -361,6 +358,7 @@ const handleCRUD = (tableName) => {
 };
 
 modules.forEach(handleCRUD);
+
 app.get('/api/settings', async (req, res) => {
   let conn;
   try {

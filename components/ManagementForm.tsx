@@ -18,7 +18,10 @@ const ManagementForm: React.FC<ManagementFormProps> = ({ type, onSubmit, initial
     is_active: true,
     create_user: false,
     username: '',
-    password: ''
+    password: '',
+    manager: '', // Used for Departments
+    budget: 0,
+    budget_month: new Date().toISOString().slice(0, 7)
   });
 
   const handleSubmit = (e: React.FormEvent) => {
@@ -28,7 +31,6 @@ const ManagementForm: React.FC<ManagementFormProps> = ({ type, onSubmit, initial
     // Clean data for submission
     const submissionData = { ...formData, id };
     
-    // Map 'role' to designation for Employees if needed
     if (type === 'Employee') {
       submissionData.is_active = formData.is_active !== false;
     }
@@ -142,6 +144,16 @@ const ManagementForm: React.FC<ManagementFormProps> = ({ type, onSubmit, initial
             <div className="space-y-2">
               <label className="text-xs font-bold text-slate-500 uppercase tracking-wider ml-1">Unit Manager</label>
               <input name="manager" type="text" required className="w-full px-4 py-3 bg-slate-50 border border-slate-100 rounded-xl outline-none focus:ring-2 focus:ring-indigo-500 font-bold" value={formData.manager || ''} onChange={handleChange} placeholder="Enter full name of manager" />
+            </div>
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <label className="text-xs font-bold text-slate-500 uppercase tracking-wider ml-1">Monthly Budget (Rs.)</label>
+                <input name="budget" type="number" className="w-full px-4 py-3 bg-slate-50 border border-slate-100 rounded-xl outline-none focus:ring-2 focus:ring-indigo-500 font-bold" value={formData.budget} onChange={handleChange} />
+              </div>
+              <div className="space-y-2">
+                <label className="text-xs font-bold text-slate-500 uppercase tracking-wider ml-1">Budget Period</label>
+                <input name="budget_month" type="month" className="w-full px-4 py-3 bg-slate-50 border border-slate-100 rounded-xl outline-none focus:ring-2 focus:ring-indigo-500 font-bold" value={formData.budget_month} onChange={handleChange} />
+              </div>
             </div>
           </>
         )}

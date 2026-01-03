@@ -4,6 +4,16 @@ import { dbService } from './db.ts';
 
 const API_BASE = '/api';
 
+const getHeaders = () => {
+  const userStr = localStorage.getItem('smartstock_user');
+  const user = userStr ? JSON.parse(userStr) : null;
+  return {
+    'Content-Type': 'application/json',
+    'x-user-id': user?.id || 'SYSTEM',
+    'x-username': user?.username || 'SYSTEM'
+  };
+};
+
 export const apiService = {
   // Authentication
   async login(username, password): Promise<User> {
@@ -36,7 +46,6 @@ export const apiService = {
     await dbService.init(); 
     let lastError = "Initialization timed out or failed.";
     
-    // Retry loop to handle MariaDB boot time in Docker
     for (let i = 0; i < 5; i++) {
         try {
             const res = await fetch(`${API_BASE}/init-db`, { 
@@ -51,7 +60,6 @@ export const apiService = {
                 return { success: true };
             } else {
                 lastError = data.error || data.details || `Server Status ${res.status}`;
-                // If it's a 503 (Initializing), we wait. If it's 500 or 4xx, we report.
                 if (res.status !== 503) break;
             }
         } catch (e: any) {
@@ -79,7 +87,7 @@ export const apiService = {
   async updateSettings(s: SystemSettings) {
     await fetch(`${API_BASE}/settings`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: getHeaders(),
       body: JSON.stringify(s)
     });
     return dbService.saveSettings(s);
@@ -102,7 +110,7 @@ export const apiService = {
   async post(path: string, data: any): Promise<any> {
     const res = await fetch(`${API_BASE}/${path}`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: getHeaders(),
       body: JSON.stringify(data)
     });
     if (!res.ok) {
@@ -113,7 +121,10 @@ export const apiService = {
   },
 
   async del(path: string, id: string | number): Promise<any> {
-    const res = await fetch(`${API_BASE}/${id ? path+'/'+id : path}`, { method: 'DELETE' });
+    const res = await fetch(`${API_BASE}/${id ? path+'/'+id : path}`, { 
+      method: 'DELETE',
+      headers: getHeaders()
+    });
     if (!res.ok) {
       const errorData = await res.json().catch(() => ({}));
       throw new Error(errorData.error || `Server Error: ${res.statusText}`);
@@ -137,7 +148,6 @@ export const apiService = {
   async getAllLocations(): Promise<LocationRecord[]> { return this.get('locations'); },
   async getAllMaintenance(): Promise<MaintenanceLog[]> { return this.get('maintenance_logs'); },
   async getAllLicenses(): Promise<License[]> { return this.get('licenses'); },
-  // Added missing deleteLicense method to fix component error
   async deleteLicense(id: string | number) { return this.del('licenses', id); },
   async getAllRequests(): Promise<AssetRequest[]> { return this.get('requests'); },
   async getUsers(): Promise<User[]> { return this.get('users'); },
@@ -145,7 +155,6 @@ export const apiService = {
   async deleteUser(id: string) { return this.del('users', id); },
   async getRoles(): Promise<Role[]> { return this.get('roles'); },
   async getNotifications(uid: string): Promise<Notification[]> { return this.get(`notifications/${uid}`); },
-  // Added missing createNotification method to fix component error
   async createNotification(data: any) { return this.post('notifications', data); },
   async markNotificationsAsRead(ids: number[]) { return this.post('notifications/read', { ids }); },
   async getAttendance(): Promise<AttendanceRecord[]> { return this.get('attendance'); },
@@ -167,7 +176,10 @@ export const apiService = {
   },
 
   async factoryReset() { 
-    const res = await fetch(`${API_BASE}/factory-reset`, { method: 'POST' });
+    const res = await fetch(`${API_BASE}/factory-reset`, { 
+      method: 'POST',
+      headers: getHeaders()
+    });
     if (res.ok) {
         localStorage.removeItem('smartstock_user');
         await dbService.clearAllData();
@@ -192,7 +204,6 @@ export const apiService = {
     };
   },
 
-  // Added missing importFullDataSnapshot method to fix component error
   async importFullDataSnapshot(data: any) {
     return dbService.bulkImport(data);
   }

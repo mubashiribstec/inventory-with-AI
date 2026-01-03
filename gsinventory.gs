@@ -32,18 +32,21 @@ function createDefaultDbFile() {
     suppliers: [],
     locations: [],
     licenses: [],
-    maintenance: [],
+    maintenance_logs: [],
     categories: [{ id: 'CAT-01', name: 'General Assets', icon: 'fa-box', itemCount: 0 }],
     employees: [],
     departments: [],
-    budgets: [],
+    salaries: [],
     requests: [],
-    users: [{id: 'U-001', username: 'admin', password: 'admin123', role: 'ADMIN', full_name: 'System Admin', department: 'IT', joining_date: '2023-01-01', designation: 'Chief System Admin', is_active: true}],
+    users: [{id: 'U-001', username: 'admin', password: 'admin', role: 'ADMIN', full_name: 'System Admin', department: 'IT', joining_date: '2023-01-01', designation: 'Chief System Admin', is_active: true}],
     settings: [{ id: 'GLOBAL', software_name: 'SmartStock Pro', primary_color: 'indigo', software_description: 'Enterprise Resource Planning', software_logo: 'fa-warehouse' }],
-    logs: [],
+    user_logs: [],
     attendance: [],
-    leaves: [],
-    roles: [],
+    leave_requests: [],
+    roles: [
+      {id: 'ADMIN', label: 'Administrator', description: 'Full system access.', permissions: 'inventory.view,inventory.edit,inventory.procure,hr.view,hr.attendance,hr.leaves,hr.users,hr.salaries,analytics.view,analytics.financials,analytics.logs,system.roles,system.db,system.settings', color: 'rose', icon: 'fa-user-crown'},
+      {id: 'STAFF', label: 'Standard Employee', description: 'Basic access.', permissions: 'inventory.view', color: 'slate', icon: 'fa-user'}
+    ],
     notifications: []
   };
   return DriveApp.createFile(DB_FILE_NAME, JSON.stringify(defaultData), MimeType.PLAIN_TEXT);
@@ -100,7 +103,7 @@ function factoryReset() {
     files.next().setTrashed(true);
   }
   createDefaultDbFile();
-  return { success: true, message: "System reset to defaults. Admin password is admin123." };
+  return { success: true, message: "System reset to defaults. Admin password is 'admin'." };
 }
 
 function getCollection(collectionName) {
@@ -127,6 +130,6 @@ function apiLogin(username, password) {
 }
 
 function setupDatabase() {
-  getDbFile(); // Triggers file creation if missing
+  getDbFile();
   return { success: true, message: "SmartStock Drive Storage initialized." };
 }
