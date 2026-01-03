@@ -15,8 +15,10 @@ import RoleManagement from './components/RoleManagement.tsx';
 import LicenseList from './components/LicenseList.tsx';
 import MaintenanceList from './components/MaintenanceList.tsx';
 import GenericListView from './components/GenericListView.tsx';
+import SupplierList from './components/SupplierList.tsx';
 
-import { ItemStatus, User, InventoryItem, Movement, Supplier, License, Role } from './types.ts';
+// Added Employee to imports from types.ts
+import { ItemStatus, User, InventoryItem, Movement, Supplier, License, Role, Department, LocationRecord, MaintenanceLog, Employee } from './types.ts';
 import { apiService } from './api.ts';
 import { dbService } from './db.ts';
 
@@ -37,11 +39,16 @@ const App: React.FC = () => {
   const [isActivating, setIsActivating] = useState(false);
   const [activationKey, setActivationKey] = useState('');
   
+  // Enterprise Data State
   const [items, setItems] = useState<InventoryItem[]>([]);
   const [movements, setMovements] = useState<Movement[]>([]);
   const [suppliers, setSuppliers] = useState<Supplier[]>([]);
   const [licenses, setLicenses] = useState<License[]>([]);
-  const [employees, setEmployees] = useState<any[]>([]);
+  // Changed employees state type from any[] to Employee[]
+  const [employees, setEmployees] = useState<Employee[]>([]);
+  const [departments, setDepartments] = useState<Department[]>([]);
+  const [locations, setLocations] = useState<LocationRecord[]>([]);
+  const [maintenanceLogs, setMaintenanceLogs] = useState<MaintenanceLog[]>([]);
 
   const fetchSettings = useCallback(async () => {
     try {
@@ -50,9 +57,7 @@ const App: React.FC = () => {
         setSettings(cloudSettings);
         return cloudSettings.system_id;
       }
-    } catch (e) {
-      console.warn("Retrying sync...");
-    }
+    } catch (e) { console.warn("Sync pending..."); }
     return null;
   }, []);
 
@@ -90,10 +95,13 @@ const App: React.FC = () => {
     if (!currentUser || !licenseState.valid) return;
     try {
       setDataLoading(true);
-      const [fItems, fMov, fSup, fLic, fUsers, fEmp] = await Promise.all([
+      // Added explicit generic types to apiService.get calls to fix unknown[] assignment errors
+      const [fItems, fMov, fSup, fLic, fUsers, fEmp, fDepts, fLocs, fMaint] = await Promise.all([
         apiService.getAllItems(), apiService.getAllMovements(), 
         apiService.getAllSuppliers(), apiService.getAllLicenses(),
-        apiService.getUsers(), apiService.get("employees")
+        apiService.getUsers(), apiService.get<Employee>("employees"),
+        apiService.get<Department>("departments"), apiService.get<LocationRecord>("locations"),
+        apiService.get<MaintenanceLog>("maintenance_logs")
       ]);
       setItems(fItems || []); 
       setMovements(fMov || []); 
@@ -101,6 +109,9 @@ const App: React.FC = () => {
       setLicenses(fLic || []);
       setAllUsers(fUsers || []);
       setEmployees(fEmp || []);
+      setDepartments(fDepts || []);
+      setLocations(fLocs || []);
+      setMaintenanceLogs(fMaint || []);
     } catch (err) { console.warn("Refresh failed", err); }
     finally { setDataLoading(false); }
   }, [currentUser, licenseState.valid]);
@@ -137,6 +148,7 @@ const App: React.FC = () => {
     expiring_soon: 0
   }), [items, licenses]);
 
+  // Modular Component Router
   const renderModule = () => {
     switch (activeTab) {
       case 'dashboard': return <Dashboard stats={stats} movements={movements} items={items} onFullAudit={() => setActiveTab('audit-trail')} onCheckIn={() => setActiveTab('attendance')} themeColor={settings.primary_color} />;
@@ -150,8 +162,13 @@ const App: React.FC = () => {
       case 'roles': return <RoleManagement />;
       case 'settings': return <SettingsModule settings={settings} onUpdate={setSettings} />;
       case 'licenses': return <LicenseList licenses={licenses} suppliers={suppliers} onAdd={() => {}} onUpdate={fetchCoreData} />;
-      case 'audit-trail': return <GenericListView title="System Audit Trail" icon="fa-stream" items={movements} columns={['date', 'item', 'from', 'to', 'status']} />;
-      default: return <div className="p-20 text-center text-slate-400">Module Under Construction</div>;
+      case 'audit-trail': return <GenericListView title="System Audit Ledger" icon="fa-stream" items={movements} columns={['date', 'item', 'from', 'to', 'status']} />;
+      case 'employees': return <GenericListView title="Staff Directory" icon="fa-users-cog" items={employees} columns={['id', 'name', 'department', 'role', 'joining_date', 'is_active']} />;
+      case 'departments': return <GenericListView title="Organizational Units" icon="fa-sitemap" items={departments} columns={['id', 'name', 'manager']} />;
+      case 'maintenance': return <MaintenanceList logs={maintenanceLogs} items={items} onUpdate={fetchCoreData} onAdd={() => {}} />;
+      case 'suppliers': return <SupplierList suppliers={suppliers} />;
+      case 'locations': return <GenericListView title="Physical Locations" icon="fa-map-marker-alt" items={locations} columns={['id', 'building', 'floor', 'room', 'manager']} />;
+      default: return <div className="p-20 text-center text-slate-400 poppins">Module <b>{activeTab}</b> is currently being initialized...</div>;
     }
   };
 
@@ -166,22 +183,38 @@ const App: React.FC = () => {
   );
 
   if (!licenseState.valid) return (
-    <div className="min-h-screen bg-slate-900 flex items-center justify-center p-6">
+    <div className="min-h-screen bg-slate-900 flex items-center justify-center p-6 poppins">
       <div className="max-w-xl w-full bg-white rounded-[40px] p-10 text-center shadow-2xl">
-        <h2 className="text-2xl font-bold mb-4">Activation Required</h2>
-        <div className="bg-slate-50 p-4 rounded-xl mb-6 font-mono text-sm">{settings.system_id || 'Generating ID...'}</div>
-        <textarea required rows={3} placeholder="Activation Key" className="w-full p-4 border rounded-xl mb-4 font-mono text-xs" value={activationKey} onChange={e => setActivationKey(e.target.value)} />
-        <button onClick={handleActivate} className="w-full py-4 bg-indigo-600 text-white rounded-xl font-bold">Apply Key</button>
+        <div className="w-20 h-20 bg-rose-50 text-rose-500 rounded-3xl flex items-center justify-center mx-auto mb-6 text-3xl">
+          <i className="fas fa-lock"></i>
+        </div>
+        <h2 className="text-2xl font-bold mb-4">Software Activation</h2>
+        <p className="text-slate-500 mb-6">Your system is currently locked. Provide your System ID to your administrator to receive an activation key.</p>
+        <div className="bg-slate-50 p-4 rounded-xl mb-6 font-mono text-sm border border-slate-100">{settings.system_id || 'Generating ID...'}</div>
+        <textarea required rows={3} placeholder="Activation Key" className="w-full p-4 border rounded-xl mb-4 font-mono text-xs focus:ring-2 focus:ring-indigo-500 outline-none" value={activationKey} onChange={e => setActivationKey(e.target.value)} />
+        <button onClick={handleActivate} className="w-full py-4 bg-indigo-600 text-white rounded-xl font-bold shadow-lg shadow-indigo-100">Activate Enterprise Access</button>
       </div>
     </div>
   );
 
   return (
     <div className={`flex min-h-screen bg-slate-50 theme-${settings.primary_color}`}>
-      <Sidebar userRole={currentUser.role} activeTab={activeTab} setActiveTab={setActiveTab} onLogout={() => { setCurrentUser(null); localStorage.removeItem('smartstock_user'); }} permissions={currentRole?.permissions?.split(',') || []} appName={settings.software_name} themeColor={settings.primary_color} logoIcon={settings.software_logo} licenseExpiry={licenseState.expiry} />
+      <Sidebar 
+        userRole={currentUser.role} 
+        activeTab={activeTab} 
+        setActiveTab={setActiveTab} 
+        onLogout={() => { setCurrentUser(null); localStorage.removeItem('smartstock_user'); window.location.reload(); }} 
+        permissions={currentRole?.permissions?.split(',') || []} 
+        appName={settings.software_name} 
+        themeColor={settings.primary_color} 
+        logoIcon={settings.software_logo} 
+        licenseExpiry={licenseState.expiry} 
+      />
       <main className="flex-1 lg:ml-64 p-6 lg:p-12">
         {dataLoading && <div className="fixed top-0 left-0 w-full h-1 bg-indigo-600 animate-pulse z-50"></div>}
-        {renderModule()}
+        <div className="max-w-[1440px] mx-auto">
+          {renderModule()}
+        </div>
       </main>
     </div>
   );

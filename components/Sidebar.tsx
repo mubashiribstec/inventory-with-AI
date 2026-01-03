@@ -73,6 +73,7 @@ const Sidebar: React.FC<SidebarProps> = ({
         { id: 'employees', icon: 'fa-users-cog', label: 'Staff Directory', permission: 'hr.view' },
         { id: 'departments', icon: 'fa-sitemap', label: 'Departments', permission: 'hr.view' },
         { id: 'user-mgmt', icon: 'fa-user-shield', label: 'Accounts', permission: 'hr.users' },
+        { id: 'roles', icon: 'fa-user-tag', label: 'Roles & Perms', permission: 'hr.users' },
       ]
     },
     {
@@ -89,6 +90,8 @@ const Sidebar: React.FC<SidebarProps> = ({
         { id: 'inventory', icon: 'fa-box-open', label: 'Registry', permission: 'inventory.view' },
         { id: 'maintenance', icon: 'fa-tools', label: 'Maintenance', permission: 'inventory.edit' },
         { id: 'licenses', icon: 'fa-key', label: 'Licenses', permission: 'inventory.view' },
+        { id: 'suppliers', icon: 'fa-truck', label: 'Suppliers', permission: 'inventory.view' },
+        { id: 'locations', icon: 'fa-map-marker-alt', label: 'Locations', permission: 'inventory.view' },
       ]
     }
   ];
@@ -98,7 +101,7 @@ const Sidebar: React.FC<SidebarProps> = ({
   const suffix = softwareNameParts.length > 1 ? softwareNameParts[softwareNameParts.length - 1] : '';
 
   return (
-    <div className="fixed inset-y-0 left-0 w-64 bg-white border-r border-slate-200 flex flex-col z-30 shadow-sm hidden lg:flex custom-scrollbar overflow-y-auto">
+    <div className="fixed inset-y-0 left-0 w-64 bg-white border-r border-slate-200 flex flex-col z-30 shadow-sm hidden lg:flex custom-scrollbar overflow-y-auto poppins">
       <div className="p-6 sticky top-0 bg-white z-10 border-b border-slate-100 mb-4">
         <div className="flex items-center gap-3">
           <div className={`w-10 h-10 bg-${themeColor}-600 rounded-xl flex items-center justify-center text-white text-xl shadow-lg shadow-${themeColor}-100`}>
@@ -133,6 +136,11 @@ const Sidebar: React.FC<SidebarProps> = ({
                       <i className={`fas ${item.icon} w-5 text-center ${activeTab === item.id ? 'text-white' : `text-slate-400 group-hover:text-${themeColor}-600`}`}></i>
                       <span className="font-semibold text-sm">{item.label}</span>
                     </div>
+                    {item.badge ? (
+                      <span className={`px-1.5 py-0.5 rounded-md text-[10px] font-black ${activeTab === item.id ? 'bg-white/20 text-white' : 'bg-rose-50 text-rose-600'}`}>
+                        {item.badge}
+                      </span>
+                    ) : null}
                   </button>
                 ))}
               </div>
