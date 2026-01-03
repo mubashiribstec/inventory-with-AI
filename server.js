@@ -79,54 +79,111 @@ app.use('/api', apiRouter);
 
 /**
  * Database Initialization & Auto-Migration
- * This ensures your table structure is always up to date even if it already exists.
+ * Ensures EVERY table (HR, Settings, Inventory) is correct.
  */
 const initializeDb = async () => {
   let conn;
   try {
     conn = await pool.getConnection();
-    console.log("MariaDB: Syncing Database Schema...");
+    console.log("MariaDB: Synchronizing Enterprise Schema...");
 
-    // 1. Create Settings Table (Base Version)
+    // 1. SETTINGS Table (Self-healing columns)
     await conn.query(`CREATE TABLE IF NOT EXISTS settings (
       id VARCHAR(50) PRIMARY KEY,
       software_name VARCHAR(255) DEFAULT 'SmartStock Pro',
       primary_color VARCHAR(50) DEFAULT 'indigo'
     )`);
 
-    // 2. AUTO-MIGRATION: Check for missing columns in 'settings' table
-    const columns = await conn.query("SHOW COLUMNS FROM settings");
-    const columnNames = columns.map(c => c.Field);
-
-    const requiredColumns = [
+    const setCols = await conn.query("SHOW COLUMNS FROM settings");
+    const setColNames = setCols.map(c => c.Field);
+    const setReq = [
       { name: 'license_key', type: 'TEXT' },
       { name: 'license_expiry', type: 'DATE' },
       { name: 'system_id', type: 'VARCHAR(100)' },
       { name: 'software_description', type: 'TEXT' },
       { name: 'software_logo', type: 'VARCHAR(255)' }
     ];
-
-    for (const col of requiredColumns) {
-      if (!columnNames.includes(col.name)) {
-        console.log(`Migration: Adding missing column '${col.name}' to settings table...`);
+    for (const col of setReq) {
+      if (!setColNames.includes(col.name)) {
         await conn.query(`ALTER TABLE settings ADD COLUMN ${col.name} ${col.type}`);
+        console.log(`Migration: Added ${col.name} to Settings.`);
       }
     }
 
-    // 3. Fetch or Generate System Identity
-    const rows = await conn.query("SELECT * FROM settings WHERE id = 'GLOBAL'");
+    // 2. USERS Table (HR Critical)
+    await conn.query(`CREATE TABLE IF NOT EXISTS users (
+      id VARCHAR(50) PRIMARY KEY, 
+      username VARCHAR(50) UNIQUE, 
+      password VARCHAR(100), 
+      role VARCHAR(20), 
+      full_name VARCHAR(100),
+      department VARCHAR(100),
+      is_active BOOLEAN DEFAULT TRUE
+    )`);
     
+    const userCols = await conn.query("SHOW COLUMNS FROM users");
+    const userColNames = userCols.map(c => c.Field);
+    const userReq = [
+      { name: 'shift_start_time', type: 'VARCHAR(10) DEFAULT "09:00"' },
+      { name: 'team_lead_id', type: 'VARCHAR(50)' },
+      { name: 'manager_id', type: 'VARCHAR(50)' },
+      { name: 'joining_date', type: 'DATE' },
+      { name: 'designation', type: 'VARCHAR(100)' }
+    ];
+    for (const col of userReq) {
+      if (!userColNames.includes(col.name)) {
+        await conn.query(`ALTER TABLE users ADD COLUMN ${col.name} ${col.type}`);
+        console.log(`Migration: Added HR column ${col.name} to Users.`);
+      }
+    }
+
+    // 3. ATTENDANCE & LEAVE (HR Core)
+    await conn.query(`CREATE TABLE IF NOT EXISTS attendance (
+      id VARCHAR(100) PRIMARY KEY,
+      user_id VARCHAR(50),
+      username VARCHAR(100),
+      date DATE,
+      check_in DATETIME,
+      check_out DATETIME,
+      status VARCHAR(20),
+      location VARCHAR(100)
+    )`);
+
+    await conn.query(`CREATE TABLE IF NOT EXISTS leave_requests (
+      id VARCHAR(50) PRIMARY KEY,
+      user_id VARCHAR(50),
+      username VARCHAR(100),
+      start_date DATE,
+      end_date DATE,
+      leave_type VARCHAR(20),
+      reason TEXT,
+      status VARCHAR(20) DEFAULT 'PENDING'
+    )`);
+
+    // 4. INVENTORY & OTHERS
+    await conn.query(`CREATE TABLE IF NOT EXISTS items (
+      id VARCHAR(50) PRIMARY KEY,
+      name VARCHAR(255) NOT NULL,
+      category VARCHAR(100),
+      serial VARCHAR(100),
+      status VARCHAR(50),
+      location VARCHAR(255),
+      assignedTo VARCHAR(255),
+      department VARCHAR(100),
+      purchaseDate DATE,
+      warranty DATE,
+      cost DECIMAL(15, 2)
+    )`);
+
+    // 5. Initial GLOBAL Settings Fetch
+    const rows = await conn.query("SELECT * FROM settings WHERE id = 'GLOBAL'");
     if (rows.length > 0) {
       let dbSettings = rows[0];
-      
-      // Ensure system_id exists
       if (!dbSettings.system_id) {
         const sid = crypto.randomBytes(4).toString('hex').toUpperCase();
         await conn.query("UPDATE settings SET system_id = ? WHERE id = 'GLOBAL'", [sid]);
         dbSettings.system_id = sid;
-        console.log("SUCCESS: New System ID Provisioned:", sid);
       }
-
       MEMORY_CACHE = { 
         ...MEMORY_CACHE, 
         ...dbSettings,
@@ -139,24 +196,14 @@ const initializeDb = async () => {
                        [MEMORY_CACHE.software_name, MEMORY_CACHE.primary_color, sid, MEMORY_CACHE.software_description, MEMORY_CACHE.software_logo]);
       MEMORY_CACHE.system_id = sid;
       MEMORY_CACHE.is_db_connected = true;
-      console.log("SUCCESS: Initial Global Settings Created with ID:", sid);
     }
 
-    // 4. Ensure Users Table & Admin
-    await conn.query(`CREATE TABLE IF NOT EXISTS users (
-      id VARCHAR(50) PRIMARY KEY, 
-      username VARCHAR(50) UNIQUE, 
-      password VARCHAR(100), 
-      role VARCHAR(20), 
-      full_name VARCHAR(100),
-      department VARCHAR(100),
-      is_active BOOLEAN DEFAULT TRUE
-    )`);
+    // 6. Ensure Admin
     await conn.query("REPLACE INTO users (id, username, password, role, full_name, is_active) VALUES ('U-001', 'admin', 'admin', 'ADMIN', 'System Administrator', 1)");
 
-    console.log("MariaDB: Schema is up-to-date. Ready for operations.");
+    console.log("MariaDB: Enterprise Integrity Verified. All systems active.");
   } catch (err) {
-    console.error("CRITICAL ERROR: MariaDB Initialization Failed:", err.message);
+    console.error("CRITICAL ERROR: MariaDB Sync Failed:", err.message);
     setTimeout(initializeDb, 5000); 
   } finally {
     if (conn) conn.release();
@@ -167,30 +214,24 @@ initializeDb();
 
 app.get('/health', (req, res) => res.json({ status: 'ok', db: MEMORY_CACHE.is_db_connected, sid: MEMORY_CACHE.system_id }));
 
-apiRouter.get('/settings', (req, res) => {
-  res.json(MEMORY_CACHE);
-});
+apiRouter.get('/settings', (req, res) => res.json(MEMORY_CACHE));
 
 apiRouter.post('/settings', async (req, res) => {
   let conn;
   try {
-    const { license_key, software_name, primary_color, software_description, software_logo } = req.body;
-    
+    const { license_key } = req.body;
     if (license_key) {
       const v = verifyLicense(license_key, MEMORY_CACHE.system_id);
       if (!v.valid) return res.status(400).json({ error: `Verification Failed: ${v.error}` });
       req.body.license_expiry = v.payload.expiry;
     }
-
     conn = await pool.getConnection();
     const updates = Object.keys(req.body).filter(k => k !== 'id' && k !== 'is_db_connected');
     const setClause = updates.map(k => `\`${k}\` = ?`).join(', ');
     const values = updates.map(k => req.body[k]);
-    
     if (updates.length > 0) {
       await conn.query(`UPDATE settings SET ${setClause} WHERE id = 'GLOBAL'`, values);
     }
-    
     MEMORY_CACHE = { ...MEMORY_CACHE, ...req.body };
     res.json({ success: true });
   } catch (e) {
@@ -205,7 +246,7 @@ apiRouter.post('/login', async (req, res) => {
   let conn;
   try {
     conn = await pool.getConnection();
-    const rows = await conn.query('SELECT id, username, role, full_name FROM users WHERE username=? AND password=?', [username, password]);
+    const rows = await conn.query('SELECT id, username, role, full_name, department, shift_start_time FROM users WHERE username=? AND password=?', [username, password]);
     if (rows.length > 0) res.json(rows[0]);
     else res.status(401).json({ error: 'Invalid credentials' });
   } catch (err) { res.status(500).json({ error: 'DB Error' }); }
