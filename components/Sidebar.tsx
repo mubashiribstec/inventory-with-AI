@@ -52,7 +52,7 @@ const Sidebar: React.FC<SidebarProps> = ({
 
   const navGroups = [
     {
-      title: 'Human Resources (Module 1)',
+      title: 'Human Resources',
       items: [
         { id: 'attendance', icon: 'fa-user-clock', label: 'Attendance Hub' },
         { id: 'notifications', icon: 'fa-bell', label: 'Alerts & Activity', badge: unreadCount },
@@ -64,7 +64,7 @@ const Sidebar: React.FC<SidebarProps> = ({
       ]
     },
     {
-      title: 'Budget & Analytics (Module 2)',
+      title: 'Financials & Analytics',
       items: [
         { id: 'dashboard', icon: 'fa-chart-pie', label: 'Executive Overview', permission: 'analytics.view' },
         { id: 'budgets', icon: 'fa-wallet', label: 'Budget & Consumption', permission: 'analytics.financials' },
@@ -72,7 +72,7 @@ const Sidebar: React.FC<SidebarProps> = ({
       ]
     },
     {
-      title: 'Inventory Control (Module 3)',
+      title: 'Inventory Control',
       items: [
         { id: 'inventory', icon: 'fa-box-open', label: 'Stock Inventory', permission: 'inventory.view' },
         { id: 'purchase-history', icon: 'fa-shopping-cart', label: 'Procurement List', permission: 'inventory.procure' },
@@ -82,7 +82,7 @@ const Sidebar: React.FC<SidebarProps> = ({
       ]
     },
     {
-      title: 'Organization',
+      title: 'Management',
       items: [
         { id: 'suppliers', icon: 'fa-truck-loading', label: 'Vendor Scorecard', permission: 'inventory.view' },
         { id: 'locations', icon: 'fa-map-marked-alt', label: 'Site Map', permission: 'inventory.view' },
@@ -90,8 +90,9 @@ const Sidebar: React.FC<SidebarProps> = ({
     }
   ];
 
+  // Logic to split name for fancy rendering (e.g. "SmartStock Pro" -> "SmartStock .Pro")
   const softwareNameParts = appName.split(' ');
-  const mainName = softwareNameParts.slice(0, -1).join(' ') || appName;
+  const mainName = softwareNameParts.length > 1 ? softwareNameParts.slice(0, -1).join(' ') : appName;
   const suffix = softwareNameParts.length > 1 ? softwareNameParts[softwareNameParts.length - 1] : '';
 
   return (

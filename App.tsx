@@ -1,5 +1,4 @@
 
-
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import Sidebar from './components/Sidebar.tsx';
 import Dashboard from './components/Dashboard.tsx';
@@ -110,6 +109,11 @@ const App: React.FC = () => {
     startupSequence();
   }, [fetchRoleData]);
 
+  // Sync browser title with software name
+  useEffect(() => {
+    document.title = `${settings.software_name} | Enterprise`;
+  }, [settings.software_name]);
+
   useEffect(() => { if (currentUser) fetchData(); }, [currentUser, fetchData]);
 
   const stats = useMemo(() => ({
@@ -126,8 +130,6 @@ const App: React.FC = () => {
   const handleManagementSubmit = async (data: any) => {
     try {
       if (managementModal.type === 'Employee') {
-        // Sanitize employee data to match DB columns exactly
-        // Fix: Ensure is_active is a boolean to match the Employee interface (was incorrectly being set as 1/0)
         const employeePayload: Employee = {
           id: data.id,
           name: data.name,
@@ -139,7 +141,6 @@ const App: React.FC = () => {
         };
         await apiService.saveEmployee(employeePayload);
         
-        // If "Authorize Access" was checked, also create/update user record
         if (data.create_user && data.username && data.password) {
            await apiService.saveUser({
               id: `U-${data.id.split('-').pop()}`,
@@ -153,7 +154,6 @@ const App: React.FC = () => {
         }
       } 
       else if (managementModal.type === 'Department') {
-        // Sanitize department data to match DB columns exactly
         const departmentPayload: Department = {
           id: data.id,
           name: data.name,
@@ -222,7 +222,16 @@ const App: React.FC = () => {
 
   return (
     <div className={`flex min-h-screen bg-slate-50 theme-${themeColor}`}>
-      <Sidebar userRole={currentUser.role} activeTab={activeTab} setActiveTab={setActiveTab} onLogout={() => { setCurrentUser(null); localStorage.removeItem('smartstock_user'); }} permissions={currentRole?.permissions?.split(',') || []} appName={settings.software_name} themeColor={themeColor} logoIcon={settings.software_logo} />
+      <Sidebar 
+        userRole={currentUser.role} 
+        activeTab={activeTab} 
+        setActiveTab={setActiveTab} 
+        onLogout={() => { setCurrentUser(null); localStorage.removeItem('smartstock_user'); }} 
+        permissions={currentRole?.permissions?.split(',') || []} 
+        appName={settings.software_name} 
+        themeColor={themeColor} 
+        logoIcon={settings.software_logo} 
+      />
       <main className="flex-1 lg:ml-64 p-6 lg:p-10 min-w-0">
         <header className="mb-8 flex flex-col md:flex-row justify-between items-center gap-4">
             <div>
