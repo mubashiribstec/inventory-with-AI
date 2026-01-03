@@ -20,7 +20,7 @@ const pool = mariadb.createPool({
   user: process.env.DB_USER || 'inventory_user',
   password: process.env.DB_PASSWORD || 'inventory_password',
   database: process.env.DB_NAME || 'smartstock',
-  connectionLimit: 10,
+  connectionLimit: 15,
   connectTimeout: 30000, 
   acquireTimeout: 30000
 });
@@ -36,14 +36,14 @@ const modules = [
 ];
 
 const handleInitDb = async (conn, forceReset = false) => {
-  console.log(`[DATABASE] Running ${forceReset ? 'FORCE RESET' : 'schema check'}...`);
+  console.log(`[DATABASE] Running ${forceReset ? 'FORCE RESET' : 'schema verification'}...`);
   
   if (forceReset) {
-    // Drop tables in reverse order of dependencies if any (though currently flat)
+    // Drop all tables to allow a clean slate
     for (const table of modules) {
       await conn.query(`DROP TABLE IF EXISTS \`${table}\``);
     }
-    console.log('[DATABASE] All existing tables dropped.');
+    console.log('[DATABASE] Clean slate achieved. Existing tables dropped.');
   }
 
   const queries = [
@@ -219,76 +219,60 @@ const handleInitDb = async (conn, forceReset = false) => {
     await conn.query(query);
   }
 
-  // Seed default settings and roles
+  // Ensure mandatory defaults
   await conn.query("REPLACE INTO settings (id, software_name, primary_color, software_description, software_logo) VALUES ('GLOBAL', 'SmartStock Pro', 'indigo', 'Enterprise Resource Planning', 'fa-warehouse')");
-
+  
   const defaultRoles = [
-    ['ADMIN', 'Administrator', 'Full system access and security policy controls.', 'inventory.view,inventory.edit,inventory.procure,hr.view,hr.attendance,hr.leaves,hr.users,hr.salaries,analytics.view,analytics.financials,analytics.logs,system.roles,system.db,system.settings', 'rose', 'fa-user-crown'],
-    ['MANAGER', 'Operations Manager', 'Departmental oversight of assets and operational logs.', 'inventory.view,inventory.edit,hr.view,hr.leaves,analytics.view,analytics.financials', 'amber', 'fa-briefcase'],
-    ['HR', 'HR Specialist', 'Manages lifecycle of staff, attendance, and leave compliance.', 'hr.view,hr.attendance,hr.leaves,hr.salaries,analytics.view', 'emerald', 'fa-users-cog'],
-    ['TEAM_LEAD', 'Team Lead', 'Oversight of tactical continuity for assigned team members.', 'inventory.view,hr.view,hr.attendance,analytics.view', 'indigo', 'fa-user-tie'],
-    ['STAFF', 'Standard Employee', 'Personal asset tracking and basic requests.', 'inventory.view', 'slate', 'fa-user']
+    ['ADMIN', 'Administrator', 'Full system access.', 'inventory.view,inventory.edit,inventory.procure,hr.view,hr.attendance,hr.leaves,hr.users,hr.salaries,analytics.view,analytics.financials,analytics.logs,system.roles,system.db,system.settings', 'rose', 'fa-user-crown'],
+    ['STAFF', 'Standard Employee', 'Basic access.', 'inventory.view', 'slate', 'fa-user']
   ];
-
   for (const r of defaultRoles) {
     await conn.query("REPLACE INTO roles (id, label, description, permissions, color, icon) VALUES (?, ?, ?, ?, ?, ?)", r);
   }
 
-  // Ensure default admin exists
   await conn.query("REPLACE INTO users (id, username, password, role, full_name, shift_start_time, department, joining_date, designation, is_active) VALUES ('U-001', 'admin', 'admin', 'ADMIN', 'System Administrator', '09:00', 'IT Infrastructure', '2023-01-01', 'Chief Systems Admin', 1)");
   
-  console.log('[DATABASE] Initialization complete. Default Login: admin / admin');
+  console.log('[DATABASE] Initialization complete.');
   return true;
 };
 
-// Retry Loop for Database Connection
 const initDbWithRetry = async (retries = 30, delay = 5000) => {
   for (let i = 0; i < retries; i++) {
     let conn;
     try {
-      console.log(`[DATABASE] Connecting to ${dbHost} (Attempt ${i + 1}/${retries})...`);
+      console.log(`[DATABASE] Connection attempt ${i + 1}/${retries} to ${dbHost}...`);
       conn = await pool.getConnection();
       await handleInitDb(conn);
       isDbReady = true;
       dbError = null;
-      console.log('[DATABASE] Connected and ready.');
+      console.log('[DATABASE] Ready.');
       return;
     } catch (err) {
-      dbError = `DB_CONNECTION_FAILURE: ${err.message}`;
-      console.error(`[DATABASE ERROR] ${err.message}`);
-      if (i < retries - 1) {
-        await new Promise(res => setTimeout(res, delay));
-      }
+      dbError = `Boot connection error: ${err.message}`;
+      console.error(`[DATABASE] ${err.message}`);
+      if (i < retries - 1) await new Promise(res => setTimeout(res, delay));
     } finally {
       if (conn) conn.release();
     }
   }
-  dbError = `CRITICAL_ERROR: Failed to connect to database after 30 attempts at ${dbHost}.`;
 };
 
-// Start initialization in background
 initDbWithRetry();
 
-// Middleware
 app.use('/api', (req, res, next) => {
   res.setHeader('Content-Type', 'application/json; charset=utf-8');
-  // Always allow /init-db regardless of state
-  if (req.path === '/init-db') return next();
-  
+  if (req.path === '/init-db') return next(); // Always allow init probe
   if (!isDbReady) {
     return res.status(503).json({ 
       error: 'Database Initializing', 
-      details: dbError || 'The server is currently establishing a connection to MariaDB.' 
+      details: dbError || 'Establishing connection to MariaDB daemon...' 
     });
   }
   next();
 });
 
-const sendJSON = (res, data, status = 200) => {
-  return res.status(status).send(JSON.stringify(data));
-};
+const sendJSON = (res, data, status = 200) => res.status(status).send(JSON.stringify(data));
 
-// Endpoints
 app.post('/api/login', async (req, res) => {
   const { username, password } = req.body;
   let conn;
@@ -301,7 +285,7 @@ app.post('/api/login', async (req, res) => {
       const { password: _, ...userSafe } = user;
       sendJSON(res, userSafe);
     } else {
-      sendJSON(res, { error: 'Invalid username or password' }, 401);
+      sendJSON(res, { error: 'Invalid credentials' }, 401);
     }
   } catch (err) {
     sendJSON(res, { error: `Login Error: ${err.message}` }, 500);
@@ -311,58 +295,22 @@ app.post('/api/login', async (req, res) => {
 });
 
 app.post('/api/init-db', async (req, res) => {
+  const force = req.body.force === true;
   let conn;
   try {
     conn = await pool.getConnection();
-    const force = req.body.force === true;
     await handleInitDb(conn, force);
     isDbReady = true;
     dbError = null;
-    sendJSON(res, { success: true, message: force ? 'Database reset and initialized.' : 'Database tables verified.' });
+    sendJSON(res, { success: true, message: force ? 'Database wiped and reset.' : 'Database verified.' });
   } catch (err) {
-    sendJSON(res, { error: `Init Failure: ${err.message}` }, 500);
+    sendJSON(res, { error: `Manual Init Failed: ${err.message}` }, 500);
   } finally {
     if (conn) conn.release();
   }
 });
 
-app.post('/api/factory-reset', async (req, res) => {
-  let conn;
-  try {
-    conn = await pool.getConnection();
-    await handleInitDb(conn, true); // True = Delete old and reset
-    sendJSON(res, { success: true, message: 'Software factory reset complete.' });
-  } catch (err) {
-    sendJSON(res, { error: err.message }, 500);
-  } finally {
-    if (conn) conn.release();
-  }
-});
-
-app.get('/api/settings', async (req, res) => {
-  let conn;
-  try {
-    conn = await pool.getConnection();
-    const rows = await conn.query('SELECT * FROM settings WHERE id = ?', ['GLOBAL']);
-    sendJSON(res, rows[0] || {});
-  } catch (err) { sendJSON(res, { error: err.message }, 500); }
-  finally { if (conn) conn.release(); }
-});
-
-app.post('/api/settings', async (req, res) => {
-  let conn;
-  try {
-    conn = await pool.getConnection();
-    const { software_name, primary_color, software_description, software_logo } = req.body;
-    await conn.query(
-      'REPLACE INTO settings (id, software_name, primary_color, software_description, software_logo) VALUES (?, ?, ?, ?, ?)',
-      ['GLOBAL', software_name, primary_color, software_description, software_logo]
-    );
-    sendJSON(res, { success: true });
-  } catch (err) { sendJSON(res, { error: err.message }, 500); }
-  finally { if (conn) conn.release(); }
-});
-
+// Generic CRUD handlers
 const handleCRUD = (tableName) => {
   app.get(`/api/${tableName}`, async (req, res) => {
     let conn;
@@ -413,12 +361,18 @@ const handleCRUD = (tableName) => {
 };
 
 modules.forEach(handleCRUD);
+app.get('/api/settings', async (req, res) => {
+  let conn;
+  try {
+    conn = await pool.getConnection();
+    const rows = await conn.query('SELECT * FROM settings WHERE id = ?', ['GLOBAL']);
+    sendJSON(res, rows[0] || {});
+  } catch (err) { sendJSON(res, { error: err.message }, 500); }
+  finally { if (conn) conn.release(); }
+});
 
 const staticPath = path.join(__dirname, 'dist');
 app.use(express.static(staticPath));
+app.get('*', (req, res) => res.sendFile(path.join(staticPath, 'index.html')));
 
-app.get('*', (req, res) => {
-  res.sendFile(path.join(staticPath, 'index.html'));
-});
-
-app.listen(port, '0.0.0.0', () => console.log(`SmartStock ERP running on port ${port}`));
+app.listen(port, '0.0.0.0', () => console.log(`SmartStock Listening on ${port}`));

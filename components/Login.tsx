@@ -27,24 +27,24 @@ const Login: React.FC<LoginProps> = ({ onLogin, softwareName, themeColor = 'indi
       const user = await apiService.login(username, password);
       onLogin(user);
     } catch (err: any) {
-      console.error("Login attempt failed:", err);
-      setError(err.message || 'Authentication server unreachable. Check your connection.');
+      setError(err.message || 'Authentication failed.');
     } finally {
       setLoading(false);
     }
   };
 
-  const handleInitDatabase = async () => {
+  const handleInitDatabase = async (force = false) => {
+    if (force && !window.confirm("CRITICAL: This will DELETE all existing data and recreate the database. Are you sure?")) {
+      return;
+    }
     setError('');
     setInitLoading(true);
     setInitSuccess(false);
     try {
-      const result = await apiService.initDatabase();
+      const result = await apiService.initDatabase(force);
       if (result.success) {
         setInitSuccess(true);
         setTimeout(() => setInitSuccess(false), 5000);
-      } else {
-        throw new Error("Initialization failed. Please check backend logs.");
       }
     } catch (err: any) {
       setError(err.message || "Failed to initialize database.");
@@ -84,7 +84,7 @@ const Login: React.FC<LoginProps> = ({ onLogin, softwareName, themeColor = 'indi
                 <i className="fas fa-check-circle text-lg"></i>
                 <span className="uppercase tracking-widest font-black">Success</span>
               </div>
-              <p className="pl-8 leading-relaxed font-medium">Database tables and seed data have been initialized successfully.</p>
+              <p className="pl-8 leading-relaxed font-medium">Database system is ready.</p>
             </div>
           )}
           
@@ -97,7 +97,7 @@ const Login: React.FC<LoginProps> = ({ onLogin, softwareName, themeColor = 'indi
                   type="text" 
                   required
                   className={`w-full pl-12 pr-4 py-3.5 bg-slate-50 border border-slate-100 rounded-xl focus:ring-2 focus:ring-${themeColor}-500 outline-none transition font-medium`}
-                  placeholder="e.g. admin"
+                  placeholder="admin"
                   value={username}
                   onChange={e => setUsername(e.target.value)}
                 />
@@ -119,15 +119,13 @@ const Login: React.FC<LoginProps> = ({ onLogin, softwareName, themeColor = 'indi
               </div>
             </div>
 
-            <div className="flex flex-col gap-3 pt-4">
-              <button 
-                type="submit" 
-                disabled={loading || initLoading}
-                className={`w-full py-4 bg-${themeColor}-600 hover:bg-${themeColor}-700 text-white rounded-2xl font-bold transition shadow-lg shadow-${themeColor}-100 flex items-center justify-center gap-3 disabled:opacity-50 transform active:scale-95`}
-              >
-                {loading ? <i className="fas fa-spinner animate-spin"></i> : <><i className="fas fa-sign-in-alt"></i> <span>Sign In to Dashboard</span></>}
-              </button>
-            </div>
+            <button 
+              type="submit" 
+              disabled={loading || initLoading}
+              className={`w-full py-4 bg-${themeColor}-600 hover:bg-${themeColor}-700 text-white rounded-2xl font-bold transition shadow-lg shadow-${themeColor}-100 flex items-center justify-center gap-3 disabled:opacity-50`}
+            >
+              {loading ? <i className="fas fa-spinner animate-spin"></i> : <><i className="fas fa-sign-in-alt"></i> <span>Sign In to Dashboard</span></>}
+            </button>
           </form>
 
           <div className="relative flex py-2 items-center">
@@ -136,15 +134,26 @@ const Login: React.FC<LoginProps> = ({ onLogin, softwareName, themeColor = 'indi
               <div className="flex-grow border-t border-slate-100"></div>
           </div>
 
-          <button 
-            type="button"
-            onClick={handleInitDatabase}
-            disabled={loading || initLoading}
-            className="w-full py-3 bg-white border border-slate-200 text-slate-500 rounded-2xl font-bold text-xs hover:bg-slate-50 transition flex items-center justify-center gap-2 disabled:opacity-50"
-          >
-            {initLoading ? <i className="fas fa-spinner animate-spin"></i> : <i className="fas fa-database text-slate-300"></i>}
-            <span>Initialize System Database</span>
-          </button>
+          <div className="grid grid-cols-2 gap-3">
+            <button 
+              type="button"
+              onClick={() => handleInitDatabase(false)}
+              disabled={loading || initLoading}
+              className="py-3 bg-white border border-slate-200 text-slate-500 rounded-2xl font-bold text-[10px] hover:bg-slate-50 transition flex items-center justify-center gap-2 disabled:opacity-50"
+            >
+              {initLoading ? <i className="fas fa-spinner animate-spin text-[10px]"></i> : <i className="fas fa-database text-slate-300"></i>}
+              <span>Check DB</span>
+            </button>
+            <button 
+              type="button"
+              onClick={() => handleInitDatabase(true)}
+              disabled={loading || initLoading}
+              className="py-3 bg-rose-50 border border-rose-100 text-rose-600 rounded-2xl font-bold text-[10px] hover:bg-rose-100 transition flex items-center justify-center gap-2 disabled:opacity-50"
+            >
+              <i className="fas fa-trash-alt opacity-50"></i>
+              <span>Wipe & Reset</span>
+            </button>
+          </div>
 
           <div className="text-center pt-2">
             <p className="text-[10px] text-slate-400 font-medium leading-relaxed uppercase tracking-tighter">

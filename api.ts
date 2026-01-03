@@ -15,20 +15,51 @@ export const apiService = {
       });
 
       if (!response.ok) {
-        if (response.status === 503) {
-            throw new Error("Authentication server unreachable. Check your connection.");
-        }
-        const errorData = await response.json().catch(() => ({}));
-        throw new Error(errorData.error || `Login Error (${response.status})`);
+        let errorMsg = `Login Error (${response.status})`;
+        try {
+          const data = await response.json();
+          errorMsg = data.error || data.details || errorMsg;
+        } catch (e) {}
+        throw new Error(errorMsg);
       }
 
       const user = await response.json();
       await dbService.saveUser(user); 
       return user;
     } catch (e: any) {
-      if (e instanceof TypeError) throw new Error("Authentication server unreachable. Check your connection.");
+      if (e instanceof TypeError) throw new Error("Backend server unreachable. Verify Docker network.");
       throw e;
     }
+  },
+
+  async initDatabase(force = false): Promise<{ success: boolean }> { 
+    await dbService.init(); 
+    let lastError = "Initialization timed out or failed.";
+    
+    // Retry loop to handle MariaDB boot time in Docker
+    for (let i = 0; i < 5; i++) {
+        try {
+            const res = await fetch(`${API_BASE}/init-db`, { 
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ force })
+            });
+            const data = await res.json().catch(() => ({}));
+            
+            if (res.ok) {
+                await this.getSettings();
+                return { success: true };
+            } else {
+                lastError = data.error || data.details || `Server Status ${res.status}`;
+                // If it's a 503 (Initializing), we wait. If it's 500 or 4xx, we report.
+                if (res.status !== 503) break;
+            }
+        } catch (e: any) {
+            lastError = e.message;
+        }
+        await new Promise(r => setTimeout(r, 3000));
+    }
+    throw new Error(lastError);
   },
 
   async getSettings(): Promise<SystemSettings> {
@@ -54,37 +85,12 @@ export const apiService = {
     return dbService.saveSettings(s);
   },
 
-  async getFullDataSnapshot() {
-    return {
-      items: await this.getAllItems(),
-      movements: await this.getAllMovements(),
-      suppliers: await this.getAllSuppliers(),
-      locations: await this.getAllLocations(),
-      maintenance: await this.getAllMaintenance(),
-      licenses: await this.getAllLicenses(),
-      categories: await this.getCategories(),
-      employees: await this.getEmployees(),
-      departments: await this.getDepartments(),
-      budgets: await this.getBudgets(),
-      users: await this.getUsers(),
-      settings: await this.getSettings(),
-      attendance: await this.getAttendance(),
-      leaves: await this.getLeaveRequests(),
-      roles: await this.getRoles()
-    };
-  },
-
-  async importFullDataSnapshot(data: any) {
-    await dbService.bulkImport(data);
-    return { success: true };
-  },
-
   async get<T>(path: string): Promise<T[]> {
     try {
       const res = await fetch(`${API_BASE}/${path}`);
       if (!res.ok) {
-          const errorData = await res.json().catch(() => ({}));
-          throw new Error(errorData.error || `Server Error: ${res.statusText}`);
+        const errorData = await res.json().catch(() => ({}));
+        throw new Error(errorData.error || `Server Error: ${res.statusText}`);
       }
       return res.json();
     } catch (e: any) {
@@ -94,21 +100,14 @@ export const apiService = {
   },
 
   async post(path: string, data: any): Promise<any> {
-    const userStr = localStorage.getItem('smartstock_user');
-    const user = userStr ? JSON.parse(userStr) : null;
-    
     const res = await fetch(`${API_BASE}/${path}`, {
       method: 'POST',
-      headers: { 
-        'Content-Type': 'application/json',
-        'x-user-id': user?.id || 'SYSTEM',
-        'x-username': user?.username || 'SYSTEM'
-      },
+      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(data)
     });
     if (!res.ok) {
-        const errorData = await res.json().catch(() => ({}));
-        throw new Error(errorData.error || `Server Error: ${res.statusText}`);
+      const errorData = await res.json().catch(() => ({}));
+      throw new Error(errorData.error || `Server Error: ${res.statusText}`);
     }
     return res.json();
   },
@@ -116,8 +115,8 @@ export const apiService = {
   async del(path: string, id: string | number): Promise<any> {
     const res = await fetch(`${API_BASE}/${id ? path+'/'+id : path}`, { method: 'DELETE' });
     if (!res.ok) {
-        const errorData = await res.json().catch(() => ({}));
-        throw new Error(errorData.error || `Server Error: ${res.statusText}`);
+      const errorData = await res.json().catch(() => ({}));
+      throw new Error(errorData.error || `Server Error: ${res.statusText}`);
     }
     return res.json();
   },
@@ -138,12 +137,16 @@ export const apiService = {
   async getAllLocations(): Promise<LocationRecord[]> { return this.get('locations'); },
   async getAllMaintenance(): Promise<MaintenanceLog[]> { return this.get('maintenance_logs'); },
   async getAllLicenses(): Promise<License[]> { return this.get('licenses'); },
+  // Added missing deleteLicense method to fix component error
+  async deleteLicense(id: string | number) { return this.del('licenses', id); },
   async getAllRequests(): Promise<AssetRequest[]> { return this.get('requests'); },
   async getUsers(): Promise<User[]> { return this.get('users'); },
   async saveUser(u: User) { return this.post('users', u); },
   async deleteUser(id: string) { return this.del('users', id); },
   async getRoles(): Promise<Role[]> { return this.get('roles'); },
   async getNotifications(uid: string): Promise<Notification[]> { return this.get(`notifications/${uid}`); },
+  // Added missing createNotification method to fix component error
+  async createNotification(data: any) { return this.post('notifications', data); },
   async markNotificationsAsRead(ids: number[]) { return this.post('notifications/read', { ids }); },
   async getAttendance(): Promise<AttendanceRecord[]> { return this.get('attendance'); },
   async saveAttendance(r: AttendanceRecord) { return this.post('attendance', r); },
@@ -153,8 +156,6 @@ export const apiService = {
   async deleteLeaveRequest(id: string) { return this.del('leave_requests', id); },
   async genericSave(store: string, data: any) { return this.post(store, data); },
   async genericDelete(store: string, id: any) { return this.del(store, id); },
-  async deleteLicense(id: any) { return this.del('licenses', id); },
-  async createNotification(notif: any) { return this.post('notifications', notif); },
 
   async exportInventoryToCSV(): Promise<string> {
     const items = await this.getAllItems();
@@ -175,31 +176,24 @@ export const apiService = {
     throw new Error("Reset Failed");
   },
 
-  async initDatabase(force = false): Promise<{ success: boolean }> { 
-    await dbService.init(); 
-    let lastError = "Initialization timed out.";
-    
-    for (let i = 0; i < 3; i++) {
-        try {
-            const res = await fetch(`${API_BASE}/init-db`, { 
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ force })
-            });
-            const data = await res.json().catch(() => ({}));
-            
-            if (res.ok) {
-                await this.getSettings();
-                return { success: true };
-            } else {
-                lastError = data.error || data.details || `Server Error ${res.status}`;
-                if (res.status !== 503) break;
-            }
-        } catch (e: any) {
-            lastError = e.message;
-            await new Promise(r => setTimeout(r, 2000));
-        }
-    }
-    throw new Error(lastError);
+  async getFullDataSnapshot() {
+    return {
+      items: await this.getAllItems(),
+      movements: await this.getAllMovements(),
+      suppliers: await this.getAllSuppliers(),
+      locations: await this.getAllLocations(),
+      maintenance: await this.getAllMaintenance(),
+      licenses: await this.getAllLicenses(),
+      categories: await this.getCategories(),
+      employees: await this.getEmployees(),
+      departments: await this.getDepartments(),
+      users: await this.getUsers(),
+      settings: await this.getSettings()
+    };
+  },
+
+  // Added missing importFullDataSnapshot method to fix component error
+  async importFullDataSnapshot(data: any) {
+    return dbService.bulkImport(data);
   }
 };
