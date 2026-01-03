@@ -34,6 +34,9 @@ const ManagementForm: React.FC<ManagementFormProps> = ({ type, onSubmit, initial
        delete (submissionData as any).role;
        delete (submissionData as any).joining_date;
        delete (submissionData as any).is_active;
+       // Explicitly ensure budget data is not sent
+       delete (submissionData as any).budget;
+       delete (submissionData as any).budget_month;
     }
 
     onSubmit(submissionData);

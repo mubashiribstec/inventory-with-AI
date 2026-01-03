@@ -20,7 +20,7 @@ const Sidebar: React.FC<SidebarProps> = ({
   setActiveTab, 
   onLogout, 
   permissions, 
-  appName = 'SmartStock Pro', 
+  appName = 'Registry', 
   themeColor = 'indigo',
   logoIcon = 'fa-warehouse'
 }) => {
@@ -40,7 +40,7 @@ const Sidebar: React.FC<SidebarProps> = ({
         const all = await apiService.getNotifications(user.id);
         setUnreadCount(all.filter(n => !n.is_read).length);
       }
-    } catch (e) { console.error(e); }
+    } catch (e) { }
   };
 
   useEffect(() => {
@@ -58,25 +58,23 @@ const Sidebar: React.FC<SidebarProps> = ({
         { id: 'leaves', icon: 'fa-calendar-alt', label: 'Leaves' },
         { id: 'salaries', icon: 'fa-file-invoice-dollar', label: 'Payroll', permission: 'hr.salaries' },
         { id: 'employees', icon: 'fa-users-cog', label: 'Staff Directory', permission: 'hr.view' },
-        { id: 'departments', icon: 'fa-sitemap', label: 'Departments & Units', permission: 'hr.view' },
-        { id: 'user-mgmt', icon: 'fa-user-shield', label: 'User Accounts', permission: 'hr.users' },
+        { id: 'departments', icon: 'fa-sitemap', label: 'Departments', permission: 'hr.view' },
+        { id: 'user-mgmt', icon: 'fa-user-shield', label: 'Accounts', permission: 'hr.users' },
       ]
     },
     {
-      title: 'Finance & Analytics',
+      title: 'Analytics',
       items: [
-        { id: 'dashboard', icon: 'fa-chart-pie', label: 'Executive Insights', permission: 'analytics.view' },
-        { id: 'budgets', icon: 'fa-wallet', label: 'Budget Tracking', permission: 'analytics.financials' },
-        { id: 'audit-trail', icon: 'fa-stream', label: 'Activity Logs', permission: 'analytics.logs' },
+        { id: 'dashboard', icon: 'fa-chart-pie', label: 'Insights', permission: 'analytics.view' },
+        { id: 'budgets', icon: 'fa-wallet', label: 'Budgets', permission: 'analytics.financials' },
+        { id: 'audit-trail', icon: 'fa-stream', label: 'Audit Logs', permission: 'analytics.logs' },
       ]
     },
     {
-      title: 'Inventory Control',
+      title: 'Inventory',
       items: [
-        { id: 'inventory', icon: 'fa-box-open', label: 'Stock Registry', permission: 'inventory.view' },
-        { id: 'purchase-history', icon: 'fa-shopping-cart', label: 'Procurement', permission: 'inventory.procure' },
-        { id: 'requests', icon: 'fa-hand-holding-box', label: 'Assignments' },
-        { id: 'maintenance', icon: 'fa-tools', label: 'Maintenance Hub', permission: 'inventory.edit' },
+        { id: 'inventory', icon: 'fa-box-open', label: 'Registry', permission: 'inventory.view' },
+        { id: 'maintenance', icon: 'fa-tools', label: 'Maintenance', permission: 'inventory.edit' },
         { id: 'licenses', icon: 'fa-key', label: 'Licenses', permission: 'inventory.view' },
       ]
     }
@@ -122,11 +120,6 @@ const Sidebar: React.FC<SidebarProps> = ({
                       <i className={`fas ${item.icon} w-5 text-center ${activeTab === item.id ? 'text-white' : `text-slate-400 group-hover:text-${themeColor}-600`}`}></i>
                       <span className="font-semibold text-sm">{item.label}</span>
                     </div>
-                    {item.badge !== undefined && item.badge > 0 && (
-                      <span className={`px-1.5 py-0.5 rounded-full text-[9px] font-bold ${activeTab === item.id ? `bg-white text-${themeColor}-600` : 'bg-rose-500 text-white'}`}>
-                        {item.badge}
-                      </span>
-                    )}
                   </button>
                 ))}
               </div>
