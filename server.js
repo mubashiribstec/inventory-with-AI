@@ -8,13 +8,11 @@ const crypto = require('crypto');
 const app = express();
 const port = process.env.PORT || 3000;
 
-// Secret for signing licenses (must match the key generator)
 const LICENSE_SECRET = process.env.LICENSE_SECRET || 'smartstock_enterprise_master_key_2025';
 
 app.use(cors());
 app.use(express.json());
 
-// Hot cache for system state
 let MEMORY_CACHE = {
   id: 'GLOBAL',
   software_name: 'SmartStock Pro',
@@ -48,12 +46,13 @@ const verifyLicense = (licenseKey, currentSystemId) => {
   } catch (e) { return { valid: false, error: 'Invalid Format' }; }
 };
 
-// Guard middleware
 const licenseGuard = (req, res, next) => {
   const publicPaths = ['/login', '/settings', '/health'];
   if (publicPaths.some(p => req.path.includes(p))) return next();
 
-  if (!MEMORY_CACHE.system_id) return res.status(503).json({ error: 'System Identity initializing' });
+  if (!MEMORY_CACHE.system_id) {
+    return res.status(503).json({ error: 'System Identity initializing' });
+  }
 
   const v = verifyLicense(MEMORY_CACHE.license_key, MEMORY_CACHE.system_id);
   if (!v.valid) {
@@ -73,9 +72,8 @@ const initializeDb = async () => {
   let conn;
   try {
     conn = await pool.getConnection();
-    console.log("MariaDB: Connected.");
+    console.log("MariaDB: Connection Established.");
 
-    // Create Settings Table
     await conn.query(`CREATE TABLE IF NOT EXISTS settings (
       id VARCHAR(50) PRIMARY KEY,
       software_name VARCHAR(255),
@@ -85,21 +83,25 @@ const initializeDb = async () => {
       system_id VARCHAR(100)
     )`);
 
-    // Load or Initialize System ID
     const rows = await conn.query("SELECT * FROM settings WHERE id = 'GLOBAL'");
     if (rows.length > 0) {
-      MEMORY_CACHE = { ...MEMORY_CACHE, ...rows[0], is_db_connected: true };
-      console.log("System Identity Loaded:", MEMORY_CACHE.system_id);
+      const dbSettings = rows[0];
+      MEMORY_CACHE = { 
+        ...MEMORY_CACHE, 
+        ...dbSettings,
+        license_expiry: dbSettings.license_expiry ? dbSettings.license_expiry.toISOString().split('T')[0] : null,
+        is_db_connected: true 
+      };
+      console.log("System Identity Active:", MEMORY_CACHE.system_id);
     } else {
       const sid = crypto.randomBytes(4).toString('hex').toUpperCase();
       await conn.query(`INSERT INTO settings (id, software_name, primary_color, system_id) VALUES ('GLOBAL', ?, ?, ?)`, 
                        [MEMORY_CACHE.software_name, MEMORY_CACHE.primary_color, sid]);
       MEMORY_CACHE.system_id = sid;
       MEMORY_CACHE.is_db_connected = true;
-      console.log("New System ID Generated:", sid);
+      console.log("New System ID Provisioned:", sid);
     }
 
-    // Ensure User table
     await conn.query(`CREATE TABLE IF NOT EXISTS users (
       id VARCHAR(50) PRIMARY KEY, 
       username VARCHAR(50) UNIQUE, 
@@ -110,7 +112,7 @@ const initializeDb = async () => {
     await conn.query("REPLACE INTO users (id, username, password, role, full_name) VALUES ('U-001', 'admin', 'admin', 'ADMIN', 'System Administrator')");
 
   } catch (err) {
-    console.error("DB Init Error:", err.message);
+    console.error("Critical DB Failure:", err.message);
     setTimeout(initializeDb, 5000);
   } finally {
     if (conn) conn.release();
@@ -119,8 +121,11 @@ const initializeDb = async () => {
 
 initializeDb();
 
-// Endpoints
-apiRouter.get('/settings', (req, res) => res.json(MEMORY_CACHE));
+app.get('/health', (req, res) => res.json({ status: 'ok', db: MEMORY_CACHE.is_db_connected }));
+
+apiRouter.get('/settings', (req, res) => {
+  res.json(MEMORY_CACHE);
+});
 
 apiRouter.post('/settings', async (req, res) => {
   let conn;
@@ -134,11 +139,14 @@ apiRouter.post('/settings', async (req, res) => {
     }
 
     conn = await pool.getConnection();
-    const updates = Object.keys(req.body).filter(k => k !== 'id');
+    const updates = Object.keys(req.body).filter(k => k !== 'id' && k !== 'is_db_connected');
     const setClause = updates.map(k => `\`${k}\` = ?`).join(', ');
     const values = updates.map(k => req.body[k]);
     
-    await conn.query(`UPDATE settings SET ${setClause} WHERE id = 'GLOBAL'`, values);
+    if (updates.length > 0) {
+      await conn.query(`UPDATE settings SET ${setClause} WHERE id = 'GLOBAL'`, values);
+    }
+    
     MEMORY_CACHE = { ...MEMORY_CACHE, ...req.body };
     res.json({ success: true });
   } catch (e) {
@@ -160,7 +168,6 @@ apiRouter.post('/login', async (req, res) => {
   finally { if (conn) conn.release(); }
 });
 
-// Generic Module Routes
 const modules = ['items', 'movements', 'departments', 'employees', 'suppliers', 'locations', 'maintenance_logs', 'licenses', 'categories', 'requests', 'users', 'roles', 'notifications', 'attendance', 'salaries', 'leave_requests'];
 modules.forEach(m => {
   apiRouter.get(`/${m}`, async (req, res) => {
@@ -188,4 +195,4 @@ const staticPath = path.join(__dirname, 'dist');
 app.use(express.static(staticPath));
 app.get('*', (req, res) => res.sendFile(path.join(staticPath, 'index.html')));
 
-app.listen(port, '0.0.0.0', () => console.log(`SmartStock Server on port ${port}`));
+app.listen(port, '0.0.0.0', () => console.log(`SmartStock Server listening on port ${port}`));

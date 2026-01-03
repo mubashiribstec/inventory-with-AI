@@ -31,12 +31,24 @@ const App: React.FC = () => {
   const [suppliers, setSuppliers] = useState<Supplier[]>([]);
   const [licenses, setLicenses] = useState<License[]>([]);
 
+  const fetchSettings = async () => {
+    try {
+      const cloudSettings = await apiService.getSettings();
+      if (cloudSettings) {
+        setSettings(cloudSettings);
+        return cloudSettings.system_id;
+      }
+    } catch (e) {
+      console.warn("Settings fetch failed, retrying...");
+    }
+    return null;
+  };
+
   const licenseState = useMemo(() => {
     const key = settings.license_key;
     if (!key || !key.includes('.')) return { valid: false, reason: 'Missing' };
     try {
       const [payloadBase64] = key.split('.');
-      // Use standard base64 decoding with padding fix if needed
       const normalizedBase64 = payloadBase64.replace(/-/g, '+').replace(/_/g, '/');
       const payload = JSON.parse(atob(normalizedBase64));
       const expiry = new Date(payload.expiry);
@@ -47,11 +59,6 @@ const App: React.FC = () => {
       };
     } catch (e) { return { valid: false, reason: 'Invalid Format' }; }
   }, [settings.license_key]);
-
-  const fetchSettings = async () => {
-    const cloudSettings = await apiService.getSettings();
-    if (cloudSettings) setSettings(cloudSettings);
-  };
 
   const handleActivate = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -92,13 +99,17 @@ const App: React.FC = () => {
     finally { setDataLoading(false); }
   }, [currentUser, licenseState.valid]);
 
-  // Stable ID Polling
+  // Persistent Settings/ID Polling
   useEffect(() => {
-    if (isInitialized && currentUser && !licenseState.valid && (!settings.system_id)) {
-      const interval = setInterval(fetchSettings, 3000);
-      return () => clearInterval(interval);
-    }
-  }, [isInitialized, currentUser, licenseState.valid, settings.system_id]);
+    const interval = setInterval(async () => {
+      const sid = await fetchSettings();
+      if (sid) {
+        // If we found the system_id and we were waiting for it, stop polling frequently
+        // but keep a slow poll to stay in sync
+      }
+    }, settings.system_id ? 10000 : 2000);
+    return () => clearInterval(interval);
+  }, [settings.system_id]);
 
   useEffect(() => {
     const startup = async () => {
@@ -149,7 +160,6 @@ const App: React.FC = () => {
   if (!licenseState.valid) return (
     <div className="min-h-screen bg-slate-900 flex items-center justify-center p-6 poppins">
       <div className="max-w-xl w-full bg-white rounded-[40px] p-10 shadow-2xl text-center relative overflow-hidden">
-        {/* Real-time Connection Status */}
         <div className={`absolute top-0 right-0 p-6 flex items-center gap-2 text-[9px] font-bold ${settings.is_db_connected ? 'text-emerald-500' : 'text-amber-500'}`}>
            <span className={`w-2 h-2 rounded-full ${settings.is_db_connected ? 'bg-emerald-500' : 'bg-amber-500 animate-pulse'}`}></span>
            {settings.is_db_connected ? 'SECURE' : 'CONNECTING...'}
