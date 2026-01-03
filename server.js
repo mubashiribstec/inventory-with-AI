@@ -22,7 +22,9 @@ let MEMORY_CACHE = {
   system_id: null,
   license_key: null,
   license_expiry: null,
-  is_db_connected: false
+  is_db_connected: false,
+  software_description: 'Enterprise Resource Planning',
+  software_logo: 'fa-warehouse'
 };
 
 // MariaDB Connection Pool
@@ -52,7 +54,7 @@ const verifyLicense = (licenseKey, currentSystemId) => {
   } catch (e) { return { valid: false, error: 'Invalid Payload' }; }
 };
 
-// Middleware: Verify License for all API calls except public ones
+// Middleware: Verify License
 const licenseGuard = (req, res, next) => {
   const publicPaths = ['/login', '/settings', '/health'];
   if (publicPaths.some(p => req.path.includes(p))) return next();
@@ -76,37 +78,53 @@ apiRouter.use(licenseGuard);
 app.use('/api', apiRouter);
 
 /**
- * Database Initialization
- * Ensures tables exist and a unique System ID is generated and SAVED.
+ * Database Initialization & Auto-Migration
+ * This ensures your table structure is always up to date even if it already exists.
  */
 const initializeDb = async () => {
   let conn;
   try {
     conn = await pool.getConnection();
-    console.log("MariaDB: Initializing Core Services...");
+    console.log("MariaDB: Syncing Database Schema...");
 
-    // 1. Create Settings Table
+    // 1. Create Settings Table (Base Version)
     await conn.query(`CREATE TABLE IF NOT EXISTS settings (
       id VARCHAR(50) PRIMARY KEY,
-      software_name VARCHAR(255),
-      primary_color VARCHAR(50),
-      license_key TEXT,
-      license_expiry DATE,
-      system_id VARCHAR(100)
+      software_name VARCHAR(255) DEFAULT 'SmartStock Pro',
+      primary_color VARCHAR(50) DEFAULT 'indigo'
     )`);
 
-    // 2. Fetch or Generate System Identity
+    // 2. AUTO-MIGRATION: Check for missing columns in 'settings' table
+    const columns = await conn.query("SHOW COLUMNS FROM settings");
+    const columnNames = columns.map(c => c.Field);
+
+    const requiredColumns = [
+      { name: 'license_key', type: 'TEXT' },
+      { name: 'license_expiry', type: 'DATE' },
+      { name: 'system_id', type: 'VARCHAR(100)' },
+      { name: 'software_description', type: 'TEXT' },
+      { name: 'software_logo', type: 'VARCHAR(255)' }
+    ];
+
+    for (const col of requiredColumns) {
+      if (!columnNames.includes(col.name)) {
+        console.log(`Migration: Adding missing column '${col.name}' to settings table...`);
+        await conn.query(`ALTER TABLE settings ADD COLUMN ${col.name} ${col.type}`);
+      }
+    }
+
+    // 3. Fetch or Generate System Identity
     const rows = await conn.query("SELECT * FROM settings WHERE id = 'GLOBAL'");
     
     if (rows.length > 0) {
       let dbSettings = rows[0];
       
-      // If system_id is missing in existing row, generate it now
+      // Ensure system_id exists
       if (!dbSettings.system_id) {
         const sid = crypto.randomBytes(4).toString('hex').toUpperCase();
         await conn.query("UPDATE settings SET system_id = ? WHERE id = 'GLOBAL'", [sid]);
         dbSettings.system_id = sid;
-        console.log("SUCCESS: Created missing System ID for existing row:", sid);
+        console.log("SUCCESS: New System ID Provisioned:", sid);
       }
 
       MEMORY_CACHE = { 
@@ -117,28 +135,29 @@ const initializeDb = async () => {
       };
     } else {
       const sid = crypto.randomBytes(4).toString('hex').toUpperCase();
-      await conn.query(`INSERT INTO settings (id, software_name, primary_color, system_id) VALUES ('GLOBAL', ?, ?, ?)`, 
-                       [MEMORY_CACHE.software_name, MEMORY_CACHE.primary_color, sid]);
+      await conn.query(`INSERT INTO settings (id, software_name, primary_color, system_id, software_description, software_logo) VALUES ('GLOBAL', ?, ?, ?, ?, ?)`, 
+                       [MEMORY_CACHE.software_name, MEMORY_CACHE.primary_color, sid, MEMORY_CACHE.software_description, MEMORY_CACHE.software_logo]);
       MEMORY_CACHE.system_id = sid;
       MEMORY_CACHE.is_db_connected = true;
-      console.log("SUCCESS: Provisioned New System ID:", sid);
+      console.log("SUCCESS: Initial Global Settings Created with ID:", sid);
     }
 
-    // 3. Ensure Default Admin User
+    // 4. Ensure Users Table & Admin
     await conn.query(`CREATE TABLE IF NOT EXISTS users (
       id VARCHAR(50) PRIMARY KEY, 
       username VARCHAR(50) UNIQUE, 
       password VARCHAR(100), 
       role VARCHAR(20), 
       full_name VARCHAR(100),
+      department VARCHAR(100),
       is_active BOOLEAN DEFAULT TRUE
     )`);
     await conn.query("REPLACE INTO users (id, username, password, role, full_name, is_active) VALUES ('U-001', 'admin', 'admin', 'ADMIN', 'System Administrator', 1)");
 
-    console.log("MariaDB: All modules synchronized. System ID is persistent.");
+    console.log("MariaDB: Schema is up-to-date. Ready for operations.");
   } catch (err) {
     console.error("CRITICAL ERROR: MariaDB Initialization Failed:", err.message);
-    setTimeout(initializeDb, 5000); // Retry loop
+    setTimeout(initializeDb, 5000); 
   } finally {
     if (conn) conn.release();
   }
@@ -146,33 +165,17 @@ const initializeDb = async () => {
 
 initializeDb();
 
-// Health Check
 app.get('/health', (req, res) => res.json({ status: 'ok', db: MEMORY_CACHE.is_db_connected, sid: MEMORY_CACHE.system_id }));
 
-/**
- * Settings Endpoints
- */
-apiRouter.get('/settings', async (req, res) => {
-  // If memory cache is somehow stale, attempt a final DB refresh
-  if (!MEMORY_CACHE.system_id) {
-    let conn;
-    try {
-      conn = await pool.getConnection();
-      const rows = await conn.query("SELECT * FROM settings WHERE id = 'GLOBAL'");
-      if (rows.length > 0) {
-        MEMORY_CACHE = { ...MEMORY_CACHE, ...rows[0], is_db_connected: true };
-      }
-    } catch(e) {} finally { if (conn) conn.release(); }
-  }
+apiRouter.get('/settings', (req, res) => {
   res.json(MEMORY_CACHE);
 });
 
 apiRouter.post('/settings', async (req, res) => {
   let conn;
   try {
-    const { license_key, software_name, primary_color } = req.body;
+    const { license_key, software_name, primary_color, software_description, software_logo } = req.body;
     
-    // Verification step if license is being updated
     if (license_key) {
       const v = verifyLicense(license_key, MEMORY_CACHE.system_id);
       if (!v.valid) return res.status(400).json({ error: `Verification Failed: ${v.error}` });
@@ -197,9 +200,6 @@ apiRouter.post('/settings', async (req, res) => {
   }
 });
 
-/**
- * Auth & Dynamic Module Routing
- */
 apiRouter.post('/login', async (req, res) => {
   const { username, password } = req.body;
   let conn;
@@ -235,7 +235,6 @@ modules.forEach(m => {
   });
 });
 
-// Serve Frontend
 const staticPath = path.join(__dirname, 'dist');
 app.use(express.static(staticPath));
 app.get('*', (req, res) => res.sendFile(path.join(staticPath, 'index.html')));
