@@ -21,7 +21,8 @@ const pool = mariadb.createPool({
   user: process.env.DB_USER || 'inventory_user',
   password: process.env.DB_PASSWORD || 'inventory_password',
   database: process.env.DB_NAME || 'smartstock',
-  connectionLimit: 15
+  connectionLimit: 15,
+  connectTimeout: 10000
 });
 
 let isDbReady = false;
@@ -44,15 +45,13 @@ const verifyLicense = (licenseKey, currentSystemId) => {
 
 // --- GATEKEEPER ---
 const licenseGuard = async (req, res, next) => {
-  // Paths that NEVER require a license check
   const bypassPaths = ['/login', '/init-db'];
   if (bypassPaths.includes(req.path)) return next();
   
-  // Allow fetching settings (GET) so frontend can see System ID and License Status
   if (req.path === '/settings' && req.method === 'GET') return next();
 
-  if (!isDbReady) {
-    return res.status(503).json({ error: 'System is initializing database. Please wait...' });
+  if (!isDbReady && req.path !== '/settings') {
+    return res.status(503).json({ error: 'System is initializing database.' });
   }
 
   let conn;
@@ -61,7 +60,6 @@ const licenseGuard = async (req, res, next) => {
     const rows = await conn.query('SELECT license_key, system_id FROM settings WHERE id = ?', ['GLOBAL']);
     const settings = rows[0];
     
-    // If it's a settings update (POST), we let it through so they can apply a key
     if (req.path === '/settings' && req.method === 'POST') return next();
 
     const v = verifyLicense(settings?.license_key, settings?.system_id);
@@ -75,21 +73,21 @@ const licenseGuard = async (req, res, next) => {
     }
     next();
   } catch (err) { 
-    console.error("Guard Error:", err.message);
+    // If the database is completely down, we still want to allow login attempts (which handle their own DB errors)
+    if (req.path === '/login') return next();
     res.status(500).json({ error: 'Internal Security Error', details: err.message }); 
   } finally { 
     if (conn) conn.release(); 
   }
 };
 
-// Mount the guard on the /api router
 const apiRouter = express.Router();
 apiRouter.use(licenseGuard);
 app.use('/api', apiRouter);
 
 // --- DB INIT ---
 const handleInitDb = async (conn) => {
-  console.log("Starting DB Schema Repair & Initialization...");
+  console.log("DB: Starting Schema Initialization...");
   
   await conn.query(`CREATE TABLE IF NOT EXISTS settings (
     id VARCHAR(50) PRIMARY KEY,
@@ -110,12 +108,15 @@ const handleInitDb = async (conn) => {
     full_name VARCHAR(100)
   )`);
 
+  // Column Fixes
   try { await conn.query("ALTER TABLE settings ADD COLUMN system_id VARCHAR(100)"); } catch(e) {}
 
+  // System ID Generation
   const rows = await conn.query("SELECT system_id FROM settings WHERE id = 'GLOBAL'");
   let sid = rows[0]?.system_id;
 
   if (!sid) {
+    console.log("DB: Generating first-time System ID...");
     sid = crypto.randomBytes(4).toString('hex').toUpperCase();
     const expiry = new Date();
     expiry.setDate(expiry.getDate() + 7);
@@ -127,11 +128,11 @@ const handleInitDb = async (conn) => {
                      [key, expiry.toISOString().split('T')[0], sid]);
   }
 
-  // FORCE RESET ADMIN USER
+  // Admin Account
   await conn.query("REPLACE INTO users (id, username, password, role, full_name) VALUES ('U-001', 'admin', 'admin', 'ADMIN', 'System Administrator')");
   
   isDbReady = true;
-  console.log("System Initialized Successfully. System ID:", sid);
+  console.log("DB: Initialization Complete. System ID:", sid);
 };
 
 const initDbWithRetry = async () => {
@@ -140,8 +141,8 @@ const initDbWithRetry = async () => {
     conn = await pool.getConnection();
     await handleInitDb(conn);
   } catch (err) { 
-    console.error("DB Connection Failed. Retrying in 5s...", err.message);
-    setTimeout(initDbWithRetry, 5000); 
+    console.error("DB: Connection failed. Check if MariaDB container is running. Retrying...", err.message);
+    setTimeout(initDbWithRetry, 3000); 
   } finally { 
     if (conn) conn.release(); 
   }
@@ -155,9 +156,18 @@ apiRouter.get('/settings', async (req, res) => {
   try {
     conn = await pool.getConnection();
     const rows = await conn.query('SELECT * FROM settings WHERE id = ?', ['GLOBAL']);
-    res.json(rows[0] || {});
-  } catch (err) { res.status(500).json({ error: err.message }); }
-  finally { if (conn) conn.release(); }
+    
+    // Emergency Init if table is empty
+    if (rows.length === 0) {
+      await handleInitDb(conn);
+      const retryRows = await conn.query('SELECT * FROM settings WHERE id = ?', ['GLOBAL']);
+      return res.json(retryRows[0] || {});
+    }
+    
+    res.json(rows[0]);
+  } catch (err) { 
+    res.status(500).json({ error: 'DB_OFFLINE', details: err.message }); 
+  } finally { if (conn) conn.release(); }
 });
 
 apiRouter.post('/settings', async (req, res) => {
@@ -171,9 +181,9 @@ apiRouter.post('/settings', async (req, res) => {
       if (!v.valid) return res.status(400).json({ error: `Invalid Key: ${v.error}` });
       req.body.license_expiry = v.payload.expiry;
     }
-    const keys = Object.keys(req.body);
-    const placeholders = keys.map(() => '?').join(', ');
-    await conn.query(`REPLACE INTO settings (${keys.map(k => `\`${k}\``).join(',')}) VALUES (${placeholders})`, Object.values(req.body));
+    const keys = Object.keys(req.body).filter(k => k !== 'id');
+    const setClause = keys.map(k => `\`${k}\` = ?`).join(', ');
+    await conn.query(`UPDATE settings SET ${setClause} WHERE id = 'GLOBAL'`, Object.values(req.body));
     res.json({ success: true });
   } catch (err) { res.status(500).json({ error: err.message }); }
   finally { if (conn) conn.release(); }
@@ -191,7 +201,7 @@ apiRouter.post('/login', async (req, res) => {
       res.status(401).json({ error: 'Incorrect username or password' });
     }
   } catch (err) { 
-    res.status(500).json({ error: 'Database error' }); 
+    res.status(500).json({ error: 'Database disconnected. Please check MariaDB.' }); 
   } finally { 
     if (conn) conn.release(); 
   }
@@ -223,4 +233,4 @@ modules.forEach(m => {
 const staticPath = path.join(__dirname, 'dist');
 app.use(express.static(staticPath));
 app.get('*', (req, res) => res.sendFile(path.join(staticPath, 'index.html')));
-app.listen(port, '0.0.0.0', () => console.log(`SmartStock API listening on port ${port}`));
+app.listen(port, '0.0.0.0', () => console.log(`SmartStock API active on port ${port}`));

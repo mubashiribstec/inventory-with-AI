@@ -13,7 +13,7 @@ import { dbService } from './db.ts';
 const App: React.FC = () => {
   const [currentUser, setCurrentUser] = useState<User | null>(null);
   const [currentRole, setCurrentRole] = useState<Role | null>(null);
-  const [settings, setSettings] = useState<any>({ id: 'GLOBAL', software_name: 'SmartStock Pro', primary_color: 'indigo' });
+  const [settings, setSettings] = useState<any>({ id: 'GLOBAL', software_name: 'SmartStock Pro', primary_color: 'indigo', system_id: null });
   const [activeTab, setActiveTab] = useState<string>('dashboard');
   const [isInitialized, setIsInitialized] = useState(false);
   const [dataLoading, setDataLoading] = useState(false);
@@ -87,6 +87,20 @@ const App: React.FC = () => {
     }
   }, [currentUser, licenseState.valid]);
 
+  // Polling for settings if System ID is missing
+  useEffect(() => {
+    if (isInitialized && currentUser && !licenseState.valid && !settings.system_id) {
+      const interval = setInterval(async () => {
+        const fresh = await apiService.getSettings();
+        if (fresh.system_id) {
+          setSettings(fresh);
+          clearInterval(interval);
+        }
+      }, 3000);
+      return () => clearInterval(interval);
+    }
+  }, [isInitialized, currentUser, licenseState.valid, settings.system_id]);
+
   useEffect(() => {
     const startup = async () => {
       try {
@@ -126,7 +140,6 @@ const App: React.FC = () => {
     </div>
   );
   
-  // 1. LOGIN SCREEN (Show this first if not logged in)
   if (!currentUser) {
     return (
       <Login 
@@ -141,7 +154,6 @@ const App: React.FC = () => {
     );
   }
 
-  // 2. LICENSE LOCK (Show after login if key invalid)
   if (!licenseState.valid) {
     return (
       <div className="min-h-screen bg-slate-900 flex items-center justify-center p-6 poppins">
@@ -154,9 +166,17 @@ const App: React.FC = () => {
             Your access to <span className="font-bold">{settings.software_name}</span> is currently restricted.
           </p>
 
-          <div className="bg-slate-50 p-6 rounded-2xl mb-8 border border-slate-100 text-left">
+          <div className="bg-slate-50 p-6 rounded-2xl mb-8 border border-slate-100 text-left relative overflow-hidden">
+             {!settings.system_id && (
+               <div className="absolute inset-0 bg-white/60 backdrop-blur-[2px] flex items-center justify-center z-10">
+                  <div className="flex items-center gap-2 text-indigo-600 font-bold text-xs">
+                    <i className="fas fa-spinner animate-spin"></i>
+                    SYNCHRONIZING SYSTEM ID...
+                  </div>
+               </div>
+             )}
              <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">System Identification ID</p>
-             <p className="font-mono font-bold text-slate-700 select-all">{settings.system_id || 'REPAIRING...'}</p>
+             <p className="font-mono font-bold text-slate-700 select-all">{settings.system_id || 'GENERATING...'}</p>
           </div>
 
           <form onSubmit={handleActivate} className="space-y-4">
@@ -168,7 +188,7 @@ const App: React.FC = () => {
                value={activationKey}
                onChange={e => setActivationKey(e.target.value)}
              />
-             <button type="submit" className="w-full py-4 bg-slate-800 text-white rounded-2xl font-bold hover:bg-slate-900 transition">
+             <button type="submit" disabled={!settings.system_id} className="w-full py-4 bg-slate-800 text-white rounded-2xl font-bold hover:bg-slate-900 transition disabled:opacity-50">
                 Unlock System
              </button>
           </form>
@@ -178,7 +198,6 @@ const App: React.FC = () => {
     );
   }
 
-  // 3. MAIN DASHBOARD
   return (
     <div className={`flex min-h-screen bg-slate-50 theme-${settings.primary_color}`}>
       <Sidebar 

@@ -44,48 +44,32 @@ export const apiService = {
 
   async initDatabase(force = false): Promise<{ success: boolean }> { 
     await dbService.init(); 
-    let lastError = "Initialization timed out or failed.";
-    
-    for (let i = 0; i < 5; i++) {
-        try {
-            const res = await fetch(`${API_BASE}/init-db`, { 
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ force })
-            });
-            const data = await res.json().catch(() => ({}));
-            
-            if (res.ok) {
-                await this.getSettings();
-                return { success: true };
-            } else {
-                lastError = data.error || data.details || `Server Status ${res.status}`;
-                if (res.status !== 503) break;
-            }
-        } catch (e: any) {
-            lastError = e.message;
-        }
-        await new Promise(r => setTimeout(r, 3000));
-    }
-    throw new Error(lastError);
+    return { success: true };
   },
 
-  async getSettings(): Promise<SystemSettings> {
+  async getSettings(retryCount = 0): Promise<SystemSettings> {
     try {
       const res = await fetch(`${API_BASE}/settings`);
       if (res.ok) {
-        const s = await res.json();
-        // Robustness check: if s is an array, take the first element
-        const settings = Array.isArray(s) ? s[0] : s;
-        
-        if (settings && settings.id) {
-          try {
-            await dbService.saveSettings(settings);
-          } catch(e) { console.warn("Skipped local settings cache - DB busy."); }
+        const settings = await res.json();
+        if (settings && settings.system_id) {
+          try { await dbService.saveSettings(settings); } catch(e) {}
           return settings;
         }
       }
-    } catch (e) {}
+      
+      // If we got an error or empty ID, retry up to 10 times
+      if (retryCount < 10) {
+        console.warn(`Settings incomplete. Retrying in 2s... (Attempt ${retryCount + 1})`);
+        await new Promise(r => setTimeout(r, 2000));
+        return this.getSettings(retryCount + 1);
+      }
+    } catch (e) {
+      if (retryCount < 10) {
+        await new Promise(r => setTimeout(r, 2000));
+        return this.getSettings(retryCount + 1);
+      }
+    }
     return dbService.getSettings();
   },
 
@@ -101,11 +85,7 @@ export const apiService = {
         throw new Error(errData.error || "Failed to sync settings with server.");
     }
 
-    try {
-        await dbService.saveSettings(s);
-    } catch(e) {
-        console.warn("Settings saved to server but local cache skipped.");
-    }
+    try { await dbService.saveSettings(s); } catch(e) {}
     return s;
   },
 
@@ -189,38 +169,5 @@ export const apiService = {
       headers.join(','),
       ...items.map(item => headers.map(header => `"${String((item as any)[header] || '').replace(/"/g, '""')}"`).join(','))
     ].join('\n');
-  },
-
-  async factoryReset() { 
-    const res = await fetch(`${API_BASE}/factory-reset`, { 
-      method: 'POST',
-      headers: getHeaders()
-    });
-    if (res.ok) {
-        localStorage.removeItem('smartstock_user');
-        await dbService.clearAllData();
-        return { success: true };
-    }
-    throw new Error("Reset Failed");
-  },
-
-  async getFullDataSnapshot() {
-    return {
-      items: await this.getAllItems(),
-      movements: await this.getAllMovements(),
-      suppliers: await this.getAllSuppliers(),
-      locations: await this.getAllLocations(),
-      maintenance: await this.getAllMaintenance(),
-      licenses: await this.getAllLicenses(),
-      categories: await this.getCategories(),
-      employees: await this.getEmployees(),
-      departments: await this.getDepartments(),
-      users: await this.getUsers(),
-      settings: await this.getSettings()
-    };
-  },
-
-  async importFullDataSnapshot(data: any) {
-    return dbService.bulkImport(data);
   }
 };
