@@ -1,13 +1,6 @@
 
 /**
  * SmartStock Pro Enterprise - GAS MariaDB Connector
- * -----------------------------------------------
- * This script allows Google Apps Script to act as the backend for the 
- * Enterprise Inventory System.
- * 
- * IMPORTANT: 
- * 1. Your MariaDB instance must be publicly accessible.
- * 2. You must whitelist Google's IP ranges in your firewall.
  */
 
 const DB_CONFIG = {
@@ -18,9 +11,6 @@ const DB_CONFIG = {
   pass: 'inventory_password'
 };
 
-/**
- * Returns a JDBC Connection
- */
 function getConnection() {
   const url = `jdbc:mysql://${DB_CONFIG.host}:${DB_CONFIG.port}/${DB_CONFIG.db}`;
   try {
@@ -30,20 +20,14 @@ function getConnection() {
   }
 }
 
-/**
- * Serves the React Application
- */
 function doGet(e) {
-  return HtmlService.createTemplateFromFile('index') // Matches your index.html
+  return HtmlService.createTemplateFromFile('index')
     .evaluate()
     .setTitle('SmartStock Pro | Enterprise')
     .addMetaTag('viewport', 'width=device-width, initial-scale=1')
     .setXFrameOptionsMode(HtmlService.XFrameOptionsMode.ALLOWALL);
 }
 
-/**
- * API: Authentication
- */
 function login(username, password) {
   const conn = getConnection();
   const stmt = conn.prepareStatement("SELECT id, username, role, full_name FROM users WHERE username = ? AND password = ?");
@@ -69,23 +53,25 @@ function login(username, password) {
   return user;
 }
 
-/**
- * API: System Settings
- */
 function getSettings() {
   const conn = getConnection();
   const stmt = conn.createStatement();
   const rs = stmt.executeQuery("SELECT * FROM settings WHERE id = 'GLOBAL' LIMIT 1");
   
-  let settings = { 
-    id: 'GLOBAL', 
-    software_name: 'SmartStock Pro', 
-    primary_color: 'indigo',
-    is_db_connected: true,
-    system_id: null
-  };
+  let settings = null;
   
   if (rs.next()) {
+    let sid = rs.getString("system_id");
+    
+    // SELF-HEALING: If row exists but system_id is blank, fix it now.
+    if (!sid) {
+      sid = Math.random().toString(36).substring(2, 10).toUpperCase();
+      const update = conn.prepareStatement("UPDATE settings SET system_id = ? WHERE id = 'GLOBAL'");
+      update.setString(1, sid);
+      update.executeUpdate();
+      update.close();
+    }
+
     settings = {
       id: rs.getString("id"),
       software_name: rs.getString("software_name"),
@@ -94,17 +80,22 @@ function getSettings() {
       software_logo: rs.getString("software_logo"),
       license_key: rs.getString("license_key"),
       license_expiry: rs.getString("license_expiry"),
-      system_id: rs.getString("system_id"),
+      system_id: sid,
       is_db_connected: true
     };
   } else {
-    // Generate System ID for new installation
     const sid = Math.random().toString(36).substring(2, 10).toUpperCase();
     const insert = conn.prepareStatement("INSERT INTO settings (id, software_name, primary_color, system_id) VALUES ('GLOBAL', 'SmartStock Pro', 'indigo', ?)");
     insert.setString(1, sid);
     insert.executeUpdate();
     insert.close();
-    settings.system_id = sid;
+    settings = { 
+      id: 'GLOBAL', 
+      software_name: 'SmartStock Pro', 
+      primary_color: 'indigo',
+      system_id: sid,
+      is_db_connected: true
+    };
   }
   
   rs.close();
@@ -113,9 +104,6 @@ function getSettings() {
   return settings;
 }
 
-/**
- * API: Update Settings
- */
 function updateSettings(settings) {
   const conn = getConnection();
   const keys = Object.keys(settings).filter(k => k !== 'id' && k !== 'is_db_connected');
@@ -132,9 +120,6 @@ function updateSettings(settings) {
   return { success: true };
 }
 
-/**
- * API: Generic Module Fetch (GET)
- */
 function getModuleData(tableName) {
   const conn = getConnection();
   const stmt = conn.createStatement();
@@ -158,9 +143,6 @@ function getModuleData(tableName) {
   return results;
 }
 
-/**
- * API: Generic Module Upsert (POST)
- */
 function saveModuleData(tableName, entity) {
   const conn = getConnection();
   const keys = Object.keys(entity);
@@ -181,9 +163,6 @@ function saveModuleData(tableName, entity) {
   return { success: true };
 }
 
-/**
- * API: Generic Delete (DELETE)
- */
 function deleteModuleData(tableName, id) {
   const conn = getConnection();
   const stmt = conn.prepareStatement(`DELETE FROM \`${tableName}\` WHERE id = ?`);

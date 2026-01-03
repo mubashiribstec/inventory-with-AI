@@ -31,7 +31,7 @@ const App: React.FC = () => {
   const [suppliers, setSuppliers] = useState<Supplier[]>([]);
   const [licenses, setLicenses] = useState<License[]>([]);
 
-  const fetchSettings = async () => {
+  const fetchSettings = useCallback(async () => {
     try {
       const cloudSettings = await apiService.getSettings();
       if (cloudSettings) {
@@ -39,14 +39,14 @@ const App: React.FC = () => {
         return cloudSettings.system_id;
       }
     } catch (e) {
-      console.warn("Settings fetch failed, retrying...");
+      console.warn("Retrying settings synchronization...");
     }
     return null;
-  };
+  }, []);
 
   const licenseState = useMemo(() => {
     const key = settings.license_key;
-    if (!key || !key.includes('.')) return { valid: false, reason: 'Missing' };
+    if (!key || !key.includes('.')) return { valid: false, reason: 'Unlicensed' };
     try {
       const [payloadBase64] = key.split('.');
       const normalizedBase64 = payloadBase64.replace(/-/g, '+').replace(/_/g, '/');
@@ -57,21 +57,21 @@ const App: React.FC = () => {
         reason: expiry > new Date() ? 'Active' : 'Expired',
         expiry: payload.expiry
       };
-    } catch (e) { return { valid: false, reason: 'Invalid Format' }; }
+    } catch (e) { return { valid: false, reason: 'Invalid Key' }; }
   }, [settings.license_key]);
 
   const handleActivate = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (isActivating) return;
+    if (isActivating || !activationKey) return;
     
     setIsActivating(true);
     try {
       await apiService.updateSettings({ ...settings, license_key: activationKey });
       await fetchSettings();
-      alert("License successfully activated!");
+      alert("System activated successfully.");
       setActivationKey('');
     } catch (err: any) { 
-      alert(err.message || "Activation failed. Please check the key and your connection."); 
+      alert(err.message || "Activation Error. Please check your system ID and key."); 
     } finally { 
       setIsActivating(false); 
     }
@@ -95,21 +95,20 @@ const App: React.FC = () => {
       ]);
       setItems(fItems || []); setMovements(fMov || []); 
       setSuppliers(fSup || []); setLicenses(fLic || []);
-    } catch (err) { console.warn("Hydration failed", err); }
+    } catch (err) { console.warn("Background refresh failed", err); }
     finally { setDataLoading(false); }
   }, [currentUser, licenseState.valid]);
 
-  // Persistent Settings/ID Polling
+  // System ID Polling Strategy
   useEffect(() => {
-    const interval = setInterval(async () => {
+    const poll = async () => {
       const sid = await fetchSettings();
-      if (sid) {
-        // If we found the system_id and we were waiting for it, stop polling frequently
-        // but keep a slow poll to stay in sync
-      }
-    }, settings.system_id ? 10000 : 2000);
-    return () => clearInterval(interval);
-  }, [settings.system_id]);
+      // If we don't have an ID yet, poll more aggressively
+      const intervalTime = sid ? 30000 : 3000;
+      setTimeout(poll, intervalTime);
+    };
+    poll();
+  }, [fetchSettings]);
 
   useEffect(() => {
     const startup = async () => {
@@ -122,11 +121,11 @@ const App: React.FC = () => {
           setCurrentUser(user);
           await fetchRoleData(user.role);
         }
-      } catch (e) { console.error("Startup Failure", e); }
+      } catch (e) { console.error("Identity Error", e); }
       finally { setIsInitialized(true); }
     };
     startup();
-  }, [fetchRoleData]);
+  }, [fetchRoleData, fetchSettings]);
 
   useEffect(() => { if (currentUser) fetchData(); }, [currentUser, fetchData]);
 
@@ -144,8 +143,8 @@ const App: React.FC = () => {
   if (!isInitialized) return (
     <div className="h-screen flex items-center justify-center bg-slate-50">
       <div className="flex flex-col items-center gap-4">
-        <div className="w-16 h-16 border-4 border-indigo-600 border-t-transparent rounded-full animate-spin"></div>
-        <p className="text-slate-400 font-bold text-xs uppercase tracking-[0.2em]">Synchronizing Infrastructure...</p>
+        <div className="w-12 h-12 border-4 border-slate-200 border-t-indigo-600 rounded-full animate-spin"></div>
+        <p className="text-slate-400 font-bold text-[10px] uppercase tracking-[0.3em]">Connecting to Infrastructure...</p>
       </div>
     </div>
   );
@@ -162,27 +161,36 @@ const App: React.FC = () => {
       <div className="max-w-xl w-full bg-white rounded-[40px] p-10 shadow-2xl text-center relative overflow-hidden">
         <div className={`absolute top-0 right-0 p-6 flex items-center gap-2 text-[9px] font-bold ${settings.is_db_connected ? 'text-emerald-500' : 'text-amber-500'}`}>
            <span className={`w-2 h-2 rounded-full ${settings.is_db_connected ? 'bg-emerald-500' : 'bg-amber-500 animate-pulse'}`}></span>
-           {settings.is_db_connected ? 'SECURE' : 'CONNECTING...'}
+           {settings.is_db_connected ? 'SECURE' : 'OFFLINE'}
         </div>
 
-        <div className="w-20 h-20 bg-rose-50 text-rose-500 rounded-3xl flex items-center justify-center text-3xl mx-auto mb-6">
-          <i className="fas fa-shield-check"></i>
+        <div className="w-20 h-20 bg-indigo-50 text-indigo-600 rounded-3xl flex items-center justify-center text-3xl mx-auto mb-6">
+          <i className="fas fa-lock"></i>
         </div>
         <h2 className="text-2xl font-bold text-slate-800 mb-2">Activation Management</h2>
-        <p className="text-slate-500 text-sm mb-8 leading-relaxed">System identity verified. Please input your signed license key.</p>
+        <p className="text-slate-500 text-sm mb-8 leading-relaxed">License signature mismatch. Please activate your system instance.</p>
 
-        <div className="bg-slate-50 p-6 rounded-2xl mb-8 border border-slate-100 text-left">
-           <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">System Identification Hash</p>
-           <p className="font-mono font-bold text-slate-700 select-all text-lg tracking-wider">
-             {settings.system_id || 'RESOLVING IDENTITY...'}
+        <div className="bg-slate-50 p-6 rounded-2xl mb-8 border border-slate-100 text-left relative">
+           <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">System Identification Key</p>
+           <p className="font-mono font-bold text-slate-700 select-all text-xl tracking-wider">
+             {settings.system_id || (
+               <span className="flex items-center gap-2 text-indigo-400 animate-pulse">
+                 <i className="fas fa-circle-notch animate-spin text-sm"></i> GENERATING IDENTITY...
+               </span>
+             )}
            </p>
+           {settings.system_id && (
+             <div className="absolute right-6 top-1/2 -translate-y-1/2 text-[9px] font-black text-emerald-600 bg-emerald-50 px-2 py-1 rounded-md border border-emerald-100 uppercase tracking-widest">
+                Verified
+             </div>
+           )}
         </div>
 
         <form onSubmit={handleActivate} className="space-y-4">
            <textarea 
              required 
              rows={3} 
-             placeholder="Paste Signed Activation Key..." 
+             placeholder="Enter Signed Activation Key..." 
              className="w-full p-5 bg-slate-50 border border-slate-200 rounded-2xl outline-none focus:ring-2 focus:ring-indigo-500 font-mono text-xs" 
              value={activationKey} 
              onChange={e => setActivationKey(e.target.value)}
@@ -194,16 +202,16 @@ const App: React.FC = () => {
              className="w-full py-4 bg-slate-800 text-white rounded-2xl font-bold hover:bg-slate-900 transition disabled:opacity-50 shadow-xl flex items-center justify-center gap-2"
            >
              {isActivating ? (
-               <><i className="fas fa-spinner animate-spin"></i> Activating...</>
+               <><i className="fas fa-spinner animate-spin"></i> Processing...</>
              ) : (
-               <><i className="fas fa-unlock-alt"></i> Activate License</>
+               <><i className="fas fa-unlock-alt"></i> Apply Activation</>
              )}
            </button>
         </form>
         
         <div className="flex items-center justify-center gap-8 mt-10">
-          <button onClick={fetchSettings} className="text-indigo-600 text-xs font-bold uppercase hover:underline">Force Sync ID</button>
-          <button onClick={() => { setCurrentUser(null); localStorage.removeItem('smartstock_user'); }} className="text-slate-400 text-xs font-bold hover:text-slate-600 uppercase tracking-widest">Logout</button>
+          <button onClick={fetchSettings} className="text-indigo-600 text-xs font-bold uppercase hover:underline">Force Identity Sync</button>
+          <button onClick={() => { setCurrentUser(null); localStorage.removeItem('smartstock_user'); }} className="text-slate-400 text-xs font-bold hover:text-slate-600 uppercase tracking-widest">Exit to Login</button>
         </div>
       </div>
     </div>

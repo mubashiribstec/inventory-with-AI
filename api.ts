@@ -4,6 +4,10 @@ import { dbService } from './db.ts';
 
 const API_BASE = '/api';
 
+/**
+ * Enterprise API Service
+ * Handles all communication between the React Frontend and Node.js/MariaDB backend.
+ */
 const getHeaders = () => {
   const userStr = localStorage.getItem('smartstock_user');
   const user = userStr ? JSON.parse(userStr) : null;
@@ -14,32 +18,42 @@ const getHeaders = () => {
 };
 
 export const apiService = {
+  // Authentication
   async login(username, password): Promise<User> {
     const response = await fetch(`${API_BASE}/login`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ username, password })
     });
-    if (!response.ok) throw new Error('Login failed');
+    if (!response.ok) {
+      const err = await response.json();
+      throw new Error(err.error || 'Login failed');
+    }
     const user = await response.json();
     await dbService.saveUser(user); 
     return user;
   },
 
+  // System Initialization
   async initDatabase(force: boolean = false): Promise<{ success: boolean }> { 
     await dbService.init(); 
     if (force) await dbService.clearAllData();
+    // In our architecture, the Node server handles its own MariaDB init on start.
+    // This call ensures IndexedDB (Edge storage) is also ready.
     return { success: true };
   },
 
+  // Branding & Security Settings
   async getSettings(): Promise<SystemSettings> {
     const res = await fetch(`${API_BASE}/settings`);
-    if (res.ok) {
-      const settings = await res.json();
-      dbService.saveSettings(settings).catch(() => {});
-      return settings;
+    if (!res.ok) {
+      // Return local fallback if server is unreachable
+      return dbService.getSettings();
     }
-    return dbService.getSettings();
+    const settings = await res.json();
+    // Cache persistent identity locally for offline verification
+    dbService.saveSettings(settings).catch(() => {});
+    return settings;
   },
 
   async updateSettings(s: SystemSettings) {
@@ -48,13 +62,17 @@ export const apiService = {
       headers: getHeaders(),
       body: JSON.stringify(s)
     });
-    if (!res.ok) throw new Error("Update failed");
+    if (!res.ok) {
+      const err = await res.json();
+      throw new Error(err.error || "Update failed");
+    }
     return s;
   },
 
+  // Generic Data Fetchers
   async get<T>(path: string): Promise<T[]> {
     const res = await fetch(`${API_BASE}/${path}`);
-    if (!res.ok) throw new Error(`Fetch Error: ${path}`);
+    if (!res.ok) throw new Error(`Communication failure on path: ${path}`);
     return res.json();
   },
 
@@ -64,7 +82,7 @@ export const apiService = {
       headers: getHeaders(),
       body: JSON.stringify(data)
     });
-    if (!res.ok) throw new Error(`Save Error: ${path}`);
+    if (!res.ok) throw new Error(`Data persistence failure on path: ${path}`);
     return res.json();
   },
 
@@ -73,10 +91,11 @@ export const apiService = {
       method: 'DELETE',
       headers: getHeaders()
     });
-    if (!res.ok) throw new Error(`Delete Error: ${path}`);
+    if (!res.ok) throw new Error(`Record deletion failure on path: ${path}`);
     return res.json();
   },
 
+  // Module Specific Implementations
   async getAllItems(): Promise<InventoryItem[]> { return this.get('items'); },
   async saveItem(item: InventoryItem) { return this.post('items', item); },
   async deleteItem(id: string) { return this.del('items', id); },
@@ -90,17 +109,14 @@ export const apiService = {
   async markNotificationsAsRead(ids: number[]) { return this.post('notifications/read', { ids }); },
   async getAttendance(): Promise<AttendanceRecord[]> { return this.get('attendance'); },
   async saveAttendance(r: AttendanceRecord) { return this.post('attendance', r); },
-  // Fix: Added missing deleteAttendance method for attendance management
   async deleteAttendance(id: string) { return this.del('attendance', id); },
   async getLeaveRequests(): Promise<LeaveRequest[]> { return this.get('leave_requests'); },
   async saveLeaveRequest(l: LeaveRequest) { return this.post('leave_requests', l); },
-  // Fix: Added missing deleteLeaveRequest method for leave management
   async deleteLeaveRequest(id: string) { return this.del('leave_requests', id); },
   async getDepartments(): Promise<Department[]> { return this.get('departments'); },
   async saveDepartment(d: Department) { return this.post('departments', d); },
   async getBudgets(): Promise<PersonalBudget[]> { return this.get('salaries'); },
   async saveBudget(b: PersonalBudget) { return this.post('salaries', b); },
-  // Fix: Added missing user and employee management methods to support administrative modules
   async getUsers(): Promise<User[]> { return this.get('users'); },
   async saveUser(user: User) { return this.post('users', user); },
   async deleteUser(id: string) { return this.del('users', id); },
