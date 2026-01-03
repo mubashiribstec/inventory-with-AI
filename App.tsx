@@ -19,8 +19,7 @@ import SalaryModule from './components/SalaryModule.tsx';
 import BudgetModule from './components/BudgetModule.tsx';
 import Login from './components/Login.tsx';
 import RequestForm from './components/RequestForm.tsx';
-import Chatbot from './components/Chatbot.tsx';
-import { ItemStatus, UserRole, User, UserLog, InventoryItem, Movement, Supplier, LocationRecord, MaintenanceLog, Category, Employee, Department, License, AssetRequest, Notification, Role, SystemSettings } from './types.ts';
+import { ItemStatus, UserRole, User, InventoryItem, Movement, Supplier, LocationRecord, MaintenanceLog, Category, Employee, Department, License, AssetRequest, Role, SystemSettings } from './types.ts';
 import Modal from './components/Modal.tsx';
 import PurchaseForm from './components/PurchaseForm.tsx';
 import ManagementForm from './components/ManagementForm.tsx';
@@ -109,7 +108,6 @@ const App: React.FC = () => {
     startupSequence();
   }, [fetchRoleData]);
 
-  // Sync browser title with software name
   useEffect(() => {
     document.title = `${settings.software_name} | Enterprise`;
   }, [settings.software_name]);
@@ -194,9 +192,9 @@ const App: React.FC = () => {
       case 'maintenance': return <MaintenanceList logs={maintenance} items={items} onUpdate={fetchData} onAdd={() => setActiveTab('requests')} />;
       case 'suppliers': return <SupplierList suppliers={suppliers} />;
       case 'employees': return <GenericListView title="Staff Directory" icon="fa-users" items={employees} columns={['id', 'name', 'email', 'department', 'role', 'is_active']} onView={setViewingEmployee} onAdd={() => setManagementModal({ isOpen: true, type: 'Employee' })} />;
-      case 'departments': return <GenericListView title="Business Units" icon="fa-building" items={departments} columns={['id', 'name', 'manager']} onAdd={() => setManagementModal({ isOpen: true, type: 'Department' })} />;
+      case 'departments': return <GenericListView title="Departments & Units" icon="fa-sitemap" items={departments} columns={['id', 'name', 'manager', 'budget']} onAdd={() => setManagementModal({ isOpen: true, type: 'Department' })} />;
       case 'budgets': return <BudgetModule />;
-      case 'audit-trail': return <GenericListView title="Movement History" icon="fa-history" items={movements} columns={['date', 'item', 'from', 'to', 'status']} />;
+      case 'audit-trail': return <GenericListView title="Audit Trail" icon="fa-history" items={movements} columns={['date', 'item', 'from', 'to', 'status']} />;
       default: return <Dashboard stats={stats} movements={movements} items={items} onFullAudit={() => setActiveTab('audit-trail')} onCheckIn={() => setActiveTab('attendance')} themeColor={settings.primary_color} />;
     }
   };
@@ -232,17 +230,23 @@ const App: React.FC = () => {
         themeColor={themeColor} 
         logoIcon={settings.software_logo} 
       />
-      <main className="flex-1 lg:ml-64 p-6 lg:p-10 min-w-0">
-        <header className="mb-8 flex flex-col md:flex-row justify-between items-center gap-4">
+      <main className="flex-1 lg:ml-64 p-6 lg:p-12 min-w-0">
+        <header className="mb-10 flex flex-col md:flex-row justify-between items-end md:items-center gap-4">
             <div>
-                <h1 className="text-3xl font-bold text-slate-800 capitalize tracking-tight poppins">{activeTab.replace('-', ' ')}</h1>
-                <p className="text-slate-500 font-medium text-sm">Operator: <span className={`text-${themeColor}-600 font-bold`}>{currentUser.full_name}</span></p>
+                <h1 className="text-4xl font-bold text-slate-900 capitalize tracking-tight poppins">{activeTab.replace('-', ' ')}</h1>
+                <p className="text-slate-500 font-semibold mt-1">Hello, {currentUser.full_name} <span className="mx-2 opacity-20">|</span> <span className={`text-${themeColor}-600 font-bold text-xs uppercase`}>{currentUser.role}</span></p>
             </div>
-            <div className="flex items-center gap-3">
-               <span className="flex items-center gap-2 px-3 py-1.5 bg-emerald-50 text-emerald-600 rounded-lg text-[10px] font-bold border border-emerald-100">
-                  <span className="w-1.5 h-1.5 bg-emerald-500 rounded-full animate-pulse"></span>
-                  SERVER ONLINE
-               </span>
+            <div className="flex items-center gap-4">
+               <div className="hidden sm:flex flex-col text-right">
+                  <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Server Status</span>
+                  <span className="text-emerald-500 font-bold text-xs flex items-center gap-1.5 justify-end">
+                     <span className="w-1.5 h-1.5 bg-emerald-500 rounded-full animate-pulse"></span>
+                     LIVE SYNC
+                  </span>
+               </div>
+               <div className="w-12 h-12 rounded-2xl bg-white border border-slate-200 shadow-sm flex items-center justify-center text-slate-400">
+                  <i className="fas fa-search"></i>
+               </div>
             </div>
         </header>
         {dataLoading ? (
@@ -257,7 +261,6 @@ const App: React.FC = () => {
       {managementModal.isOpen && <Modal title={`Manage ${managementModal.type}`} onClose={() => setManagementModal({ isOpen: false, type: null })}><ManagementForm type={managementModal.type!} onSubmit={handleManagementSubmit} /></Modal>}
       {viewingItem && <Modal title="Asset Profile" onClose={() => setViewingItem(null)}><ItemDetails item={viewingItem} /></Modal>}
       {viewingEmployee && <Modal title="Staff Profile" onClose={() => setViewingEmployee(null)}><EmployeeDetails employee={viewingEmployee} items={items} allUsers={users} /></Modal>}
-      <Chatbot items={items} stats={stats} />
     </div>
   );
 };

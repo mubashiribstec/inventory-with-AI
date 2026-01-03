@@ -25,7 +25,6 @@ const Sidebar: React.FC<SidebarProps> = ({
   logoIcon = 'fa-warehouse'
 }) => {
   const [unreadCount, setUnreadCount] = useState(0);
-
   const isAdmin = userRole === UserRole.ADMIN;
   
   const hasPermission = (key: string) => {
@@ -54,88 +53,77 @@ const Sidebar: React.FC<SidebarProps> = ({
     {
       title: 'Human Resources',
       items: [
-        { id: 'attendance', icon: 'fa-user-clock', label: 'Attendance Hub' },
-        { id: 'notifications', icon: 'fa-bell', label: 'Alerts & Activity', badge: unreadCount },
-        { id: 'leaves', icon: 'fa-calendar-alt', label: 'Leave Requests' },
-        { id: 'salaries', icon: 'fa-file-invoice-dollar', label: 'Salary & Payroll', permission: 'hr.salaries' },
+        { id: 'attendance', icon: 'fa-user-clock', label: 'Attendance' },
+        { id: 'notifications', icon: 'fa-bell', label: 'Alerts', badge: unreadCount },
+        { id: 'leaves', icon: 'fa-calendar-alt', label: 'Leaves' },
+        { id: 'salaries', icon: 'fa-file-invoice-dollar', label: 'Payroll', permission: 'hr.salaries' },
         { id: 'employees', icon: 'fa-users-cog', label: 'Staff Directory', permission: 'hr.view' },
-        { id: 'departments', icon: 'fa-sitemap', label: 'Business Units', permission: 'hr.view' },
+        { id: 'departments', icon: 'fa-sitemap', label: 'Departments & Units', permission: 'hr.view' },
         { id: 'user-mgmt', icon: 'fa-user-shield', label: 'User Accounts', permission: 'hr.users' },
       ]
     },
     {
-      title: 'Financials & Analytics',
+      title: 'Finance & Analytics',
       items: [
-        { id: 'dashboard', icon: 'fa-chart-pie', label: 'Executive Overview', permission: 'analytics.view' },
-        { id: 'budgets', icon: 'fa-wallet', label: 'Budget & Consumption', permission: 'analytics.financials' },
-        { id: 'audit-trail', icon: 'fa-stream', label: 'Movement Ledger', permission: 'analytics.logs' },
+        { id: 'dashboard', icon: 'fa-chart-pie', label: 'Executive Insights', permission: 'analytics.view' },
+        { id: 'budgets', icon: 'fa-wallet', label: 'Budget Tracking', permission: 'analytics.financials' },
+        { id: 'audit-trail', icon: 'fa-stream', label: 'Activity Logs', permission: 'analytics.logs' },
       ]
     },
     {
       title: 'Inventory Control',
       items: [
-        { id: 'inventory', icon: 'fa-box-open', label: 'Stock Inventory', permission: 'inventory.view' },
-        { id: 'purchase-history', icon: 'fa-shopping-cart', label: 'Procurement List', permission: 'inventory.procure' },
-        { id: 'requests', icon: 'fa-hand-holding-box', label: 'Staff Assignments' },
-        { id: 'maintenance', icon: 'fa-tools', label: 'Faulty Item Hub', permission: 'inventory.edit' },
-        { id: 'licenses', icon: 'fa-key', label: 'License Compliance', permission: 'inventory.view' },
-      ]
-    },
-    {
-      title: 'Management',
-      items: [
-        { id: 'suppliers', icon: 'fa-truck-loading', label: 'Vendor Scorecard', permission: 'inventory.view' },
-        { id: 'locations', icon: 'fa-map-marked-alt', label: 'Site Map', permission: 'inventory.view' },
+        { id: 'inventory', icon: 'fa-box-open', label: 'Stock Registry', permission: 'inventory.view' },
+        { id: 'purchase-history', icon: 'fa-shopping-cart', label: 'Procurement', permission: 'inventory.procure' },
+        { id: 'requests', icon: 'fa-hand-holding-box', label: 'Assignments' },
+        { id: 'maintenance', icon: 'fa-tools', label: 'Maintenance Hub', permission: 'inventory.edit' },
+        { id: 'licenses', icon: 'fa-key', label: 'Licenses', permission: 'inventory.view' },
       ]
     }
   ];
 
-  // Logic to split name for fancy rendering (e.g. "SmartStock Pro" -> "SmartStock .Pro")
   const softwareNameParts = appName.split(' ');
   const mainName = softwareNameParts.length > 1 ? softwareNameParts.slice(0, -1).join(' ') : appName;
   const suffix = softwareNameParts.length > 1 ? softwareNameParts[softwareNameParts.length - 1] : '';
 
   return (
     <div className="fixed inset-y-0 left-0 w-64 bg-white border-r border-slate-200 flex flex-col z-30 shadow-sm hidden lg:flex custom-scrollbar overflow-y-auto">
-      <div className="p-6 sticky top-0 bg-white z-10 border-b border-slate-100 mb-6">
+      <div className="p-6 sticky top-0 bg-white z-10 border-b border-slate-100 mb-4">
         <div className="flex items-center gap-3">
           <div className={`w-10 h-10 bg-${themeColor}-600 rounded-xl flex items-center justify-center text-white text-xl shadow-lg shadow-${themeColor}-100`}>
             <i className={`fas ${logoIcon}`}></i>
           </div>
           <h2 className="text-xl font-bold text-slate-800 poppins">
-            {mainName}{suffix && <span className={`text-${themeColor}-600 italic`}>.{suffix}</span>}
+            {mainName}{suffix && <span className={`text-${themeColor}-600`}>.{suffix}</span>}
           </h2>
         </div>
       </div>
 
-      <div className="px-4 pb-6 space-y-6 flex-1">
+      <div className="px-3 pb-6 space-y-5 flex-1">
         {navGroups.map((group, groupIdx) => {
-          const visibleItems = group.items.filter(i => {
-            if (!i.permission) return true;
-            return hasPermission(i.permission);
-          });
+          const visibleItems = group.items.filter(i => !i.permission || hasPermission(i.permission));
           if (visibleItems.length === 0) return null;
           
           return (
             <div key={groupIdx}>
-              <p className="px-4 text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-3">{group.title}</p>
-              <div className="space-y-1">
+              <p className="px-4 text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-2 opacity-70">{group.title}</p>
+              <div className="space-y-0.5">
                 {visibleItems.map(item => (
                   <button
                     key={item.id}
                     onClick={() => setActiveTab(item.id)}
-                    className={`w-full flex items-center justify-between px-4 py-2.5 rounded-xl transition-all duration-200 group ${
+                    className={`w-full flex items-center justify-between px-4 py-2 rounded-xl transition-all duration-200 group ${
                       activeTab === item.id 
-                        ? `bg-${themeColor}-600 text-white shadow-lg shadow-${themeColor}-100` 
+                        ? `bg-${themeColor}-600 text-white shadow-md shadow-${themeColor}-100` 
                         : 'text-slate-500 hover:bg-slate-50'
                     }`}
                   >
                     <div className="flex items-center gap-3">
                       <i className={`fas ${item.icon} w-5 text-center ${activeTab === item.id ? 'text-white' : `text-slate-400 group-hover:text-${themeColor}-600`}`}></i>
-                      <span className="font-medium text-sm">{item.label}</span>
+                      <span className="font-semibold text-sm">{item.label}</span>
                     </div>
                     {item.badge !== undefined && item.badge > 0 && (
-                      <span className={`px-1.5 py-0.5 rounded-full text-[10px] font-bold ${activeTab === item.id ? `bg-white text-${themeColor}-600` : 'bg-rose-500 text-white'}`}>
+                      <span className={`px-1.5 py-0.5 rounded-full text-[9px] font-bold ${activeTab === item.id ? `bg-white text-${themeColor}-600` : 'bg-rose-500 text-white'}`}>
                         {item.badge}
                       </span>
                     )}
@@ -147,33 +135,22 @@ const Sidebar: React.FC<SidebarProps> = ({
         })}
       </div>
 
-      <div className="mt-auto p-4 space-y-3">
-        {(isAdmin || hasPermission('system.roles') || hasPermission('analytics.logs') || hasPermission('system.settings')) && (
-           <div className="bg-slate-50 p-4 rounded-2xl border border-slate-100 space-y-2">
-              <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-2">Admin Panel</p>
-              {hasPermission('analytics.logs') && (
-                <button onClick={() => setActiveTab('system-logs')} className={`w-full py-2 bg-white border border-slate-200 text-slate-600 rounded-xl text-xs font-bold hover:bg-slate-50 transition ${activeTab === 'system-logs' ? `ring-2 ring-${themeColor}-500` : ''}`}>
-                   <i className="fas fa-shield-alt mr-2"></i> Audit Logs
-                </button>
-              )}
-              {hasPermission('system.roles') && (
-                <button onClick={() => setActiveTab('role-mgmt')} className={`w-full py-2 bg-white border border-slate-200 text-slate-600 rounded-xl text-xs font-bold hover:bg-slate-50 transition ${activeTab === 'role-mgmt' ? `ring-2 ring-${themeColor}-500` : ''}`}>
-                   <i className="fas fa-user-tag mr-2"></i> Role Config
-                </button>
-              )}
-              {hasPermission('system.settings') && (
-                <button onClick={() => setActiveTab('settings')} className={`w-full py-2 bg-white border border-slate-200 text-slate-600 rounded-xl text-xs font-bold hover:bg-slate-50 transition ${activeTab === 'settings' ? `ring-2 ring-${themeColor}-500` : ''}`}>
-                   <i className="fas fa-sliders-h mr-2"></i> Settings
-                </button>
-              )}
-           </div>
+      <div className="p-4 space-y-3 mt-auto">
+        {(isAdmin || hasPermission('system.settings')) && (
+          <button 
+            onClick={() => setActiveTab('settings')}
+            className={`w-full flex items-center gap-3 px-4 py-2.5 rounded-xl transition-all ${activeTab === 'settings' ? `bg-slate-800 text-white` : 'text-slate-500 hover:bg-slate-50'}`}
+          >
+            <i className="fas fa-cog w-5"></i>
+            <span className="text-sm font-semibold">Settings</span>
+          </button>
         )}
         <button 
           onClick={onLogout}
-          className="w-full flex items-center gap-3 px-4 py-3 rounded-xl text-rose-500 hover:bg-rose-50 transition font-bold text-sm"
+          className="w-full flex items-center gap-3 px-4 py-2.5 rounded-xl text-rose-500 hover:bg-rose-50 transition font-bold text-sm"
         >
           <i className="fas fa-sign-out-alt w-5"></i>
-          <span>Logout Session</span>
+          <span>Logout</span>
         </button>
       </div>
     </div>
