@@ -31,7 +31,7 @@ type AppTab = 'dashboard' | 'inventory' | 'maintenance' | 'suppliers' | 'locatio
 const App: React.FC = () => {
   const [currentUser, setCurrentUser] = useState<User | null>(null);
   const [currentRole, setCurrentRole] = useState<Role | null>(null);
-  const [settings, setSettings] = useState<SystemSettings>({ id: 'GLOBAL', software_name: 'Enterprise IMS', primary_color: 'indigo' });
+  const [settings, setSettings] = useState<SystemSettings>({ id: 'GLOBAL', software_name: 'SmartStock Pro', primary_color: 'indigo' });
   const [activeTab, setActiveTab] = useState<AppTab>('dashboard');
   
   const [items, setItems] = useState<InventoryItem[]>([]);
@@ -47,7 +47,7 @@ const App: React.FC = () => {
   const [departments, setDepartments] = useState<Department[]>([]);
 
   const [isInitialized, setIsInitialized] = useState(false);
-  const [bootStatus, setBootStatus] = useState('Checking Server Connection...');
+  const [bootStatus, setBootStatus] = useState('Checking connectivity...');
   const [dataLoading, setDataLoading] = useState(false);
   
   const [isPurchaseModalOpen, setIsPurchaseModalOpen] = useState(false);
@@ -57,18 +57,12 @@ const App: React.FC = () => {
   const [viewingItem, setViewingItem] = useState<InventoryItem | null>(null);
   const [viewingEmployee, setViewingEmployee] = useState<Employee | null>(null);
 
-  useEffect(() => { 
-    if (settings.software_name) {
-      document.title = `${settings.software_name} | Smart Stock Pro`; 
-    }
-  }, [settings.software_name]);
-
   const fetchRoleData = useCallback(async (roleId: string) => {
     try {
       const allRoles = await apiService.getRoles();
       const role = allRoles.find(r => r.id === roleId);
       if (role) setCurrentRole(role);
-    } catch (e) { console.error("Role lookup error:", e); }
+    } catch (e) {}
   }, []);
 
   const fetchData = useCallback(async () => {
@@ -84,16 +78,20 @@ const App: React.FC = () => {
       setItems(fItems || []); setMovements(fMov || []); setSuppliers(fSup || []); setLocations(fLoc || []);
       setMaintenance(fMaint || []); setLicenses(fLic || []); setCategories(fCat || []);
       setEmployees(fEmp || []); setDepartments(fDept || []); setRequests(fReq || []); setUsers(fUsers || []);
-    } catch (err) { console.error("Data Hydration Error:", err); } finally { setDataLoading(false); }
+    } catch (err) {
+      console.warn("Hydration incomplete - DB might need manual initialization.");
+    } finally {
+      setDataLoading(false);
+    }
   }, [currentUser]);
 
   useEffect(() => {
     const startupSequence = async () => {
       try {
-        setBootStatus("Synchronizing System Data...");
-        await apiService.initDatabase();
+        setBootStatus("Probing backend...");
+        // Non-blocking init probe
+        apiService.initDatabase().catch(e => console.log("Auto-init postponed:", e.message));
         
-        setBootStatus("Fetching Visual Branding...");
         const cloudSettings = await apiService.getSettings();
         if (cloudSettings) setSettings(cloudSettings);
         
@@ -103,11 +101,10 @@ const App: React.FC = () => {
           setCurrentUser(user);
           await fetchRoleData(user.role);
         }
-      } catch (e) { 
-        console.error("Boot failure:", e); 
-        setBootStatus("Server unavailable. Please check backend.");
-      } finally { 
-        setIsInitialized(true); 
+      } catch (e) {
+        console.warn("Soft startup - Proceeding to Login");
+      } finally {
+        setIsInitialized(true);
       }
     };
     startupSequence();
@@ -115,30 +112,16 @@ const App: React.FC = () => {
 
   useEffect(() => { if (currentUser) fetchData(); }, [currentUser, fetchData]);
 
-  const handleManagementSubmit = async (data: any) => {
-    try {
-      if (managementModal.type === 'Employee') {
-        await apiService.saveEmployee(data);
-        if (data.create_user) {
-          await apiService.saveUser({
-            id: `U-${data.id.split('-').pop()}`,
-            username: data.username,
-            password: data.password,
-            role: UserRole.STAFF,
-            full_name: data.name,
-            department: data.department,
-            joining_date: data.joining_date,
-            is_active: data.is_active
-          });
-        }
-      }
-      if (managementModal.type === 'Department') await apiService.saveDepartment(data);
-      if (managementModal.type === 'Category') await apiService.genericSave('categories', data);
-      
-      setManagementModal({ isOpen: false, type: null });
-      fetchData();
-    } catch (err) { alert("Operation failed: " + err); }
-  };
+  const stats = useMemo(() => ({
+    purchased: items.length,
+    assigned: items.filter(i => i.status === ItemStatus.ASSIGNED || i.status === ItemStatus.IN_USE).length,
+    inUse: items.filter(i => i.status === ItemStatus.IN_USE).length,
+    backup: items.filter(i => i.status === ItemStatus.BACKUP).length,
+    faulty: items.filter(i => i.status === ItemStatus.FAULTY).length,
+    available: items.filter(i => i.status === ItemStatus.AVAILABLE).length,
+    licenses_total: licenses.length,
+    expiring_soon: 0
+  }), [items, licenses]);
 
   const renderContent = () => {
     if (!currentUser) return null;
@@ -162,17 +145,6 @@ const App: React.FC = () => {
       default: return <Dashboard stats={stats} movements={movements} items={items} onFullAudit={() => setActiveTab('audit-trail')} onCheckIn={() => setActiveTab('attendance')} themeColor={settings.primary_color} />;
     }
   };
-
-  const stats = useMemo(() => ({
-    purchased: items.length,
-    assigned: items.filter(i => i.status === ItemStatus.ASSIGNED || i.status === ItemStatus.IN_USE).length,
-    inUse: items.filter(i => i.status === ItemStatus.IN_USE).length,
-    backup: items.filter(i => i.status === ItemStatus.BACKUP).length,
-    faulty: items.filter(i => i.status === ItemStatus.FAULTY).length,
-    available: items.filter(i => i.status === ItemStatus.AVAILABLE).length,
-    licenses_total: licenses.length,
-    expiring_soon: 0
-  }), [items, licenses]);
 
   const themeColor = settings.primary_color || 'indigo';
 
@@ -218,7 +190,13 @@ const App: React.FC = () => {
 
       {isPurchaseModalOpen && <Modal title="Execute Procurement" onClose={() => setIsPurchaseModalOpen(false)}><PurchaseForm onSubmit={async (i) => { await apiService.saveItem(i); setIsPurchaseModalOpen(false); fetchData(); }} suppliers={suppliers} locations={locations} departments={departments} /></Modal>}
       {isRequestModalOpen && <Modal title="New Asset Request" onClose={() => setIsRequestModalOpen(false)}><RequestForm employees={employees} departments={departments} categories={categories} onSubmit={async (req) => { await apiService.genericSave('requests', req); setIsRequestModalOpen(false); fetchData(); }} /></Modal>}
-      {managementModal.isOpen && <Modal title={`Manage ${managementModal.type}`} onClose={() => setManagementModal({ isOpen: false, type: null })}><ManagementForm type={managementModal.type!} onSubmit={handleManagementSubmit} /></Modal>}
+      {managementModal.isOpen && <Modal title={`Manage ${managementModal.type}`} onClose={() => setManagementModal({ isOpen: false, type: null })}><ManagementForm type={managementModal.type!} onSubmit={async (data) => {
+        if (managementModal.type === 'Employee') await apiService.saveEmployee(data);
+        if (managementModal.type === 'Department') await apiService.saveDepartment(data);
+        if (managementModal.type === 'Category') await apiService.genericSave('categories', data);
+        setManagementModal({ isOpen: false, type: null });
+        fetchData();
+      }} /></Modal>}
       {viewingItem && <Modal title="Asset Profile" onClose={() => setViewingItem(null)}><ItemDetails item={viewingItem} /></Modal>}
       {viewingEmployee && <Modal title="Staff Profile" onClose={() => setViewingEmployee(null)}><EmployeeDetails employee={viewingEmployee} items={items} allUsers={users} /></Modal>}
       <Chatbot items={items} stats={stats} />

@@ -10,6 +10,7 @@ const port = process.env.PORT || 3000;
 app.use(cors());
 app.use(express.json());
 
+// Configuration for MariaDB connection
 const dbHost = process.env.DB_HOST && process.env.DB_HOST.trim() !== '' 
   ? process.env.DB_HOST 
   : '127.0.0.1';
@@ -19,16 +20,32 @@ const pool = mariadb.createPool({
   user: process.env.DB_USER || 'inventory_user',
   password: process.env.DB_PASSWORD || 'inventory_password',
   database: process.env.DB_NAME || 'smartstock',
-  connectionLimit: 20,
-  connectTimeout: 20000, 
-  acquireTimeout: 20000
+  connectionLimit: 10,
+  connectTimeout: 30000, 
+  acquireTimeout: 30000
 });
 
 let isDbReady = false;
 let dbError = null;
 
-const handleInitDb = async (conn) => {
-  console.log('[DATABASE] Running schema check and auto-initialization...');
+const modules = [
+  'notifications', 'user_logs', 'attendance', 'salaries', 'leave_requests', 
+  'items', 'movements', 'departments', 'employees', 'suppliers', 
+  'locations', 'maintenance_logs', 'licenses', 'categories', 'requests', 
+  'users', 'roles', 'settings'
+];
+
+const handleInitDb = async (conn, forceReset = false) => {
+  console.log(`[DATABASE] Running ${forceReset ? 'FORCE RESET' : 'schema check'}...`);
+  
+  if (forceReset) {
+    // Drop tables in reverse order of dependencies if any (though currently flat)
+    for (const table of modules) {
+      await conn.query(`DROP TABLE IF EXISTS \`${table}\``);
+    }
+    console.log('[DATABASE] All existing tables dropped.');
+  }
+
   const queries = [
     `CREATE TABLE IF NOT EXISTS roles (
       id VARCHAR(50) PRIMARY KEY,
@@ -202,9 +219,10 @@ const handleInitDb = async (conn) => {
     await conn.query(query);
   }
 
+  // Seed default settings and roles
   await conn.query("REPLACE INTO settings (id, software_name, primary_color, software_description, software_logo) VALUES ('GLOBAL', 'SmartStock Pro', 'indigo', 'Enterprise Resource Planning', 'fa-warehouse')");
 
-  const roles = [
+  const defaultRoles = [
     ['ADMIN', 'Administrator', 'Full system access and security policy controls.', 'inventory.view,inventory.edit,inventory.procure,hr.view,hr.attendance,hr.leaves,hr.users,hr.salaries,analytics.view,analytics.financials,analytics.logs,system.roles,system.db,system.settings', 'rose', 'fa-user-crown'],
     ['MANAGER', 'Operations Manager', 'Departmental oversight of assets and operational logs.', 'inventory.view,inventory.edit,hr.view,hr.leaves,analytics.view,analytics.financials', 'amber', 'fa-briefcase'],
     ['HR', 'HR Specialist', 'Manages lifecycle of staff, attendance, and leave compliance.', 'hr.view,hr.attendance,hr.leaves,hr.salaries,analytics.view', 'emerald', 'fa-users-cog'],
@@ -212,30 +230,32 @@ const handleInitDb = async (conn) => {
     ['STAFF', 'Standard Employee', 'Personal asset tracking and basic requests.', 'inventory.view', 'slate', 'fa-user']
   ];
 
-  for (const r of roles) {
+  for (const r of defaultRoles) {
     await conn.query("REPLACE INTO roles (id, label, description, permissions, color, icon) VALUES (?, ?, ?, ?, ?, ?)", r);
   }
 
+  // Ensure default admin exists
   await conn.query("REPLACE INTO users (id, username, password, role, full_name, shift_start_time, department, joining_date, designation, is_active) VALUES ('U-001', 'admin', 'admin', 'ADMIN', 'System Administrator', '09:00', 'IT Infrastructure', '2023-01-01', 'Chief Systems Admin', 1)");
   
-  console.log('[DATABASE] Auto-initialization complete. Default Login: admin / admin');
+  console.log('[DATABASE] Initialization complete. Default Login: admin / admin');
   return true;
 };
 
-const initDbWithRetry = async (retries = 20, delay = 5000) => {
+// Retry Loop for Database Connection
+const initDbWithRetry = async (retries = 30, delay = 5000) => {
   for (let i = 0; i < retries; i++) {
     let conn;
     try {
-      console.log(`[DATABASE] Attempting connection to ${dbHost} (Attempt ${i + 1}/${retries})...`);
+      console.log(`[DATABASE] Connecting to ${dbHost} (Attempt ${i + 1}/${retries})...`);
       conn = await pool.getConnection();
-      console.log(`[DATABASE] Successfully connected to ${dbHost}`);
       await handleInitDb(conn);
       isDbReady = true;
       dbError = null;
+      console.log('[DATABASE] Connected and ready.');
       return;
     } catch (err) {
-      dbError = `Connection attempt failed: ${err.message}. Ensure the MariaDB container is running and the credentials match.`;
-      console.error(`[DATABASE ERROR] Attempt ${i + 1} failed: ${err.message}`);
+      dbError = `DB_CONNECTION_FAILURE: ${err.message}`;
+      console.error(`[DATABASE ERROR] ${err.message}`);
       if (i < retries - 1) {
         await new Promise(res => setTimeout(res, delay));
       }
@@ -243,15 +263,19 @@ const initDbWithRetry = async (retries = 20, delay = 5000) => {
       if (conn) conn.release();
     }
   }
-  dbError = `CRITICAL: Failed to connect to database at ${dbHost} after multiple attempts. Check logs.`;
-  console.error('[DATABASE] Critical failure.');
+  dbError = `CRITICAL_ERROR: Failed to connect to database after 30 attempts at ${dbHost}.`;
 };
 
+// Start initialization in background
 initDbWithRetry();
 
+// Middleware
 app.use('/api', (req, res, next) => {
   res.setHeader('Content-Type', 'application/json; charset=utf-8');
-  if (!isDbReady && req.path !== '/init-db') {
+  // Always allow /init-db regardless of state
+  if (req.path === '/init-db') return next();
+  
+  if (!isDbReady) {
     return res.status(503).json({ 
       error: 'Database Initializing', 
       details: dbError || 'The server is currently establishing a connection to MariaDB.' 
@@ -264,23 +288,7 @@ const sendJSON = (res, data, status = 200) => {
   return res.status(status).send(JSON.stringify(data));
 };
 
-async function logAction(userId, username, action, targetType, targetId, details) {
-  if (!isDbReady) return;
-  let conn;
-  try {
-    conn = await pool.getConnection();
-    await conn.query(
-      `INSERT INTO user_logs (user_id, username, action, target_type, target_id, details) 
-       VALUES (?, ?, ?, ?, ?, ?)`,
-      [userId, username, action, targetType, targetId, JSON.stringify(details)]
-    );
-  } catch (err) {
-    console.error('Audit Log Error:', err);
-  } finally {
-    if (conn) conn.release();
-  }
-}
-
+// Endpoints
 app.post('/api/login', async (req, res) => {
   const { username, password } = req.body;
   let conn;
@@ -289,53 +297,43 @@ app.post('/api/login', async (req, res) => {
     const rows = await conn.query('SELECT * FROM users WHERE username = ? AND password = ?', [username, password]);
     if (rows.length > 0) {
       const user = rows[0];
-      if (user.is_active === 0) {
-        return sendJSON(res, { error: 'Account disabled' }, 403);
-      }
+      if (user.is_active === 0) return sendJSON(res, { error: 'Account disabled' }, 403);
       const { password: _, ...userSafe } = user;
-      await logAction(user.id, user.username, 'LOGIN', 'USER', user.id, 'User logged in successfully');
       sendJSON(res, userSafe);
     } else {
       sendJSON(res, { error: 'Invalid username or password' }, 401);
     }
   } catch (err) {
-    sendJSON(res, { error: `Login Failed: ${err.message}` }, 500);
-  } finally {
-    if (conn) conn.release();
-  }
-});
-
-const modules = ['items', 'movements', 'suppliers', 'locations', 'maintenance_logs', 'categories', 'employees', 'departments', 'licenses', 'requests', 'attendance', 'users', 'leave_requests', 'roles', 'notifications', 'user_logs', 'settings', 'salaries'];
-
-app.post('/api/factory-reset', async (req, res) => {
-  let conn;
-  try {
-    conn = await pool.getConnection();
-    for (const table of modules) {
-      await conn.query(`DELETE FROM ${table}`);
-    }
-    await handleInitDb(conn);
-    sendJSON(res, { success: true, message: 'Software factory reset complete.' });
-  } catch (err) {
-    sendJSON(res, { error: err.message }, 500);
+    sendJSON(res, { error: `Login Error: ${err.message}` }, 500);
   } finally {
     if (conn) conn.release();
   }
 });
 
 app.post('/api/init-db', async (req, res) => {
-  if (isDbReady) {
-    return sendJSON(res, { success: true, message: 'Database already ready.' });
-  }
   let conn;
   try {
     conn = await pool.getConnection();
-    await handleInitDb(conn);
+    const force = req.body.force === true;
+    await handleInitDb(conn, force);
     isDbReady = true;
     dbError = null;
-    sendJSON(res, { success: true, message: 'Database initialized manually.' });
+    sendJSON(res, { success: true, message: force ? 'Database reset and initialized.' : 'Database tables verified.' });
   } catch (err) {
-    sendJSON(res, { error: `Manual Init Failed: ${err.message}` }, 500);
+    sendJSON(res, { error: `Init Failure: ${err.message}` }, 500);
+  } finally {
+    if (conn) conn.release();
+  }
+});
+
+app.post('/api/factory-reset', async (req, res) => {
+  let conn;
+  try {
+    conn = await pool.getConnection();
+    await handleInitDb(conn, true); // True = Delete old and reset
+    sendJSON(res, { success: true, message: 'Software factory reset complete.' });
+  } catch (err) {
+    sendJSON(res, { error: err.message }, 500);
   } finally {
     if (conn) conn.release();
   }
@@ -377,8 +375,6 @@ const handleCRUD = (tableName) => {
   });
 
   app.post(`/api/${tableName}`, async (req, res) => {
-    const userId = req.headers['x-user-id'] || 'SYSTEM';
-    const username = req.headers['x-username'] || 'SYSTEM';
     let conn;
     try {
       conn = await pool.getConnection();
@@ -400,20 +396,16 @@ const handleCRUD = (tableName) => {
         const placeholders = keys.map(() => '?').join(', ');
         await conn.query(`INSERT INTO ${tableName} (${escapedKeys.join(', ')}) VALUES (${placeholders})`, values);
       }
-      await logAction(userId, username, isUpdate ? 'UPDATE' : 'CREATE', tableName.toUpperCase(), id || 'NEW', req.body);
       sendJSON(res, { success: true });
     } catch (err) { sendJSON(res, { error: err.message }, 500); }
     finally { if (conn) conn.release(); }
   });
 
   app.delete(`/api/${tableName}/:id`, async (req, res) => {
-    const userId = req.headers['x-user-id'] || 'SYSTEM';
-    const username = req.headers['x-username'] || 'SYSTEM';
     let conn;
     try {
       conn = await pool.getConnection();
       await conn.query(`DELETE FROM ${tableName} WHERE id = ?`, [req.params.id]);
-      await logAction(userId, username, 'DELETE', tableName.toUpperCase(), req.params.id, { id: req.params.id });
       sendJSON(res, { success: true });
     } catch (err) { sendJSON(res, { error: err.message }, 500); }
     finally { if (conn) conn.release(); }
@@ -425,12 +417,8 @@ modules.forEach(handleCRUD);
 const staticPath = path.join(__dirname, 'dist');
 app.use(express.static(staticPath));
 
-app.use('/api', (req, res) => {
-  res.status(404).send(JSON.stringify({ error: 'Endpoint not found' }));
-});
-
 app.get('*', (req, res) => {
   res.sendFile(path.join(staticPath, 'index.html'));
 });
 
-app.listen(port, '0.0.0.0', () => console.log(`SmartStock ERP Active on ${port}`));
+app.listen(port, '0.0.0.0', () => console.log(`SmartStock ERP running on port ${port}`));

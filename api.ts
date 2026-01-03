@@ -5,7 +5,7 @@ import { dbService } from './db.ts';
 const API_BASE = '/api';
 
 export const apiService = {
-  // Authentication - Strictly Remote (MariaDB)
+  // Authentication
   async login(username, password): Promise<User> {
     try {
       const response = await fetch(`${API_BASE}/login`, {
@@ -15,30 +15,22 @@ export const apiService = {
       });
 
       if (!response.ok) {
-        if (response.status >= 500) {
+        if (response.status === 503) {
             throw new Error("Authentication server unreachable. Check your connection.");
         }
-        
-        let errorMsg = `Server Error (${response.status})`;
-        try {
-            const errorData = await response.json();
-            errorMsg = errorData.error || errorData.details || errorMsg;
-        } catch (e) {}
-        throw new Error(errorMsg);
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(errorData.error || `Login Error (${response.status})`);
       }
 
       const user = await response.json();
-      await dbService.saveUser(user); // Cache for session persistence
+      await dbService.saveUser(user); 
       return user;
-    } catch (e) {
-      if (e instanceof TypeError) {
-          throw new Error("Authentication server unreachable. Check your connection.");
-      }
+    } catch (e: any) {
+      if (e instanceof TypeError) throw new Error("Authentication server unreachable. Check your connection.");
       throw e;
     }
   },
 
-  // Global Settings - Source of Truth is the MariaDB 'settings' table
   async getSettings(): Promise<SystemSettings> {
     try {
       const res = await fetch(`${API_BASE}/settings`);
@@ -95,7 +87,7 @@ export const apiService = {
           throw new Error(errorData.error || `Server Error: ${res.statusText}`);
       }
       return res.json();
-    } catch (e) {
+    } catch (e: any) {
       if (e instanceof TypeError) throw new Error("Connection failed. Server offline.");
       throw e;
     }
@@ -122,16 +114,7 @@ export const apiService = {
   },
 
   async del(path: string, id: string | number): Promise<any> {
-    const userStr = localStorage.getItem('smartstock_user');
-    const user = userStr ? JSON.parse(userStr) : null;
-
-    const res = await fetch(`${API_BASE}/${id ? path+'/'+id : path}`, {
-      method: 'DELETE',
-      headers: {
-        'x-user-id': user?.id || 'SYSTEM',
-        'x-username': user?.username || 'SYSTEM'
-      }
-    });
+    const res = await fetch(`${API_BASE}/${id ? path+'/'+id : path}`, { method: 'DELETE' });
     if (!res.ok) {
         const errorData = await res.json().catch(() => ({}));
         throw new Error(errorData.error || `Server Error: ${res.statusText}`);
@@ -142,17 +125,13 @@ export const apiService = {
   async getAllItems(): Promise<InventoryItem[]> { return this.get('items'); },
   async saveItem(item: InventoryItem) { return this.post('items', item); },
   async deleteItem(id: string) { return this.del('items', id); },
-  
   async getEmployees(): Promise<Employee[]> { return this.get('employees'); },
   async saveEmployee(e: Employee) { return this.post('employees', e); },
   async deleteEmployee(id: string) { return this.del('employees', id); },
-  
   async getDepartments(): Promise<Department[]> { return this.get('departments'); },
   async saveDepartment(d: Department) { return this.post('departments', d); },
-  
   async getBudgets(): Promise<PersonalBudget[]> { return this.get('salaries'); },
   async saveBudget(b: PersonalBudget) { return this.post('salaries', b); },
-  
   async getCategories(): Promise<Category[]> { return this.get('categories'); },
   async getAllMovements(): Promise<Movement[]> { return this.get('movements'); },
   async getAllSuppliers(): Promise<Supplier[]> { return this.get('suppliers'); },
@@ -160,38 +139,25 @@ export const apiService = {
   async getAllMaintenance(): Promise<MaintenanceLog[]> { return this.get('maintenance_logs'); },
   async getAllLicenses(): Promise<License[]> { return this.get('licenses'); },
   async getAllRequests(): Promise<AssetRequest[]> { return this.get('requests'); },
-  
   async getUsers(): Promise<User[]> { return this.get('users'); },
   async saveUser(u: User) { return this.post('users', u); },
   async deleteUser(id: string) { return this.del('users', id); },
-  
   async getRoles(): Promise<Role[]> { return this.get('roles'); },
   async getNotifications(uid: string): Promise<Notification[]> { return this.get(`notifications/${uid}`); },
   async markNotificationsAsRead(ids: number[]) { return this.post('notifications/read', { ids }); },
-  
   async getAttendance(): Promise<AttendanceRecord[]> { return this.get('attendance'); },
   async saveAttendance(r: AttendanceRecord) { return this.post('attendance', r); },
   async deleteAttendance(id: string) { return this.del('attendance', id); },
-  
   async getLeaveRequests(): Promise<LeaveRequest[]> { return this.get('leave_requests'); },
   async saveLeaveRequest(l: LeaveRequest) { return this.post('leave_requests', l); },
   async deleteLeaveRequest(id: string) { return this.del('leave_requests', id); },
-
-  async genericSave(store: string, data: any) { 
-    const mappedStore = store === 'maintenance' ? 'maintenance_logs' : store;
-    return this.post(mappedStore, data); 
-  },
-  async genericDelete(store: string, id: any) { 
-    const mappedStore = store === 'maintenance' ? 'maintenance_logs' : store;
-    return this.del(mappedStore, id); 
-  },
-
+  async genericSave(store: string, data: any) { return this.post(store, data); },
+  async genericDelete(store: string, id: any) { return this.del(store, id); },
   async deleteLicense(id: any) { return this.del('licenses', id); },
   async createNotification(notif: any) { return this.post('notifications', notif); },
 
   async exportInventoryToCSV(): Promise<string> {
     const items = await this.getAllItems();
-    if (!items || items.length === 0) return 'ID,Name,Category,Serial,Status,Location,Assigned To,Department,Purchase Date,Warranty,Cost';
     const headers = ['id', 'name', 'category', 'serial', 'status', 'location', 'assignedTo', 'department', 'purchaseDate', 'warranty', 'cost'];
     return [
       headers.join(','),
@@ -209,13 +175,17 @@ export const apiService = {
     throw new Error("Reset Failed");
   },
 
-  async initDatabase(): Promise<{ success: boolean }> { 
+  async initDatabase(force = false): Promise<{ success: boolean }> { 
     await dbService.init(); 
     let lastError = "Initialization timed out.";
     
-    for (let i = 0; i < 5; i++) {
+    for (let i = 0; i < 3; i++) {
         try {
-            const res = await fetch(`${API_BASE}/init-db`, { method: 'POST' });
+            const res = await fetch(`${API_BASE}/init-db`, { 
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ force })
+            });
             const data = await res.json().catch(() => ({}));
             
             if (res.ok) {
@@ -223,14 +193,11 @@ export const apiService = {
                 return { success: true };
             } else {
                 lastError = data.error || data.details || `Server Error ${res.status}`;
-                // If the error is not "Initializing", it might be a hard failure
-                if (res.status !== 503) {
-                    throw new Error(lastError);
-                }
+                if (res.status !== 503) break;
             }
         } catch (e: any) {
             lastError = e.message;
-            if (i < 4) await new Promise(r => setTimeout(r, 2000));
+            await new Promise(r => setTimeout(r, 2000));
         }
     }
     throw new Error(lastError);
