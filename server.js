@@ -323,17 +323,31 @@ const handleCRUD = (tableName) => {
     let conn;
     try {
       conn = await pool.getConnection();
-      const keys = Object.keys(req.body);
-      const values = Object.values(req.body).map(v => v === '' ? null : v);
+      
       const id = req.body.id;
-      let isUpdate = false;
-      if (id) {
-        const existing = await conn.query(`SELECT 1 FROM \`${tableName}\` WHERE id = ?`, [id]);
-        if (existing.length > 0) isUpdate = true;
-      }
+      if (!id) throw new Error("ID is required for all data entries.");
+
+      const keys = Object.keys(req.body);
+      const values = keys.map(k => {
+          const val = req.body[k];
+          if (val === '' || val === undefined) return null;
+          // Convert JS Booleans to 1/0 for MariaDB
+          if (typeof val === 'boolean') return val ? 1 : 0;
+          return val;
+      });
+
+      const existing = await conn.query(`SELECT 1 FROM \`${tableName}\` WHERE id = ?`, [id]);
+      const isUpdate = existing.length > 0;
+
       if (isUpdate) {
-        const setClause = keys.filter(k => k !== 'id').map(k => `\`${k}\` = ?`).join(', ');
-        const updateValues = keys.filter(k => k !== 'id').map(k => req.body[k] === '' ? null : req.body[k]);
+        const updateKeys = keys.filter(k => k !== 'id');
+        const setClause = updateKeys.map(k => `\`${k}\` = ?`).join(', ');
+        const updateValues = updateKeys.map(k => {
+            const val = req.body[k];
+            if (val === '' || val === undefined) return null;
+            if (typeof val === 'boolean') return val ? 1 : 0;
+            return val;
+        });
         updateValues.push(id);
         await conn.query(`UPDATE \`${tableName}\` SET ${setClause} WHERE id = ?`, updateValues);
       } else {
@@ -342,7 +356,10 @@ const handleCRUD = (tableName) => {
         await conn.query(`INSERT INTO \`${tableName}\` (${escapedKeys.join(', ')}) VALUES (${placeholders})`, values);
       }
       sendJSON(res, { success: true });
-    } catch (err) { sendJSON(res, { error: err.message }, 500); }
+    } catch (err) { 
+        console.error(`[SQL ERROR] Table: ${tableName} | Msg: ${err.message}`);
+        sendJSON(res, { error: err.message }, 500); 
+    }
     finally { if (conn) conn.release(); }
   });
 

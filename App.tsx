@@ -1,4 +1,5 @@
 
+
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import Sidebar from './components/Sidebar.tsx';
 import Dashboard from './components/Dashboard.tsx';
@@ -89,7 +90,6 @@ const App: React.FC = () => {
     const startupSequence = async () => {
       try {
         setBootStatus("Probing backend...");
-        // Non-blocking init probe
         apiService.initDatabase().catch(e => console.log("Auto-init postponed:", e.message));
         
         const cloudSettings = await apiService.getSettings();
@@ -122,6 +122,61 @@ const App: React.FC = () => {
     licenses_total: licenses.length,
     expiring_soon: 0
   }), [items, licenses]);
+
+  const handleManagementSubmit = async (data: any) => {
+    try {
+      if (managementModal.type === 'Employee') {
+        // Sanitize employee data to match DB columns exactly
+        // Fix: Ensure is_active is a boolean to match the Employee interface (was incorrectly being set as 1/0)
+        const employeePayload: Employee = {
+          id: data.id,
+          name: data.name,
+          email: data.email,
+          department: data.department,
+          role: data.role,
+          joining_date: data.joining_date,
+          is_active: !!data.is_active
+        };
+        await apiService.saveEmployee(employeePayload);
+        
+        // If "Authorize Access" was checked, also create/update user record
+        if (data.create_user && data.username && data.password) {
+           await apiService.saveUser({
+              id: `U-${data.id.split('-').pop()}`,
+              username: data.username,
+              password: data.password,
+              role: UserRole.STAFF,
+              full_name: data.name,
+              department: data.department,
+              is_active: true
+           });
+        }
+      } 
+      else if (managementModal.type === 'Department') {
+        // Sanitize department data to match DB columns exactly
+        const departmentPayload: Department = {
+          id: data.id,
+          name: data.name,
+          manager: data.manager,
+          budget: parseFloat(data.budget) || 0,
+          budget_month: data.budget_month
+        };
+        await apiService.saveDepartment(departmentPayload);
+      } 
+      else if (managementModal.type === 'Category') {
+        await apiService.genericSave('categories', {
+          id: data.id,
+          name: data.name,
+          icon: data.icon
+        });
+      }
+      
+      setManagementModal({ isOpen: false, type: null });
+      fetchData();
+    } catch (err: any) {
+      alert(`Database Error: ${err.message}`);
+    }
+  };
 
   const renderContent = () => {
     if (!currentUser) return null;
@@ -190,13 +245,7 @@ const App: React.FC = () => {
 
       {isPurchaseModalOpen && <Modal title="Execute Procurement" onClose={() => setIsPurchaseModalOpen(false)}><PurchaseForm onSubmit={async (i) => { await apiService.saveItem(i); setIsPurchaseModalOpen(false); fetchData(); }} suppliers={suppliers} locations={locations} departments={departments} /></Modal>}
       {isRequestModalOpen && <Modal title="New Asset Request" onClose={() => setIsRequestModalOpen(false)}><RequestForm employees={employees} departments={departments} categories={categories} onSubmit={async (req) => { await apiService.genericSave('requests', req); setIsRequestModalOpen(false); fetchData(); }} /></Modal>}
-      {managementModal.isOpen && <Modal title={`Manage ${managementModal.type}`} onClose={() => setManagementModal({ isOpen: false, type: null })}><ManagementForm type={managementModal.type!} onSubmit={async (data) => {
-        if (managementModal.type === 'Employee') await apiService.saveEmployee(data);
-        if (managementModal.type === 'Department') await apiService.saveDepartment(data);
-        if (managementModal.type === 'Category') await apiService.genericSave('categories', data);
-        setManagementModal({ isOpen: false, type: null });
-        fetchData();
-      }} /></Modal>}
+      {managementModal.isOpen && <Modal title={`Manage ${managementModal.type}`} onClose={() => setManagementModal({ isOpen: false, type: null })}><ManagementForm type={managementModal.type!} onSubmit={handleManagementSubmit} /></Modal>}
       {viewingItem && <Modal title="Asset Profile" onClose={() => setViewingItem(null)}><ItemDetails item={viewingItem} /></Modal>}
       {viewingEmployee && <Modal title="Staff Profile" onClose={() => setViewingEmployee(null)}><EmployeeDetails employee={viewingEmployee} items={items} allUsers={users} /></Modal>}
       <Chatbot items={items} stats={stats} />

@@ -19,7 +19,7 @@ const ManagementForm: React.FC<ManagementFormProps> = ({ type, onSubmit, initial
     create_user: false,
     username: '',
     password: '',
-    manager: '', // Used for Departments
+    manager: '', 
     budget: 0,
     budget_month: new Date().toISOString().slice(0, 7)
   });
@@ -28,11 +28,20 @@ const ManagementForm: React.FC<ManagementFormProps> = ({ type, onSubmit, initial
     e.preventDefault();
     const id = formData.id || `${type.substring(0, 3).toUpperCase()}-${Math.floor(Date.now() % 10000)}`;
     
-    // Clean data for submission
+    // Final data structure for submission
     const submissionData = { ...formData, id };
     
+    // Explicit cleaning of the object based on type before it leaves the form
+    // (Additional sanitization also happens in App.tsx)
     if (type === 'Employee') {
-      submissionData.is_active = formData.is_active !== false;
+       delete (submissionData as any).manager;
+       delete (submissionData as any).budget;
+       delete (submissionData as any).budget_month;
+    } else if (type === 'Department') {
+       delete (submissionData as any).email;
+       delete (submissionData as any).role;
+       delete (submissionData as any).joining_date;
+       delete (submissionData as any).is_active;
     }
 
     onSubmit(submissionData);

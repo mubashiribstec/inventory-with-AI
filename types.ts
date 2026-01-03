@@ -1,4 +1,5 @@
 
+
 export enum ItemStatus {
   PURCHASED = 'purchased',
   ASSIGNED = 'assigned',
@@ -207,6 +208,8 @@ export interface Department {
   name: string;
   manager: string;
   head?: string;
+  budget?: number;
+  budget_month?: string;
 }
 
 export interface PersonalBudget {
