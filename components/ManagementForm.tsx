@@ -12,7 +12,7 @@ const ManagementForm: React.FC<ManagementFormProps> = ({ type, onSubmit, initial
   const [formData, setFormData] = useState(initialData || {
     name: '',
     email: '',
-    department: 'IT',
+    department: 'General',
     role: '',
     joining_date: new Date().toISOString().split('T')[0],
     is_active: true,
@@ -20,31 +20,20 @@ const ManagementForm: React.FC<ManagementFormProps> = ({ type, onSubmit, initial
     username: '',
     password: '',
     manager: '', 
-    budget: 0,
-    budget_month: new Date().toISOString().slice(0, 7)
   });
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     const id = formData.id || `${type.substring(0, 3).toUpperCase()}-${Math.floor(Date.now() % 10000)}`;
     
-    // Final data structure for submission
+    // Clean specific fields based on type
     const submissionData = { ...formData, id };
     
-    // Explicit cleaning of the object based on type before it leaves the form
-    // (Additional sanitization also happens in App.tsx)
-    if (type === 'Employee') {
-       delete (submissionData as any).manager;
-       delete (submissionData as any).budget;
-       delete (submissionData as any).budget_month;
-    } else if (type === 'Department') {
+    if (type === 'Department') {
        delete (submissionData as any).email;
        delete (submissionData as any).role;
        delete (submissionData as any).joining_date;
        delete (submissionData as any).is_active;
-       // Clean up budget fields as they are no longer required for this section
-       delete (submissionData as any).budget;
-       delete (submissionData as any).budget_month;
     }
 
     onSubmit(submissionData);
@@ -116,34 +105,6 @@ const ManagementForm: React.FC<ManagementFormProps> = ({ type, onSubmit, initial
                 </div>
               </div>
             </div>
-
-            {!initialData && (
-              <div className="mt-4 p-5 bg-indigo-50/50 border border-indigo-100 rounded-2xl space-y-4">
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-2">
-                    <i className="fas fa-user-shield text-indigo-500"></i>
-                    <p className="text-xs font-bold text-indigo-900">Authorize System Access</p>
-                  </div>
-                  <label className="relative inline-flex items-center cursor-pointer">
-                    <input name="create_user" type="checkbox" className="sr-only peer" checked={formData.create_user} onChange={handleChange} />
-                    <div className="w-9 h-5 bg-slate-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full rtl:peer-checked:after:-translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:start-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-indigo-600"></div>
-                  </label>
-                </div>
-                
-                {formData.create_user && (
-                  <div className="grid grid-cols-2 gap-4 animate-fadeIn">
-                    <div className="space-y-1">
-                      <label className="text-[10px] font-bold text-indigo-400 uppercase">Username</label>
-                      <input name="username" type="text" className="w-full px-3 py-2 bg-white border border-indigo-100 rounded-lg text-xs outline-none focus:ring-2 focus:ring-indigo-500" value={formData.username} onChange={handleChange} placeholder="Login ID" required />
-                    </div>
-                    <div className="space-y-1">
-                      <label className="text-[10px] font-bold text-indigo-400 uppercase">Password</label>
-                      <input name="password" type="password" className="w-full px-3 py-2 bg-white border border-indigo-100 rounded-lg text-xs outline-none focus:ring-2 focus:ring-indigo-500" value={formData.password} onChange={handleChange} placeholder="••••••••" required />
-                    </div>
-                  </div>
-                )}
-              </div>
-            )}
           </div>
         )}
 

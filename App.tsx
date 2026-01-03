@@ -46,7 +46,7 @@ const App: React.FC = () => {
   const [departments, setDepartments] = useState<Department[]>([]);
 
   const [isInitialized, setIsInitialized] = useState(false);
-  const [bootStatus, setBootStatus] = useState('Checking connectivity...');
+  const [bootStatus, setBootStatus] = useState('Synchronizing Global Config...');
   const [dataLoading, setDataLoading] = useState(false);
   
   const [isPurchaseModalOpen, setIsPurchaseModalOpen] = useState(false);
@@ -87,9 +87,8 @@ const App: React.FC = () => {
   useEffect(() => {
     const startupSequence = async () => {
       try {
-        setBootStatus("Probing backend...");
-        apiService.initDatabase().catch(e => console.log("Auto-init postponed:", e.message));
-        
+        setBootStatus("Fetching global configuration...");
+        // Critical: Fetch cloud settings before showing the app to prevent name flickering
         const cloudSettings = await apiService.getSettings();
         if (cloudSettings) setSettings(cloudSettings);
         
@@ -125,13 +124,13 @@ const App: React.FC = () => {
     expiring_soon: 0
   }), [items, licenses]);
 
-  const handleDeleteDepartment = async (id: string) => {
-    if (window.confirm("Are you sure you want to permanently delete this department?")) {
+  const handleDeleteDepartment = async (dept: Department) => {
+    if (window.confirm(`Permanently delete the ${dept.name} department?`)) {
       try {
-        await apiService.genericDelete('departments', id);
+        await apiService.genericDelete('departments', dept.id);
         fetchData();
       } catch (err) {
-        alert("Error deleting department: " + err);
+        alert("Delete failed: " + err);
       }
     }
   };
@@ -149,18 +148,6 @@ const App: React.FC = () => {
           is_active: !!data.is_active
         };
         await apiService.saveEmployee(employeePayload);
-        
-        if (data.create_user && data.username && data.password) {
-           await apiService.saveUser({
-              id: `U-${data.id.split('-').pop()}`,
-              username: data.username,
-              password: data.password,
-              role: UserRole.STAFF,
-              full_name: data.name,
-              department: data.department,
-              is_active: true
-           });
-        }
       } 
       else if (managementModal.type === 'Department') {
         const departmentPayload: Department = {
@@ -201,7 +188,7 @@ const App: React.FC = () => {
       case 'maintenance': return <MaintenanceList logs={maintenance} items={items} onUpdate={fetchData} onAdd={() => setActiveTab('requests')} />;
       case 'suppliers': return <SupplierList suppliers={suppliers} />;
       case 'employees': return <GenericListView title="Staff Directory" icon="fa-users" items={employees} columns={['id', 'name', 'email', 'department', 'role', 'is_active']} onView={setViewingEmployee} onAdd={() => setManagementModal({ isOpen: true, type: 'Employee' })} />;
-      case 'departments': return <GenericListView title="Departments & Units" icon="fa-sitemap" items={departments} columns={['id', 'name', 'manager']} onAdd={() => setManagementModal({ isOpen: true, type: 'Department' })} onDelete={(dept) => handleDeleteDepartment(dept.id)} />;
+      case 'departments': return <GenericListView title="Departments & Units" icon="fa-sitemap" items={departments} columns={['id', 'name', 'manager']} onAdd={() => setManagementModal({ isOpen: true, type: 'Department' })} onDelete={handleDeleteDepartment} />;
       case 'budgets': return <BudgetModule />;
       case 'audit-trail': return <GenericListView title="Audit Trail" icon="fa-history" items={movements} columns={['date', 'item', 'from', 'to', 'status']} />;
       default: return <Dashboard stats={stats} movements={movements} items={items} onFullAudit={() => setActiveTab('audit-trail')} onCheckIn={() => setActiveTab('attendance')} themeColor={settings.primary_color} />;
@@ -211,8 +198,8 @@ const App: React.FC = () => {
   const themeColor = settings.primary_color || 'indigo';
 
   if (!isInitialized) return (
-    <div className="flex flex-col h-screen items-center justify-center bg-white poppins">
-      <div className={`w-12 h-12 border-4 border-${themeColor}-600 border-t-transparent rounded-full animate-spin mb-4`}></div>
+    <div className="flex flex-col h-screen items-center justify-center bg-white poppins text-center">
+      <div className={`w-14 h-14 border-4 border-${themeColor}-600 border-t-transparent rounded-full animate-spin mb-6`}></div>
       <p className="text-slate-400 font-bold text-xs uppercase tracking-widest">{bootStatus}</p>
     </div>
   );
@@ -247,10 +234,10 @@ const App: React.FC = () => {
             </div>
             <div className="flex items-center gap-4">
                <div className="hidden sm:flex flex-col text-right">
-                  <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Server Status</span>
+                  <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Cloud Sync</span>
                   <span className="text-emerald-500 font-bold text-xs flex items-center gap-1.5 justify-end">
                      <span className="w-1.5 h-1.5 bg-emerald-500 rounded-full animate-pulse"></span>
-                     LIVE SYNC
+                     PERSISTENT
                   </span>
                </div>
                <div className="w-12 h-12 rounded-2xl bg-white border border-slate-200 shadow-sm flex items-center justify-center text-slate-400">
