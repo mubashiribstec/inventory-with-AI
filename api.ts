@@ -15,61 +15,41 @@ const getHeaders = () => {
 };
 
 export const apiService = {
-  // Authentication
   async login(username, password): Promise<User> {
-    try {
-      const response = await fetch(`${API_BASE}/login`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ username, password })
-      });
-
-      if (!response.ok) {
-        let errorMsg = `Login Error (${response.status})`;
-        try {
-          const data = await response.json();
-          errorMsg = data.error || data.details || errorMsg;
-        } catch (e) {}
-        throw new Error(errorMsg);
-      }
-
-      const user = await response.json();
-      await dbService.saveUser(user); 
-      return user;
-    } catch (e: any) {
-      if (e instanceof TypeError) throw new Error("Backend server unreachable. Verify Docker network.");
-      throw e;
+    const response = await fetch(`${API_BASE}/login`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ username, password })
+    });
+    if (!response.ok) {
+      const data = await response.json().catch(() => ({}));
+      throw new Error(data.error || 'Login failed');
     }
+    const user = await response.json();
+    await dbService.saveUser(user); 
+    return user;
   },
 
-  async initDatabase(force = false): Promise<{ success: boolean }> { 
+  // Fixed: Added force parameter to support database resetting as required by Login.tsx
+  async initDatabase(force: boolean = false): Promise<{ success: boolean }> { 
     await dbService.init(); 
+    if (force) {
+      await dbService.clearAllData();
+    }
     return { success: true };
   },
 
-  async getSettings(retryCount = 0): Promise<SystemSettings> {
+  async getSettings(): Promise<SystemSettings> {
     try {
       const res = await fetch(`${API_BASE}/settings`);
       if (res.ok) {
         const settings = await res.json();
-        if (settings && settings.system_id) {
-          try { await dbService.saveSettings(settings); } catch(e) {}
-          return settings;
-        }
+        // Save to IndexedDB in background
+        dbService.saveSettings(settings).catch(() => {});
+        return settings;
       }
-      
-      // If we got an error or empty ID, retry up to 10 times
-      if (retryCount < 10) {
-        console.warn(`Settings incomplete. Retrying in 2s... (Attempt ${retryCount + 1})`);
-        await new Promise(r => setTimeout(r, 2000));
-        return this.getSettings(retryCount + 1);
-      }
-    } catch (e) {
-      if (retryCount < 10) {
-        await new Promise(r => setTimeout(r, 2000));
-        return this.getSettings(retryCount + 1);
-      }
-    }
+    } catch (e) {}
+    // Fallback ONLY if server is completely unreachable
     return dbService.getSettings();
   },
 
@@ -79,28 +59,20 @@ export const apiService = {
       headers: getHeaders(),
       body: JSON.stringify(s)
     });
-    
     if (!res.ok) {
         const errData = await res.json().catch(() => ({}));
-        throw new Error(errData.error || "Failed to sync settings with server.");
+        throw new Error(errData.error || "Update failed");
     }
-
-    try { await dbService.saveSettings(s); } catch(e) {}
     return s;
   },
 
   async get<T>(path: string): Promise<T[]> {
-    try {
-      const res = await fetch(`${API_BASE}/${path}`);
-      if (!res.ok) {
-        const errorData = await res.json().catch(() => ({}));
-        throw new Error(errorData.error || `Server Error: ${res.statusText}`);
-      }
-      return res.json();
-    } catch (e: any) {
-      if (e instanceof TypeError) throw new Error("Connection failed. Server offline.");
-      throw e;
+    const res = await fetch(`${API_BASE}/${path}`);
+    if (!res.ok) {
+      const errorData = await res.json().catch(() => ({}));
+      throw new Error(errorData.error || `Server Error`);
     }
+    return res.json();
   },
 
   async post(path: string, data: any): Promise<any> {
@@ -111,7 +83,7 @@ export const apiService = {
     });
     if (!res.ok) {
       const errorData = await res.json().catch(() => ({}));
-      throw new Error(errorData.error || `Server Error: ${res.statusText}`);
+      throw new Error(errorData.error || `Server Error`);
     }
     return res.json();
   },
@@ -123,7 +95,7 @@ export const apiService = {
     });
     if (!res.ok) {
       const errorData = await res.json().catch(() => ({}));
-      throw new Error(errorData.error || `Server Error: ${res.statusText}`);
+      throw new Error(errorData.error || `Server Error`);
     }
     return res.json();
   },
@@ -160,14 +132,5 @@ export const apiService = {
   async saveLeaveRequest(l: LeaveRequest) { return this.post('leave_requests', l); },
   async deleteLeaveRequest(id: string) { return this.del('leave_requests', id); },
   async genericSave(store: string, data: any) { return this.post(store, data); },
-  async genericDelete(store: string, id: any) { return this.del(store, id); },
-
-  async exportInventoryToCSV(): Promise<string> {
-    const items = await this.getAllItems();
-    const headers = ['id', 'name', 'category', 'serial', 'status', 'location', 'assignedTo', 'department', 'purchaseDate', 'warranty', 'cost'];
-    return [
-      headers.join(','),
-      ...items.map(item => headers.map(header => `"${String((item as any)[header] || '').replace(/"/g, '""')}"`).join(','))
-    ].join('\n');
-  }
+  async genericDelete(store: string, id: any) { return this.del(store, id); }
 };

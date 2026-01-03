@@ -13,7 +13,13 @@ import { dbService } from './db.ts';
 const App: React.FC = () => {
   const [currentUser, setCurrentUser] = useState<User | null>(null);
   const [currentRole, setCurrentRole] = useState<Role | null>(null);
-  const [settings, setSettings] = useState<any>({ id: 'GLOBAL', software_name: 'SmartStock Pro', primary_color: 'indigo', system_id: null });
+  const [settings, setSettings] = useState<any>({ 
+    id: 'GLOBAL', 
+    software_name: 'SmartStock Pro', 
+    primary_color: 'indigo', 
+    system_id: null,
+    is_db_connected: false
+  });
   const [activeTab, setActiveTab] = useState<string>('dashboard');
   const [isInitialized, setIsInitialized] = useState(false);
   const [dataLoading, setDataLoading] = useState(false);
@@ -24,42 +30,34 @@ const App: React.FC = () => {
   const [suppliers, setSuppliers] = useState<Supplier[]>([]);
   const [licenses, setLicenses] = useState<License[]>([]);
 
-  // --- LICENSE VALIDATION ---
   const licenseState = useMemo(() => {
     const key = settings.license_key;
     if (!key || !key.includes('.')) return { valid: false, reason: 'Missing' };
-    
     try {
       const [payloadBase64] = key.split('.');
       const payload = JSON.parse(atob(payloadBase64));
       const expiry = new Date(payload.expiry);
-      const isExpired = expiry < new Date();
-      
-      const diff = expiry.getTime() - new Date().getTime();
-      const days = Math.ceil(diff / (1000 * 3600 * 24));
-      
       return { 
-        valid: !isExpired, 
-        reason: isExpired ? 'Expired' : 'Active',
-        expiry: payload.expiry,
-        daysRemaining: days
+        valid: expiry > new Date(), 
+        reason: expiry > new Date() ? 'Active' : 'Expired',
+        expiry: payload.expiry
       };
-    } catch (e) {
-      return { valid: false, reason: 'Invalid' };
-    }
+    } catch (e) { return { valid: false, reason: 'Invalid' }; }
   }, [settings.license_key]);
+
+  const fetchSettings = async () => {
+    const cloudSettings = await apiService.getSettings();
+    if (cloudSettings) setSettings(cloudSettings);
+  };
 
   const handleActivate = async (e: React.FormEvent) => {
     e.preventDefault();
     try {
       await apiService.updateSettings({ ...settings, license_key: activationKey });
-      const fresh = await apiService.getSettings();
-      setSettings(fresh);
-      alert("System unlocked successfully!");
+      await fetchSettings();
+      alert("Activation successful!");
       setActivationKey('');
-    } catch (err: any) {
-      alert(err.message || "Activation failed.");
-    }
+    } catch (err: any) { alert(err.message); }
   };
 
   const fetchRoleData = useCallback(async (roleId: string) => {
@@ -80,23 +78,14 @@ const App: React.FC = () => {
       ]);
       setItems(fItems || []); setMovements(fMov || []); 
       setSuppliers(fSup || []); setLicenses(fLic || []);
-    } catch (err) {
-      console.warn("Hydration failed", err);
-    } finally {
-      setDataLoading(false);
-    }
+    } catch (err) { console.warn("Hydration error", err); }
+    finally { setDataLoading(false); }
   }, [currentUser, licenseState.valid]);
 
-  // Polling for settings if System ID is missing
+  // Polling for SID (every 4s) if not loaded
   useEffect(() => {
-    if (isInitialized && currentUser && !licenseState.valid && !settings.system_id) {
-      const interval = setInterval(async () => {
-        const fresh = await apiService.getSettings();
-        if (fresh.system_id) {
-          setSettings(fresh);
-          clearInterval(interval);
-        }
-      }, 3000);
+    if (isInitialized && currentUser && !licenseState.valid && (!settings.system_id)) {
+      const interval = setInterval(fetchSettings, 4000);
       return () => clearInterval(interval);
     }
   }, [isInitialized, currentUser, licenseState.valid, settings.system_id]);
@@ -105,18 +94,15 @@ const App: React.FC = () => {
     const startup = async () => {
       try {
         await dbService.init();
-        const cloudSettings = await apiService.getSettings();
-        if (cloudSettings) setSettings(cloudSettings);
-        
+        await fetchSettings();
         const sessionToken = localStorage.getItem('smartstock_user');
         if (sessionToken) {
           const user = JSON.parse(sessionToken);
           setCurrentUser(user);
           await fetchRoleData(user.role);
         }
-      } catch (e) {
-        console.error("Startup error", e);
-      } finally { setIsInitialized(true); }
+      } catch (e) { console.error("Startup failed", e); }
+      finally { setIsInitialized(true); }
     };
     startup();
   }, [fetchRoleData]);
@@ -135,82 +121,59 @@ const App: React.FC = () => {
   }), [items, licenses]);
 
   if (!isInitialized) return (
-    <div className="h-screen flex items-center justify-center bg-white">
-      <div className="w-12 h-12 border-4 border-indigo-600 border-t-transparent rounded-full animate-spin"></div>
+    <div className="h-screen flex items-center justify-center bg-slate-50">
+      <div className="flex flex-col items-center gap-4">
+        <div className="w-16 h-16 border-4 border-indigo-600 border-t-transparent rounded-full animate-spin"></div>
+        <p className="text-slate-400 font-bold text-xs uppercase tracking-[0.2em]">Enterprise System Loading...</p>
+      </div>
     </div>
   );
   
-  if (!currentUser) {
-    return (
-      <Login 
-        onLogin={(u) => { 
-          setCurrentUser(u); 
-          localStorage.setItem('smartstock_user', JSON.stringify(u)); 
-          fetchRoleData(u.role); 
-        }} 
-        softwareName={settings.software_name} 
-        themeColor={settings.primary_color} 
-      />
-    );
-  }
+  if (!currentUser) return (
+    <Login 
+      onLogin={(u) => { setCurrentUser(u); localStorage.setItem('smartstock_user', JSON.stringify(u)); fetchRoleData(u.role); }} 
+      softwareName={settings.software_name} themeColor={settings.primary_color} 
+    />
+  );
 
-  if (!licenseState.valid) {
-    return (
-      <div className="min-h-screen bg-slate-900 flex items-center justify-center p-6 poppins">
-        <div className="max-w-xl w-full bg-white rounded-[40px] p-10 shadow-2xl text-center">
-          <div className="w-20 h-20 bg-rose-50 text-rose-500 rounded-3xl flex items-center justify-center text-3xl mx-auto mb-6">
-            <i className="fas fa-lock"></i>
-          </div>
-          <h2 className="text-2xl font-bold text-slate-800 mb-2">Activation Required</h2>
-          <p className="text-slate-500 text-sm mb-8 leading-relaxed">
-            Your access to <span className="font-bold">{settings.software_name}</span> is currently restricted.
-          </p>
+  if (!licenseState.valid) return (
+    <div className="min-h-screen bg-slate-900 flex items-center justify-center p-6 poppins">
+      <div className="max-w-xl w-full bg-white rounded-[40px] p-10 shadow-2xl text-center relative overflow-hidden">
+        {/* Connection Pulse */}
+        <div className={`absolute top-0 right-0 p-6 flex items-center gap-2 text-[9px] font-bold ${settings.is_db_connected ? 'text-emerald-500' : 'text-amber-500'}`}>
+           <span className={`w-2 h-2 rounded-full ${settings.is_db_connected ? 'bg-emerald-500' : 'bg-amber-500 animate-pulse'}`}></span>
+           {settings.is_db_connected ? 'DB ONLINE' : 'DB CONNECTING...'}
+        </div>
 
-          <div className="bg-slate-50 p-6 rounded-2xl mb-8 border border-slate-100 text-left relative overflow-hidden">
-             {!settings.system_id && (
-               <div className="absolute inset-0 bg-white/60 backdrop-blur-[2px] flex items-center justify-center z-10">
-                  <div className="flex items-center gap-2 text-indigo-600 font-bold text-xs">
-                    <i className="fas fa-spinner animate-spin"></i>
-                    SYNCHRONIZING SYSTEM ID...
-                  </div>
-               </div>
-             )}
-             <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">System Identification ID</p>
-             <p className="font-mono font-bold text-slate-700 select-all">{settings.system_id || 'GENERATING...'}</p>
-          </div>
+        <div className="w-20 h-20 bg-rose-50 text-rose-500 rounded-3xl flex items-center justify-center text-3xl mx-auto mb-6">
+          <i className="fas fa-key"></i>
+        </div>
+        <h2 className="text-2xl font-bold text-slate-800 mb-2">License Authentication</h2>
+        <p className="text-slate-500 text-sm mb-8 leading-relaxed">Please provide a valid activation key for this installation.</p>
 
-          <form onSubmit={handleActivate} className="space-y-4">
-             <textarea 
-               required
-               rows={3}
-               placeholder="Paste activation key..."
-               className="w-full p-4 bg-slate-50 border border-slate-200 rounded-2xl outline-none focus:ring-2 focus:ring-indigo-500 font-mono text-xs"
-               value={activationKey}
-               onChange={e => setActivationKey(e.target.value)}
-             />
-             <button type="submit" disabled={!settings.system_id} className="w-full py-4 bg-slate-800 text-white rounded-2xl font-bold hover:bg-slate-900 transition disabled:opacity-50">
-                Unlock System
-             </button>
-          </form>
-          <button onClick={() => { setCurrentUser(null); localStorage.removeItem('smartstock_user'); }} className="mt-6 text-slate-400 text-xs font-bold hover:text-slate-600 uppercase tracking-widest">Logout</button>
+        <div className="bg-slate-50 p-6 rounded-2xl mb-8 border border-slate-100 text-left">
+           <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">System Identification ID</p>
+           <p className="font-mono font-bold text-slate-700 select-all text-lg tracking-wider">
+             {settings.system_id || 'SYNCHRONIZING...'}
+           </p>
+        </div>
+
+        <form onSubmit={handleActivate} className="space-y-4">
+           <textarea required rows={3} placeholder="Enter License Key..." className="w-full p-5 bg-slate-50 border border-slate-200 rounded-2xl outline-none focus:ring-2 focus:ring-indigo-500 font-mono text-xs" value={activationKey} onChange={e => setActivationKey(e.target.value)} />
+           <button type="submit" disabled={!settings.system_id} className="w-full py-4 bg-slate-800 text-white rounded-2xl font-bold hover:bg-slate-900 transition disabled:opacity-50 shadow-xl">Activate License</button>
+        </form>
+        
+        <div className="flex items-center justify-center gap-8 mt-10">
+          <button onClick={fetchSettings} className="text-indigo-600 text-xs font-bold uppercase hover:underline">Sync State</button>
+          <button onClick={() => { setCurrentUser(null); localStorage.removeItem('smartstock_user'); }} className="text-slate-400 text-xs font-bold hover:text-slate-600 uppercase tracking-widest">Logout</button>
         </div>
       </div>
-    );
-  }
+    </div>
+  );
 
   return (
     <div className={`flex min-h-screen bg-slate-50 theme-${settings.primary_color}`}>
-      <Sidebar 
-        userRole={currentUser.role} 
-        activeTab={activeTab} 
-        setActiveTab={setActiveTab} 
-        onLogout={() => { setCurrentUser(null); localStorage.removeItem('smartstock_user'); }} 
-        permissions={currentRole?.permissions?.split(',') || []} 
-        appName={settings.software_name} 
-        themeColor={settings.primary_color} 
-        logoIcon={settings.software_logo} 
-        licenseExpiry={licenseState.expiry}
-      />
+      <Sidebar userRole={currentUser.role} activeTab={activeTab} setActiveTab={setActiveTab} onLogout={() => { setCurrentUser(null); localStorage.removeItem('smartstock_user'); }} permissions={currentRole?.permissions?.split(',') || []} appName={settings.software_name} themeColor={settings.primary_color} logoIcon={settings.software_logo} licenseExpiry={licenseState.expiry} />
       <main className="flex-1 lg:ml-64 p-6 lg:p-12 min-w-0">
         {dataLoading ? (
           <div className="flex h-64 items-center justify-center">
