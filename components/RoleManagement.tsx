@@ -1,4 +1,5 @@
 
+
 import React, { useState, useEffect } from 'react';
 import { Role, PERMISSION_GROUPS } from '../types.ts';
 import { apiService } from '../api.ts';
@@ -263,14 +264,15 @@ const RoleManagement: React.FC = () => {
                   <h4 className="text-[10px] font-bold text-indigo-500 uppercase tracking-[0.2em]">Module Permission Matrix</h4>
                   
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-                    {Object.entries(PERMISSION_GROUPS).map(([group, perms]) => (
+                    {/* // Fixed the error by explicitly typing the iteration results */}
+                    {Object.entries(PERMISSION_GROUPS).map(([group, perms]: [string, any[]]) => (
                       <div key={group} className="space-y-4">
                         <div className="flex items-center gap-2 pb-2 border-b border-slate-50">
                           <span className="w-1.5 h-4 bg-indigo-500 rounded-full"></span>
                           <h5 className="text-[11px] font-black text-slate-800 tracking-wider uppercase">{group}</h5>
                         </div>
                         <div className="space-y-3">
-                          {perms.map(p => {
+                          {perms.map((p: any) => {
                             const isChecked = formData.permissions.includes(p.key);
                             return (
                               <label key={p.key} className={`flex items-start gap-3 p-3 rounded-2xl border transition cursor-pointer group ${isChecked ? 'bg-indigo-50/30 border-indigo-100' : 'bg-white border-transparent hover:bg-slate-50'}`}>

@@ -1,4 +1,5 @@
 
+
 export enum ItemStatus {
   PURCHASED = 'purchased',
   ASSIGNED = 'assigned',
@@ -7,7 +8,7 @@ export enum ItemStatus {
   FAULTY = 'faulty',
   AVAILABLE = 'available',
   ARCHIVED = 'archived',
-  SCRAPPED = 'scrapped' // Non-repairable category
+  SCRAPPED = 'scrapped'
 }
 
 export enum UserRole {
@@ -26,6 +27,7 @@ export interface SystemSettings {
   software_logo?: string;
   license_key?: string;
   license_expiry?: string;
+  system_id?: string;
 }
 
 export interface Role {
@@ -36,41 +38,6 @@ export interface Role {
   color: string;
   icon?: string;
   updated_at?: string;
-}
-
-export const PERMISSION_GROUPS = {
-  INVENTORY: [
-    { key: 'inventory.view', label: 'View Assets', desc: 'Read-only access to hardware registry' },
-    { key: 'inventory.edit', label: 'Modify Assets', desc: 'Edit details, transfer or delete assets' },
-    { key: 'inventory.procure', label: 'Procurement', desc: 'Create new purchase records' },
-  ],
-  HR: [
-    { key: 'hr.view', label: 'View Staff', desc: 'Access to staff directory and hierarchy' },
-    { key: 'hr.attendance', label: 'Manage Attendance', desc: 'Edit or delete attendance logs' },
-    { key: 'hr.leaves', label: 'Approve Leaves', desc: 'Approve or reject leave applications' },
-    { key: 'hr.users', label: 'Manage Accounts', desc: 'Create and configure user credentials' },
-    { key: 'hr.salaries', label: 'Salary Management', desc: 'Access to payroll and tenure-based earnings' },
-  ],
-  ANALYTICS: [
-    { key: 'analytics.view', label: 'View Dashboards', desc: 'Access to high-level metric summaries' },
-    { key: 'analytics.financials', label: 'Budget Tracking', desc: 'View departmental budget spending' },
-    { key: 'analytics.logs', label: 'System Audit', desc: 'Read-only access to system activity logs' },
-  ],
-  SYSTEM: [
-    { key: 'system.roles', label: 'Role Configuration', desc: 'Modify permissions for all system roles' },
-    { key: 'system.db', label: 'Database Control', desc: 'Initialize or wipe system datasets' },
-    { key: 'system.settings', label: 'System Settings', desc: 'Modify software name and visual themes' },
-  ]
-};
-
-export interface Notification {
-  id: number;
-  recipient_id: string;
-  sender_name: string;
-  message: string;
-  type: 'ATTENDANCE' | 'SYSTEM' | 'LEAVE' | 'REQUEST';
-  is_read: boolean;
-  timestamp: string;
 }
 
 export interface User {
@@ -99,39 +66,6 @@ export interface Employee {
   manager_id?: string;
   joining_date?: string;
   is_active?: boolean;
-}
-
-export interface UserLog {
-  id: number;
-  user_id: string;
-  username: string;
-  action: string;
-  target_type: string;
-  target_id: string;
-  details: string;
-  timestamp: string;
-}
-
-export interface AttendanceRecord {
-  id: string;
-  user_id: string;
-  username: string;
-  date: string;
-  check_in: string | null;
-  check_out: string | null;
-  status: 'PRESENT' | 'LATE' | 'ON-LEAVE' | 'ABSENT' | 'HALF-DAY';
-  location?: string;
-}
-
-export interface LeaveRequest {
-  id: string;
-  user_id: string;
-  username: string;
-  start_date: string;
-  end_date: string;
-  leave_type: 'VACATION' | 'SICK' | 'CASUAL' | 'OTHER';
-  reason: string;
-  status: 'PENDING' | 'APPROVED' | 'REJECTED';
 }
 
 export interface InventoryItem {
@@ -246,3 +180,67 @@ export interface DashboardStats {
   licenses_total: number;
   expiring_soon: number;
 }
+
+export interface AttendanceRecord {
+  id: string;
+  user_id: string;
+  username: string;
+  date: string;
+  check_in: string | null;
+  check_out: string | null;
+  status: 'PRESENT' | 'LATE' | 'ON-LEAVE' | 'ABSENT' | 'HALF-DAY';
+  location?: string;
+}
+
+export interface LeaveRequest {
+  id: string;
+  user_id: string;
+  username: string;
+  start_date: string;
+  end_date: string;
+  leave_type: 'VACATION' | 'SICK' | 'CASUAL' | 'OTHER';
+  reason: string;
+  status: 'PENDING' | 'APPROVED' | 'REJECTED';
+}
+
+export interface Notification {
+  id: number;
+  recipient_id: string;
+  sender_name: string;
+  message: string;
+  type: 'ATTENDANCE' | 'SYSTEM' | 'LEAVE' | 'REQUEST';
+  is_read: boolean;
+  timestamp: string;
+}
+
+export interface UserLog {
+  id: number;
+  user_id: string;
+  username: string;
+  action: string;
+  target_type: string;
+  target_id: string;
+  details: string;
+  timestamp: string;
+}
+
+// Permission configuration used in Role Management
+export const PERMISSION_GROUPS: Record<string, { key: string; label: string; desc: string }[]> = {
+  Inventory: [
+    { key: 'inventory.view', label: 'View Assets', desc: 'Allow viewing of the asset registry' },
+    { key: 'inventory.edit', label: 'Modify Assets', desc: 'Allow editing and deleting asset records' },
+  ],
+  'Human Resources': [
+    { key: 'hr.view', label: 'View Staff', desc: 'Allow viewing employee directory and departments' },
+    { key: 'hr.salaries', label: 'Manage Payroll', desc: 'Access to salary and payroll information' },
+    { key: 'hr.users', label: 'Manage Accounts', desc: 'Create and manage system user accounts' },
+  ],
+  Analytics: [
+    { key: 'analytics.view', label: 'View Insights', desc: 'Access to dashboard and reporting' },
+    { key: 'analytics.financials', label: 'Financial Overview', desc: 'Access to budget and financial data' },
+    { key: 'analytics.logs', label: 'Audit Trail', desc: 'View system activity and logs' },
+  ],
+  System: [
+    { key: 'system.settings', label: 'System Settings', desc: 'Modify global branding and system configs' },
+  ]
+};
