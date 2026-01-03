@@ -218,6 +218,34 @@ const handleInitDb = async (conn, forceReset = false) => {
     await conn.query(query);
   }
 
+  // --- COMPREHENSIVE MIGRATION: Departments Table ---
+  try {
+    const columns = await conn.query("SHOW COLUMNS FROM departments");
+    const hasManager = columns.some(c => c.Field === 'manager');
+    const hasHead = columns.some(c => c.Field === 'head');
+    
+    if (!hasManager) {
+      if (hasHead) {
+        console.log("[MIGRATION] Renaming 'head' to 'manager' in departments...");
+        await conn.query("ALTER TABLE departments CHANGE head manager VARCHAR(255)");
+      } else {
+        console.log("[MIGRATION] Adding missing 'manager' column to departments...");
+        await conn.query("ALTER TABLE departments ADD COLUMN manager VARCHAR(255) AFTER name");
+      }
+    }
+  } catch (err) { console.warn("[MIGRATION] Dept check failed:", err.message); }
+
+  // --- COMPREHENSIVE MIGRATION: Employees Table ---
+  try {
+    const columns = await conn.query("SHOW COLUMNS FROM employees");
+    if (!columns.some(c => c.Field === 'joining_date')) {
+      await conn.query("ALTER TABLE employees ADD COLUMN joining_date DATE");
+    }
+    if (!columns.some(c => c.Field === 'is_active')) {
+      await conn.query("ALTER TABLE employees ADD COLUMN is_active BOOLEAN DEFAULT TRUE");
+    }
+  } catch (err) { console.warn("[MIGRATION] Employee check failed:", err.message); }
+
   await conn.query("REPLACE INTO settings (id, software_name, primary_color, software_description, software_logo) VALUES ('GLOBAL', 'SmartStock Pro', 'indigo', 'Enterprise Resource Planning', 'fa-warehouse')");
   
   const defaultRoles = [
@@ -331,7 +359,6 @@ const handleCRUD = (tableName) => {
       const values = keys.map(k => {
           const val = req.body[k];
           if (val === '' || val === undefined) return null;
-          // Convert JS Booleans to 1/0 for MariaDB
           if (typeof val === 'boolean') return val ? 1 : 0;
           return val;
       });

@@ -85,13 +85,15 @@ CREATE TABLE IF NOT EXISTS employees (
     name VARCHAR(255) NOT NULL,
     email VARCHAR(255),
     department VARCHAR(100),
-    role VARCHAR(100)
+    role VARCHAR(100),
+    joining_date DATE,
+    is_active BOOLEAN DEFAULT TRUE
 );
 
 CREATE TABLE IF NOT EXISTS departments (
     id VARCHAR(50) PRIMARY KEY,
     name VARCHAR(100) NOT NULL,
-    head VARCHAR(255),
+    manager VARCHAR(255),
     budget DECIMAL(15, 2) DEFAULT 0,
     budget_month VARCHAR(20)
 );
@@ -127,7 +129,7 @@ INSERT IGNORE INTO categories (id, name, icon) VALUES
 ('CAT-004', 'Mobile Devices', 'fa-mobile-alt'),
 ('CAT-005', 'Furniture', 'fa-chair');
 
-INSERT IGNORE INTO departments (id, name, head, budget, budget_month) VALUES 
+INSERT IGNORE INTO departments (id, name, manager, budget, budget_month) VALUES 
 ('DEPT-IT', 'IT Infrastructure', 'Alice Johnson', 250000.00, '2024-03'),
 ('DEPT-MKT', 'Marketing & Creative', 'Bob Smith', 120000.00, '2024-03'),
 ('DEPT-FIN', 'Finance', 'Robert Chen', 80000.00, '2024-03'),
