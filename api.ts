@@ -76,7 +76,10 @@ export const apiService = {
       if (res.ok) {
         const s = await res.json();
         if (s.id) {
-          await dbService.saveSettings(s);
+          // Only save to local storage if initialized to avoid "DB not initialized"
+          try {
+            await dbService.saveSettings(s);
+          } catch(e) { console.warn("Skipped local settings cache - DB busy."); }
           return s;
         }
       }
@@ -85,12 +88,23 @@ export const apiService = {
   },
 
   async updateSettings(s: SystemSettings) {
-    await fetch(`${API_BASE}/settings`, {
+    const res = await fetch(`${API_BASE}/settings`, {
       method: 'POST',
       headers: getHeaders(),
       body: JSON.stringify(s)
     });
-    return dbService.saveSettings(s);
+    
+    if (!res.ok) {
+        const errData = await res.json().catch(() => ({}));
+        throw new Error(errData.error || "Failed to sync settings with server.");
+    }
+
+    try {
+        await dbService.saveSettings(s);
+    } catch(e) {
+        console.warn("Settings saved to server but local cache skipped.");
+    }
+    return s;
   },
 
   async get<T>(path: string): Promise<T[]> {

@@ -246,17 +246,18 @@ const handleInitDb = async (conn, forceReset = false) => {
     }
   } catch (err) { console.warn("[MIGRATION] Employee check failed:", err.message); }
 
-  await conn.query("REPLACE INTO settings (id, software_name, primary_color, software_description, software_logo) VALUES ('GLOBAL', 'SmartStock Pro', 'indigo', 'Enterprise Resource Planning', 'fa-warehouse')");
+  // CRITICAL FIX: Use INSERT IGNORE instead of REPLACE INTO to avoid overwriting user settings on every boot
+  await conn.query("INSERT IGNORE INTO settings (id, software_name, primary_color, software_description, software_logo) VALUES ('GLOBAL', 'SmartStock Pro', 'indigo', 'Enterprise Resource Planning', 'fa-warehouse')");
   
   const defaultRoles = [
     ['ADMIN', 'Administrator', 'Full system access.', 'inventory.view,inventory.edit,inventory.procure,hr.view,hr.attendance,hr.leaves,hr.users,hr.salaries,analytics.view,analytics.financials,analytics.logs,system.roles,system.db,system.settings', 'rose', 'fa-user-crown'],
     ['STAFF', 'Standard Employee', 'Basic access.', 'inventory.view', 'slate', 'fa-user']
   ];
   for (const r of defaultRoles) {
-    await conn.query("REPLACE INTO roles (id, label, description, permissions, color, icon) VALUES (?, ?, ?, ?, ?, ?)", r);
+    await conn.query("INSERT IGNORE INTO roles (id, label, description, permissions, color, icon) VALUES (?, ?, ?, ?, ?, ?)", r);
   }
 
-  await conn.query("REPLACE INTO users (id, username, password, role, full_name, shift_start_time, department, joining_date, designation, is_active) VALUES ('U-001', 'admin', 'admin', 'ADMIN', 'System Administrator', '09:00', 'IT Infrastructure', '2023-01-01', 'Chief Systems Admin', 1)");
+  await conn.query("INSERT IGNORE INTO users (id, username, password, role, full_name, shift_start_time, department, joining_date, designation, is_active) VALUES ('U-001', 'admin', 'admin', 'ADMIN', 'System Administrator', '09:00', 'IT Infrastructure', '2023-01-01', 'Chief Systems Admin', 1)");
   
   console.log('[DATABASE] Initialization complete.');
   return true;

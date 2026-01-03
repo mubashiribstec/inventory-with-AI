@@ -24,6 +24,7 @@ import Modal from './components/Modal.tsx';
 import PurchaseForm from './components/PurchaseForm.tsx';
 import ManagementForm from './components/ManagementForm.tsx';
 import { apiService } from './api.ts';
+import { dbService } from './db.ts';
 
 type AppTab = 'dashboard' | 'inventory' | 'maintenance' | 'suppliers' | 'locations' | 'licenses' | 'categories' | 'employees' | 'departments' | 'purchase-history' | 'requests' | 'faulty-reports' | 'budgets' | 'audit-trail' | 'system-logs' | 'attendance' | 'leaves' | 'user-mgmt' | 'role-mgmt' | 'notifications' | 'settings' | 'salaries';
 
@@ -46,7 +47,7 @@ const App: React.FC = () => {
   const [departments, setDepartments] = useState<Department[]>([]);
 
   const [isInitialized, setIsInitialized] = useState(false);
-  const [bootStatus, setBootStatus] = useState('Synchronizing Global Config...');
+  const [bootStatus, setBootStatus] = useState('Initializing Secure Storage...');
   const [dataLoading, setDataLoading] = useState(false);
   
   const [isPurchaseModalOpen, setIsPurchaseModalOpen] = useState(false);
@@ -87,8 +88,12 @@ const App: React.FC = () => {
   useEffect(() => {
     const startupSequence = async () => {
       try {
+        setBootStatus("Initializing secure storage...");
+        // CRITICAL FIX: Initialize local DB first to avoid "DB not initialized" error
+        await dbService.init();
+
         setBootStatus("Fetching global configuration...");
-        // Critical: Fetch cloud settings before showing the app to prevent name flickering
+        // Fetch cloud settings after DB is ready
         const cloudSettings = await apiService.getSettings();
         if (cloudSettings) setSettings(cloudSettings);
         
@@ -99,7 +104,7 @@ const App: React.FC = () => {
           await fetchRoleData(user.role);
         }
       } catch (e) {
-        console.warn("Soft startup - Proceeding to Login");
+        console.warn("Soft startup - Proceeding to Login", e);
       } finally {
         setIsInitialized(true);
       }
