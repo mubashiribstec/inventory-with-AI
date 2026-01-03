@@ -23,6 +23,7 @@ const App: React.FC = () => {
   const [activeTab, setActiveTab] = useState<string>('dashboard');
   const [isInitialized, setIsInitialized] = useState(false);
   const [dataLoading, setDataLoading] = useState(false);
+  const [isActivating, setIsActivating] = useState(false);
   const [activationKey, setActivationKey] = useState('');
   
   const [items, setItems] = useState<InventoryItem[]>([]);
@@ -35,14 +36,16 @@ const App: React.FC = () => {
     if (!key || !key.includes('.')) return { valid: false, reason: 'Missing' };
     try {
       const [payloadBase64] = key.split('.');
-      const payload = JSON.parse(atob(payloadBase64));
+      // Use standard base64 decoding with padding fix if needed
+      const normalizedBase64 = payloadBase64.replace(/-/g, '+').replace(/_/g, '/');
+      const payload = JSON.parse(atob(normalizedBase64));
       const expiry = new Date(payload.expiry);
       return { 
         valid: expiry > new Date(), 
         reason: expiry > new Date() ? 'Active' : 'Expired',
         expiry: payload.expiry
       };
-    } catch (e) { return { valid: false, reason: 'Invalid' }; }
+    } catch (e) { return { valid: false, reason: 'Invalid Format' }; }
   }, [settings.license_key]);
 
   const fetchSettings = async () => {
@@ -52,12 +55,19 @@ const App: React.FC = () => {
 
   const handleActivate = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (isActivating) return;
+    
+    setIsActivating(true);
     try {
       await apiService.updateSettings({ ...settings, license_key: activationKey });
       await fetchSettings();
-      alert("Activation successful!");
+      alert("License successfully activated!");
       setActivationKey('');
-    } catch (err: any) { alert(err.message); }
+    } catch (err: any) { 
+      alert(err.message || "Activation failed. Please check the key and your connection."); 
+    } finally { 
+      setIsActivating(false); 
+    }
   };
 
   const fetchRoleData = useCallback(async (roleId: string) => {
@@ -78,14 +88,14 @@ const App: React.FC = () => {
       ]);
       setItems(fItems || []); setMovements(fMov || []); 
       setSuppliers(fSup || []); setLicenses(fLic || []);
-    } catch (err) { console.warn("Hydration error", err); }
+    } catch (err) { console.warn("Hydration failed", err); }
     finally { setDataLoading(false); }
   }, [currentUser, licenseState.valid]);
 
-  // Polling for SID (every 4s) if not loaded
+  // Stable ID Polling
   useEffect(() => {
     if (isInitialized && currentUser && !licenseState.valid && (!settings.system_id)) {
-      const interval = setInterval(fetchSettings, 4000);
+      const interval = setInterval(fetchSettings, 3000);
       return () => clearInterval(interval);
     }
   }, [isInitialized, currentUser, licenseState.valid, settings.system_id]);
@@ -101,7 +111,7 @@ const App: React.FC = () => {
           setCurrentUser(user);
           await fetchRoleData(user.role);
         }
-      } catch (e) { console.error("Startup failed", e); }
+      } catch (e) { console.error("Startup Failure", e); }
       finally { setIsInitialized(true); }
     };
     startup();
@@ -124,7 +134,7 @@ const App: React.FC = () => {
     <div className="h-screen flex items-center justify-center bg-slate-50">
       <div className="flex flex-col items-center gap-4">
         <div className="w-16 h-16 border-4 border-indigo-600 border-t-transparent rounded-full animate-spin"></div>
-        <p className="text-slate-400 font-bold text-xs uppercase tracking-[0.2em]">Enterprise System Loading...</p>
+        <p className="text-slate-400 font-bold text-xs uppercase tracking-[0.2em]">Synchronizing Infrastructure...</p>
       </div>
     </div>
   );
@@ -139,32 +149,50 @@ const App: React.FC = () => {
   if (!licenseState.valid) return (
     <div className="min-h-screen bg-slate-900 flex items-center justify-center p-6 poppins">
       <div className="max-w-xl w-full bg-white rounded-[40px] p-10 shadow-2xl text-center relative overflow-hidden">
-        {/* Connection Pulse */}
+        {/* Real-time Connection Status */}
         <div className={`absolute top-0 right-0 p-6 flex items-center gap-2 text-[9px] font-bold ${settings.is_db_connected ? 'text-emerald-500' : 'text-amber-500'}`}>
            <span className={`w-2 h-2 rounded-full ${settings.is_db_connected ? 'bg-emerald-500' : 'bg-amber-500 animate-pulse'}`}></span>
-           {settings.is_db_connected ? 'DB ONLINE' : 'DB CONNECTING...'}
+           {settings.is_db_connected ? 'SECURE' : 'CONNECTING...'}
         </div>
 
         <div className="w-20 h-20 bg-rose-50 text-rose-500 rounded-3xl flex items-center justify-center text-3xl mx-auto mb-6">
-          <i className="fas fa-key"></i>
+          <i className="fas fa-shield-check"></i>
         </div>
-        <h2 className="text-2xl font-bold text-slate-800 mb-2">License Authentication</h2>
-        <p className="text-slate-500 text-sm mb-8 leading-relaxed">Please provide a valid activation key for this installation.</p>
+        <h2 className="text-2xl font-bold text-slate-800 mb-2">Activation Management</h2>
+        <p className="text-slate-500 text-sm mb-8 leading-relaxed">System identity verified. Please input your signed license key.</p>
 
         <div className="bg-slate-50 p-6 rounded-2xl mb-8 border border-slate-100 text-left">
-           <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">System Identification ID</p>
+           <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">System Identification Hash</p>
            <p className="font-mono font-bold text-slate-700 select-all text-lg tracking-wider">
-             {settings.system_id || 'SYNCHRONIZING...'}
+             {settings.system_id || 'RESOLVING IDENTITY...'}
            </p>
         </div>
 
         <form onSubmit={handleActivate} className="space-y-4">
-           <textarea required rows={3} placeholder="Enter License Key..." className="w-full p-5 bg-slate-50 border border-slate-200 rounded-2xl outline-none focus:ring-2 focus:ring-indigo-500 font-mono text-xs" value={activationKey} onChange={e => setActivationKey(e.target.value)} />
-           <button type="submit" disabled={!settings.system_id} className="w-full py-4 bg-slate-800 text-white rounded-2xl font-bold hover:bg-slate-900 transition disabled:opacity-50 shadow-xl">Activate License</button>
+           <textarea 
+             required 
+             rows={3} 
+             placeholder="Paste Signed Activation Key..." 
+             className="w-full p-5 bg-slate-50 border border-slate-200 rounded-2xl outline-none focus:ring-2 focus:ring-indigo-500 font-mono text-xs" 
+             value={activationKey} 
+             onChange={e => setActivationKey(e.target.value)}
+             disabled={isActivating || !settings.system_id}
+           />
+           <button 
+             type="submit" 
+             disabled={isActivating || !settings.system_id} 
+             className="w-full py-4 bg-slate-800 text-white rounded-2xl font-bold hover:bg-slate-900 transition disabled:opacity-50 shadow-xl flex items-center justify-center gap-2"
+           >
+             {isActivating ? (
+               <><i className="fas fa-spinner animate-spin"></i> Activating...</>
+             ) : (
+               <><i className="fas fa-unlock-alt"></i> Activate License</>
+             )}
+           </button>
         </form>
         
         <div className="flex items-center justify-center gap-8 mt-10">
-          <button onClick={fetchSettings} className="text-indigo-600 text-xs font-bold uppercase hover:underline">Sync State</button>
+          <button onClick={fetchSettings} className="text-indigo-600 text-xs font-bold uppercase hover:underline">Force Sync ID</button>
           <button onClick={() => { setCurrentUser(null); localStorage.removeItem('smartstock_user'); }} className="text-slate-400 text-xs font-bold hover:text-slate-600 uppercase tracking-widest">Logout</button>
         </div>
       </div>

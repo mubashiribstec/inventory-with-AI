@@ -30,7 +30,6 @@ export const apiService = {
     return user;
   },
 
-  // Fixed: Added force parameter to support database resetting as required by Login.tsx
   async initDatabase(force: boolean = false): Promise<{ success: boolean }> { 
     await dbService.init(); 
     if (force) {
@@ -44,12 +43,12 @@ export const apiService = {
       const res = await fetch(`${API_BASE}/settings`);
       if (res.ok) {
         const settings = await res.json();
-        // Save to IndexedDB in background
+        // Background sync to IndexedDB for offline fallback
         dbService.saveSettings(settings).catch(() => {});
         return settings;
       }
     } catch (e) {}
-    // Fallback ONLY if server is completely unreachable
+    // Only use local cache if server is completely offline
     return dbService.getSettings();
   },
 
@@ -61,7 +60,7 @@ export const apiService = {
     });
     if (!res.ok) {
         const errData = await res.json().catch(() => ({}));
-        throw new Error(errData.error || "Update failed");
+        throw new Error(errData.error || "Server rejected settings update");
     }
     return s;
   },
