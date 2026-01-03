@@ -6,9 +6,10 @@ import { apiService } from '../api.ts';
 interface SettingsModuleProps {
   settings: any;
   onUpdate: (settings: any) => void;
+  onNavigate?: (tab: string) => void;
 }
 
-const SettingsModule: React.FC<SettingsModuleProps> = ({ settings, onUpdate }) => {
+const SettingsModule: React.FC<SettingsModuleProps> = ({ settings, onUpdate, onNavigate }) => {
   const [formData, setFormData] = useState<any>({ ...settings });
   const [newKey, setNewKey] = useState('');
   const [loading, setLoading] = useState(false);
@@ -122,7 +123,26 @@ const SettingsModule: React.FC<SettingsModuleProps> = ({ settings, onUpdate }) =
         </div>
       </div>
       <div className="space-y-8">
-        {/* Help Column ... */}
+        <div className="bg-white p-8 rounded-[32px] border border-slate-100 shadow-sm">
+            <div className="flex items-center gap-4 mb-6">
+                <div className="w-10 h-10 bg-indigo-50 text-indigo-600 rounded-xl flex items-center justify-center">
+                    <i className="fas fa-user-tag"></i>
+                </div>
+                <div>
+                    <h4 className="font-bold text-slate-800">Access Control</h4>
+                    <p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest">Permissions Hub</p>
+                </div>
+            </div>
+            <p className="text-xs text-slate-500 leading-relaxed mb-6">
+                Manage organizational roles, custom permission levels, and staff access scopes from the dedicated Roles module.
+            </p>
+            <button 
+                onClick={() => onNavigate && onNavigate('roles')}
+                className="w-full py-3 bg-slate-50 text-indigo-600 rounded-2xl font-bold text-xs hover:bg-indigo-50 transition border border-indigo-100"
+            >
+                Configure Global Roles
+            </button>
+        </div>
       </div>
     </div>
   );

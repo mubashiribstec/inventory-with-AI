@@ -16,8 +16,9 @@ import LicenseList from './components/LicenseList.tsx';
 import MaintenanceList from './components/MaintenanceList.tsx';
 import GenericListView from './components/GenericListView.tsx';
 import SupplierList from './components/SupplierList.tsx';
+import Modal from './components/Modal.tsx';
+import ManagementForm from './components/ManagementForm.tsx';
 
-// Added Employee to imports from types.ts
 import { ItemStatus, User, InventoryItem, Movement, Supplier, License, Role, Department, LocationRecord, MaintenanceLog, Employee } from './types.ts';
 import { apiService } from './api.ts';
 import { dbService } from './db.ts';
@@ -39,12 +40,14 @@ const App: React.FC = () => {
   const [isActivating, setIsActivating] = useState(false);
   const [activationKey, setActivationKey] = useState('');
   
+  // Generic Management State
+  const [mgmtModal, setMgmtModal] = useState<{ open: boolean; type: 'Employee' | 'Department' | 'Category'; data?: any }>({ open: false, type: 'Employee' });
+
   // Enterprise Data State
   const [items, setItems] = useState<InventoryItem[]>([]);
   const [movements, setMovements] = useState<Movement[]>([]);
   const [suppliers, setSuppliers] = useState<Supplier[]>([]);
   const [licenses, setLicenses] = useState<License[]>([]);
-  // Changed employees state type from any[] to Employee[]
   const [employees, setEmployees] = useState<Employee[]>([]);
   const [departments, setDepartments] = useState<Department[]>([]);
   const [locations, setLocations] = useState<LocationRecord[]>([]);
@@ -95,7 +98,6 @@ const App: React.FC = () => {
     if (!currentUser || !licenseState.valid) return;
     try {
       setDataLoading(true);
-      // Added explicit generic types to apiService.get calls to fix unknown[] assignment errors
       const [fItems, fMov, fSup, fLic, fUsers, fEmp, fDepts, fLocs, fMaint] = await Promise.all([
         apiService.getAllItems(), apiService.getAllMovements(), 
         apiService.getAllSuppliers(), apiService.getAllLicenses(),
@@ -137,6 +139,26 @@ const App: React.FC = () => {
 
   useEffect(() => { if (currentUser) fetchCoreData(); }, [currentUser, fetchCoreData]);
 
+  // Generic Persistence Logic
+  const handleSaveGeneric = async (data: any) => {
+    try {
+      const store = mgmtModal.type === 'Employee' ? 'employees' : mgmtModal.type === 'Department' ? 'departments' : 'categories';
+      await apiService.genericSave(store, data);
+      setMgmtModal({ ...mgmtModal, open: false });
+      fetchCoreData();
+    } catch (err: any) { alert(err.message); }
+  };
+
+  const handleDeleteGeneric = async (type: string, id: string) => {
+    if (window.confirm(`Are you sure you want to delete this ${type}?`)) {
+      try {
+        const store = type === 'Employee' ? 'employees' : 'departments';
+        await apiService.genericDelete(store, id);
+        fetchCoreData();
+      } catch (err: any) { alert(err.message); }
+    }
+  };
+
   const stats = useMemo(() => ({
     purchased: items.length,
     assigned: items.filter(i => i.status === ItemStatus.ASSIGNED || i.status === ItemStatus.IN_USE).length,
@@ -160,11 +182,31 @@ const App: React.FC = () => {
       case 'budgets': return <BudgetModule />;
       case 'notifications': return <NotificationCenter currentUser={currentUser!} />;
       case 'roles': return <RoleManagement />;
-      case 'settings': return <SettingsModule settings={settings} onUpdate={setSettings} />;
+      case 'settings': return <SettingsModule settings={settings} onUpdate={setSettings} onNavigate={(tab) => setActiveTab(tab)} />;
       case 'licenses': return <LicenseList licenses={licenses} suppliers={suppliers} onAdd={() => {}} onUpdate={fetchCoreData} />;
       case 'audit-trail': return <GenericListView title="System Audit Ledger" icon="fa-stream" items={movements} columns={['date', 'item', 'from', 'to', 'status']} />;
-      case 'employees': return <GenericListView title="Staff Directory" icon="fa-users-cog" items={employees} columns={['id', 'name', 'department', 'role', 'joining_date', 'is_active']} />;
-      case 'departments': return <GenericListView title="Organizational Units" icon="fa-sitemap" items={departments} columns={['id', 'name', 'manager']} />;
+      case 'employees': return (
+        <GenericListView 
+          title="Staff Directory" 
+          icon="fa-users-cog" 
+          items={employees} 
+          columns={['id', 'name', 'department', 'role', 'joining_date', 'is_active']} 
+          onAdd={() => setMgmtModal({ open: true, type: 'Employee' })}
+          onEdit={(item) => setMgmtModal({ open: true, type: 'Employee', data: item })}
+          onDelete={(item) => handleDeleteGeneric('Employee', item.id)}
+        />
+      );
+      case 'departments': return (
+        <GenericListView 
+          title="Organizational Units" 
+          icon="fa-sitemap" 
+          items={departments} 
+          columns={['id', 'name', 'manager']} 
+          onAdd={() => setMgmtModal({ open: true, type: 'Department' })}
+          onEdit={(item) => setMgmtModal({ open: true, type: 'Department', data: item })}
+          onDelete={(item) => handleDeleteGeneric('Department', item.id)}
+        />
+      );
       case 'maintenance': return <MaintenanceList logs={maintenanceLogs} items={items} onUpdate={fetchCoreData} onAdd={() => {}} />;
       case 'suppliers': return <SupplierList suppliers={suppliers} />;
       case 'locations': return <GenericListView title="Physical Locations" icon="fa-map-marker-alt" items={locations} columns={['id', 'building', 'floor', 'room', 'manager']} />;
@@ -216,6 +258,12 @@ const App: React.FC = () => {
           {renderModule()}
         </div>
       </main>
+
+      {mgmtModal.open && (
+        <Modal title={`${mgmtModal.data ? 'Update' : 'Register'} ${mgmtModal.type}`} onClose={() => setMgmtModal({ ...mgmtModal, open: false })}>
+          <ManagementForm type={mgmtModal.type} initialData={mgmtModal.data} onSubmit={handleSaveGeneric} />
+        </Modal>
+      )}
     </div>
   );
 };
