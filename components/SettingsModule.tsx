@@ -19,10 +19,6 @@ const COLORS = [
   { name: 'Slate', value: 'slate' },
 ];
 
-const ICONS = [
-  'fa-warehouse', 'fa-boxes', 'fa-tools', 'fa-laptop', 'fa-shield-alt', 'fa-building', 'fa-cubes', 'fa-layer-group'
-];
-
 const SettingsModule: React.FC<SettingsModuleProps> = ({ settings, onUpdate }) => {
   const [formData, setFormData] = useState<SystemSettings>({ 
     ...settings,
@@ -44,6 +40,23 @@ const SettingsModule: React.FC<SettingsModuleProps> = ({ settings, onUpdate }) =
       alert("Error saving settings: " + err);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleRenewLicense = async () => {
+    const newExpiry = window.prompt("Enter new expiry date (YYYY-MM-DD):", formData.license_expiry || '');
+    if (newExpiry && /^\d{4}-\d{2}-\d{2}$/.test(newExpiry)) {
+       const updated = { ...formData, license_expiry: newExpiry };
+       setLoading(true);
+       try {
+         await apiService.updateSettings(updated);
+         onUpdate(updated);
+         setFormData(updated);
+         alert("Software license successfully extended.");
+       } catch (e) { alert(e); }
+       finally { setLoading(false); }
+    } else if (newExpiry) {
+       alert("Invalid date format. Use YYYY-MM-DD.");
     }
   };
 
@@ -209,6 +222,52 @@ const SettingsModule: React.FC<SettingsModuleProps> = ({ settings, onUpdate }) =
             </button>
           </div>
         </form>
+
+        {/* Software Licensing Section */}
+        <div className="bg-white rounded-[32px] border border-slate-100 shadow-sm overflow-hidden">
+           <div className="p-8 border-b border-slate-100 flex items-center gap-4 bg-indigo-50/20">
+              <div className="w-12 h-12 bg-white rounded-2xl flex items-center justify-center text-indigo-600 shadow-sm border border-indigo-100">
+                 <i className="fas fa-key"></i>
+              </div>
+              <div>
+                 <h3 className="text-xl font-bold text-slate-800 poppins">Software Licensing</h3>
+                 <p className="text-xs text-slate-400 font-bold uppercase tracking-widest">Yearly Subscription Management</p>
+              </div>
+           </div>
+           
+           <div className="p-8 space-y-6">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+                 <div className="space-y-1.5">
+                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">System License Key</label>
+                    <div className="flex items-center gap-3 px-5 py-4 bg-slate-50 border border-slate-100 rounded-2xl">
+                       <i className="fas fa-fingerprint text-slate-300"></i>
+                       <span className="font-mono font-bold text-slate-700">{formData.license_key || 'UNREGISTERED'}</span>
+                    </div>
+                 </div>
+                 <div className="space-y-1.5">
+                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Yearly Expiry Date</label>
+                    <div className="flex items-center gap-3 px-5 py-4 bg-slate-50 border border-slate-100 rounded-2xl">
+                       <i className="fas fa-calendar-check text-slate-300"></i>
+                       <span className="font-bold text-slate-700">{formData.license_expiry || 'Not Set'}</span>
+                    </div>
+                 </div>
+              </div>
+              <div className="p-4 bg-indigo-50 border border-indigo-100 rounded-2xl flex items-start gap-3">
+                 <i className="fas fa-info-circle text-indigo-500 mt-1"></i>
+                 <div className="flex-1">
+                   <p className="text-xs text-indigo-800 leading-relaxed font-medium">
+                     This software is currently on a yearly license plan. Access will be automatically restricted if the license is not renewed before the expiry date.
+                   </p>
+                   <button 
+                     onClick={handleRenewLicense}
+                     className="mt-4 px-6 py-2 bg-indigo-600 text-white rounded-xl text-[10px] font-black uppercase tracking-widest hover:bg-indigo-700 transition"
+                   >
+                     Renew / Update License
+                   </button>
+                 </div>
+              </div>
+           </div>
+        </div>
 
         {/* Portability */}
         <div className="bg-white rounded-[32px] border border-slate-100 shadow-sm overflow-hidden">

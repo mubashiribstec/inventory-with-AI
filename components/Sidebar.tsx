@@ -1,5 +1,5 @@
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { UserRole } from '../types.ts';
 import { apiService } from '../api.ts';
 
@@ -12,6 +12,7 @@ interface SidebarProps {
   appName?: string;
   themeColor?: string;
   logoIcon?: string;
+  licenseExpiry?: string;
 }
 
 const Sidebar: React.FC<SidebarProps> = ({ 
@@ -22,7 +23,8 @@ const Sidebar: React.FC<SidebarProps> = ({
   permissions, 
   appName = 'Registry', 
   themeColor = 'indigo',
-  logoIcon = 'fa-warehouse'
+  logoIcon = 'fa-warehouse',
+  licenseExpiry
 }) => {
   const [unreadCount, setUnreadCount] = useState(0);
   const isAdmin = userRole === UserRole.ADMIN;
@@ -31,6 +33,17 @@ const Sidebar: React.FC<SidebarProps> = ({
     if (isAdmin) return true;
     return permissions.includes(key);
   };
+
+  const licenseStatus = useMemo(() => {
+    if (!licenseExpiry) return { text: 'Unknown', color: 'slate' };
+    const expiry = new Date(licenseExpiry);
+    const today = new Date();
+    const diffDays = Math.ceil((expiry.getTime() - today.getTime()) / (1000 * 3600 * 24));
+    
+    if (diffDays < 0) return { text: 'Expired', color: 'rose' };
+    if (diffDays < 30) return { text: `${diffDays}d Left`, color: 'amber' };
+    return { text: 'Active', color: 'emerald' };
+  }, [licenseExpiry]);
 
   const fetchUnread = async () => {
     try {
@@ -129,6 +142,14 @@ const Sidebar: React.FC<SidebarProps> = ({
       </div>
 
       <div className="p-4 space-y-3 mt-auto">
+        <div className="px-4 py-3 bg-slate-50 rounded-2xl border border-slate-100 flex items-center justify-between">
+           <div className="flex flex-col">
+              <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Yearly Access</span>
+              <span className={`text-[10px] font-bold text-${licenseStatus.color}-600`}>{licenseStatus.text}</span>
+           </div>
+           <i className={`fas fa-check-circle text-${licenseStatus.color}-500 text-sm`}></i>
+        </div>
+
         {(isAdmin || hasPermission('system.settings')) && (
           <button 
             onClick={() => setActiveTab('settings')}

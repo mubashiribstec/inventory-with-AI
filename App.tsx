@@ -57,6 +57,21 @@ const App: React.FC = () => {
   const [viewingItem, setViewingItem] = useState<InventoryItem | null>(null);
   const [viewingEmployee, setViewingEmployee] = useState<Employee | null>(null);
 
+  const isLicenseValid = useMemo(() => {
+    if (!settings.license_expiry) return true;
+    const expiryDate = new Date(settings.license_expiry);
+    const today = new Date();
+    return expiryDate >= today;
+  }, [settings.license_expiry]);
+
+  const daysToExpiry = useMemo(() => {
+    if (!settings.license_expiry) return null;
+    const expiryDate = new Date(settings.license_expiry);
+    const today = new Date();
+    const diff = expiryDate.getTime() - today.getTime();
+    return Math.ceil(diff / (1000 * 3600 * 24));
+  }, [settings.license_expiry]);
+
   const fetchRoleData = useCallback(async (roleId: string) => {
     try {
       const allRoles = await apiService.getRoles();
@@ -66,7 +81,7 @@ const App: React.FC = () => {
   }, []);
 
   const fetchData = useCallback(async () => {
-    if (!currentUser) return;
+    if (!currentUser || !isLicenseValid) return;
     try {
       setDataLoading(true);
       const [fItems, fMov, fSup, fLoc, fMaint, fLic, fCat, fEmp, fDept, fReq, fUsers] = await Promise.all([
@@ -83,7 +98,7 @@ const App: React.FC = () => {
     } finally {
       setDataLoading(false);
     }
-  }, [currentUser]);
+  }, [currentUser, isLicenseValid]);
 
   useEffect(() => {
     const startupSequence = async () => {
@@ -198,6 +213,31 @@ const App: React.FC = () => {
     />
   );
 
+  if (!isLicenseValid) return (
+    <div className="min-h-screen bg-slate-900 flex items-center justify-center p-6 font-sans">
+      <div className="max-w-md w-full bg-white rounded-[40px] p-10 text-center shadow-2xl animate-fadeIn">
+        <div className="w-20 h-20 bg-rose-50 text-rose-500 rounded-3xl flex items-center justify-center text-3xl mx-auto mb-6 border border-rose-100">
+          <i className="fas fa-calendar-times"></i>
+        </div>
+        <h2 className="text-2xl font-black text-slate-800 poppins mb-2">License Expired</h2>
+        <p className="text-slate-500 text-sm font-medium mb-8 leading-relaxed">
+          The yearly subscription for <span className="text-indigo-600 font-bold">{settings.software_name}</span> has ended. Please contact your system administrator or the vendor to renew your yearly access.
+        </p>
+        <div className="p-4 bg-slate-50 rounded-2xl border border-slate-100 mb-8">
+          <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">Last Valid Date</p>
+          <p className="text-sm font-bold text-slate-700">{settings.license_expiry}</p>
+        </div>
+        <button 
+           onClick={() => { setCurrentUser(null); localStorage.removeItem('smartstock_user'); }}
+           className="w-full py-4 bg-slate-800 text-white rounded-2xl font-bold hover:bg-slate-900 transition mb-4"
+        >
+          Logout & Return
+        </button>
+        <p className="text-[10px] text-slate-400 font-bold uppercase tracking-tighter">System ID: {settings.license_key || 'UNKNOWN'}</p>
+      </div>
+    </div>
+  );
+
   return (
     <div className={`flex min-h-screen bg-slate-50 theme-${themeColor}`}>
       <Sidebar 
@@ -209,8 +249,20 @@ const App: React.FC = () => {
         appName={settings.software_name || 'Enterprise System'} 
         themeColor={themeColor} 
         logoIcon={settings.software_logo} 
+        licenseExpiry={settings.license_expiry}
       />
       <main className="flex-1 lg:ml-64 p-6 lg:p-12 min-w-0">
+        {daysToExpiry !== null && daysToExpiry < 30 && daysToExpiry >= 0 && (
+          <div className="mb-6 p-4 bg-amber-50 border border-amber-100 rounded-2xl flex items-center justify-between animate-fadeIn">
+            <div className="flex items-center gap-3">
+               <i className="fas fa-exclamation-triangle text-amber-500"></i>
+               <p className="text-xs font-bold text-amber-800">
+                 Software license expiring in <span className="underline">{daysToExpiry} days</span>. Please renew soon to avoid service interruption.
+               </p>
+            </div>
+          </div>
+        )}
+
         <header className="mb-10 flex flex-col md:flex-row justify-between items-end md:items-center gap-4">
             <div>
                 <h1 className="text-4xl font-bold text-slate-900 capitalize tracking-tight poppins">{activeTab.replace('-', ' ')}</h1>

@@ -24,6 +24,8 @@ export interface SystemSettings {
   primary_color: string;
   software_description?: string;
   software_logo?: string;
+  license_key?: string;
+  license_expiry?: string;
 }
 
 export interface Role {

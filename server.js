@@ -71,7 +71,9 @@ const handleInitDb = async (conn, forceReset = false) => {
       software_name VARCHAR(255),
       primary_color VARCHAR(50),
       software_description TEXT,
-      software_logo VARCHAR(50)
+      software_logo VARCHAR(50),
+      license_key VARCHAR(100),
+      license_expiry DATE
     )`,
     `CREATE TABLE IF NOT EXISTS items (
       id VARCHAR(50) PRIMARY KEY,
@@ -99,8 +101,13 @@ const handleInitDb = async (conn, forceReset = false) => {
     await conn.query(query);
   }
 
-  // Initial Seed - Use INSERT IGNORE to prevent overwriting user changes on restart
-  await conn.query("INSERT IGNORE INTO settings (id, software_name, primary_color, software_description, software_logo) VALUES ('GLOBAL', 'Inventory System', 'indigo', 'Local Enterprise Resource Planning', 'fa-warehouse')");
+  // Initial Seed - Added default 1 year license
+  const oneYearFromNow = new Date();
+  oneYearFromNow.setFullYear(oneYearFromNow.getFullYear() + 1);
+  const expiryStr = oneYearFromNow.toISOString().split('T')[0];
+
+  await conn.query(`INSERT IGNORE INTO settings (id, software_name, primary_color, software_description, software_logo, license_key, license_expiry) 
+                   VALUES ('GLOBAL', 'Inventory System', 'indigo', 'Local Enterprise Resource Planning', 'fa-warehouse', 'ENT-PRE-TRIAL-2024', ?)`, [expiryStr]);
   
   const defaultRoles = [
     ['ADMIN', 'Administrator', 'Full system access.', 'inventory.view,inventory.edit,inventory.procure,hr.view,hr.attendance,hr.leaves,hr.users,hr.salaries,analytics.view,analytics.financials,analytics.logs,system.roles,system.db,system.settings', 'rose', 'fa-user-crown'],
