@@ -32,12 +32,12 @@ const modules = [
   'notifications', 'user_logs', 'attendance', 'salaries', 'leave_requests', 
   'items', 'movements', 'departments', 'employees', 'suppliers', 
   'locations', 'maintenance_logs', 'licenses', 'categories', 'requests', 
-  'users', 'roles', 'settings'
+  'users', 'roles'
 ];
 
 const handleInitDb = async (conn, forceReset = false) => {
   if (forceReset) {
-    for (const table of modules) {
+    for (const table of [...modules, 'settings']) {
       await conn.query(`DROP TABLE IF EXISTS \`${table}\``);
     }
   }
@@ -99,7 +99,7 @@ const handleInitDb = async (conn, forceReset = false) => {
     await conn.query(query);
   }
 
-  // Initial Seed with generic data - "SmartStock Pro" removed from hardcoded defaults
+  // Initial Seed - Use INSERT IGNORE to prevent overwriting user changes on restart
   await conn.query("INSERT IGNORE INTO settings (id, software_name, primary_color, software_description, software_logo) VALUES ('GLOBAL', 'Inventory System', 'indigo', 'Local Enterprise Resource Planning', 'fa-warehouse')");
   
   const defaultRoles = [
@@ -162,6 +162,31 @@ app.post('/api/login', async (req, res) => {
   finally { if (conn) conn.release(); }
 });
 
+// CRITICAL FIX: Define settings endpoints BEFORE generic CRUD to avoid shadowing
+app.get('/api/settings', async (req, res) => {
+  let conn;
+  try {
+    conn = await pool.getConnection();
+    const rows = await conn.query('SELECT * FROM settings WHERE id = ?', ['GLOBAL']);
+    sendJSON(res, rows[0] || {});
+  } catch (err) { sendJSON(res, { error: err.message }, 500); }
+  finally { if (conn) conn.release(); }
+});
+
+app.post('/api/settings', async (req, res) => {
+  let conn;
+  try {
+    conn = await pool.getConnection();
+    const body = req.body;
+    const keys = Object.keys(body);
+    const values = keys.map(k => body[k]);
+    const placeholders = keys.map(() => '?').join(', ');
+    await conn.query(`REPLACE INTO settings (${keys.map(k => `\`${k}\``).join(', ')}) VALUES (${placeholders})`, values);
+    sendJSON(res, { success: true });
+  } catch (err) { sendJSON(res, { error: err.message }, 500); }
+  finally { if (conn) conn.release(); }
+});
+
 const handleCRUD = (tableName) => {
   app.get(`/api/${tableName}`, async (req, res) => {
     let conn;
@@ -199,16 +224,6 @@ const handleCRUD = (tableName) => {
 };
 
 modules.forEach(handleCRUD);
-
-app.get('/api/settings', async (req, res) => {
-  let conn;
-  try {
-    conn = await pool.getConnection();
-    const rows = await conn.query('SELECT * FROM settings WHERE id = ?', ['GLOBAL']);
-    sendJSON(res, rows[0] || {});
-  } catch (err) { sendJSON(res, { error: err.message }, 500); }
-  finally { if (conn) conn.release(); }
-});
 
 const staticPath = path.join(__dirname, 'dist');
 app.use(express.static(staticPath));

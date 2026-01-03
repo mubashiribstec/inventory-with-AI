@@ -75,12 +75,14 @@ export const apiService = {
       const res = await fetch(`${API_BASE}/settings`);
       if (res.ok) {
         const s = await res.json();
-        if (s.id) {
-          // Only save to local storage if initialized to avoid "DB not initialized"
+        // Robustness check: if s is an array, take the first element
+        const settings = Array.isArray(s) ? s[0] : s;
+        
+        if (settings && settings.id) {
           try {
-            await dbService.saveSettings(s);
+            await dbService.saveSettings(settings);
           } catch(e) { console.warn("Skipped local settings cache - DB busy."); }
-          return s;
+          return settings;
         }
       }
     } catch (e) {}
