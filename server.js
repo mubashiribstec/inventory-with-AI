@@ -44,24 +44,32 @@ const verifyLicense = (licenseKey, currentSystemId) => {
 
 // --- GATEKEEPER ---
 const licenseGuard = async (req, res, next) => {
-  if (req.path === '/api/login' || req.path === '/api/init-db') return next();
+  if (req.path === '/api/login' || req.path === '/api/init-db' || req.path === '/api/settings') return next();
+  
   let conn;
   try {
     conn = await pool.getConnection();
     const rows = await conn.query('SELECT license_key, system_id FROM settings WHERE id = ?', ['GLOBAL']);
     const settings = rows[0];
-    if (req.path === '/api/settings' && (req.method === 'POST' || req.method === 'GET')) return next();
+    
     const v = verifyLicense(settings?.license_key, settings?.system_id);
-    if (!v.valid) return res.status(403).json({ error: 'License Required', details: v.error, code: 'LICENSE_INVALID' });
+    if (!v.valid) {
+      return res.status(403).json({ error: 'License Required', details: v.error, code: 'LICENSE_INVALID' });
+    }
     next();
-  } catch (err) { res.status(500).json({ error: 'Auth Error' }); }
-  finally { if (conn) conn.release(); }
+  } catch (err) { 
+    res.status(500).json({ error: 'Auth Guard Error' }); 
+  } finally { 
+    if (conn) conn.release(); 
+  }
 };
 app.use('/api', licenseGuard);
 
 // --- DB INIT ---
 const handleInitDb = async (conn) => {
-  // Ensure table exists with correct columns
+  console.log("Starting DB Schema Repair & Initialization...");
+  
+  // Create tables
   await conn.query(`CREATE TABLE IF NOT EXISTS settings (
     id VARCHAR(50) PRIMARY KEY,
     software_name VARCHAR(255),
@@ -73,26 +81,39 @@ const handleInitDb = async (conn) => {
     system_id VARCHAR(100)
   )`);
 
-  // Force add system_id column if it was missing from an old version
+  await conn.query(`CREATE TABLE IF NOT EXISTS users (
+    id VARCHAR(50) PRIMARY KEY, 
+    username VARCHAR(50) UNIQUE, 
+    password VARCHAR(100), 
+    role VARCHAR(20), 
+    full_name VARCHAR(100)
+  )`);
+
+  // Force add system_id column if missing
   try { await conn.query("ALTER TABLE settings ADD COLUMN system_id VARCHAR(100)"); } catch(e) {}
 
+  // Ensure GLOBAL settings exist
   const rows = await conn.query("SELECT system_id FROM settings WHERE id = 'GLOBAL'");
   let sid = rows[0]?.system_id;
 
   if (!sid) {
+    console.log("Generating New System ID...");
     sid = crypto.randomBytes(4).toString('hex').toUpperCase();
     const expiry = new Date();
-    expiry.setDate(expiry.getDate() + 7); // 7 day initial trial
+    expiry.setDate(expiry.getDate() + 7);
     const payload = JSON.stringify({ expiry: expiry.toISOString().split('T')[0], sid });
     const key = `${Buffer.from(payload).toString('base64')}.${generateSignature(payload)}`;
     
     await conn.query(`REPLACE INTO settings (id, software_name, primary_color, license_key, license_expiry, system_id) 
-                     VALUES ('GLOBAL', 'SmartStock', 'indigo', ?, ?, ?)`, 
+                     VALUES ('GLOBAL', 'SmartStock Pro', 'indigo', ?, ?, ?)`, 
                      [key, expiry.toISOString().split('T')[0], sid]);
   }
+
+  // FORCE RESET ADMIN USER
+  console.log("Verifying Admin Account (admin / admin)...");
+  await conn.query("REPLACE INTO users (id, username, password, role, full_name) VALUES ('U-001', 'admin', 'admin', 'ADMIN', 'System Administrator')");
   
-  await conn.query(`CREATE TABLE IF NOT EXISTS users (id VARCHAR(50) PRIMARY KEY, username VARCHAR(50) UNIQUE, password VARCHAR(100), role VARCHAR(20), full_name VARCHAR(100))`);
-  await conn.query("INSERT IGNORE INTO users (id, username, password, role, full_name) VALUES ('U-001', 'admin', 'admin', 'ADMIN', 'Admin')");
+  console.log("System Initialized Successfully. System ID:", sid);
 };
 
 const initDbWithRetry = async () => {
@@ -101,9 +122,12 @@ const initDbWithRetry = async () => {
     conn = await pool.getConnection();
     await handleInitDb(conn);
     isDbReady = true;
-    console.log("Database Securely Initialized.");
-  } catch (err) { setTimeout(initDbWithRetry, 3000); }
-  finally { if (conn) conn.release(); }
+  } catch (err) { 
+    console.error("DB Connection Failed. Retrying in 5s...", err.message);
+    setTimeout(initDbWithRetry, 5000); 
+  } finally { 
+    if (conn) conn.release(); 
+  }
 };
 initDbWithRetry();
 
@@ -125,7 +149,7 @@ app.post('/api/settings', async (req, res) => {
     if (license_key) {
       const rows = await conn.query('SELECT system_id FROM settings WHERE id = ?', ['GLOBAL']);
       const v = verifyLicense(license_key, rows[0].system_id);
-      if (!v.valid) return res.status(400).json({ error: v.error });
+      if (!v.valid) return res.status(400).json({ error: `Invalid Key: ${v.error}` });
       req.body.license_expiry = v.payload.expiry;
     }
     const keys = Object.keys(req.body);
@@ -138,14 +162,26 @@ app.post('/api/settings', async (req, res) => {
 
 app.post('/api/login', async (req, res) => {
   const { username, password } = req.body;
+  console.log(`Login Attempt: [User: ${username}]`);
+  
   let conn;
   try {
     conn = await pool.getConnection();
     const rows = await conn.query('SELECT id, username, role, full_name FROM users WHERE username=? AND password=?', [username, password]);
-    if (rows.length > 0) res.json(rows[0]);
-    else res.status(401).json({ error: 'Invalid' });
-  } catch (err) { res.status(500).json({ error: err.message }); }
-  finally { if (conn) conn.release(); }
+    
+    if (rows.length > 0) {
+      console.log(`Login Success: [User: ${username}]`);
+      res.json(rows[0]);
+    } else {
+      console.log(`Login Failed: [User: ${username}] - Invalid Credentials`);
+      res.status(401).json({ error: 'Incorrect username or password' });
+    }
+  } catch (err) { 
+    console.error(`Login System Error:`, err.message);
+    res.status(500).json({ error: 'Database connection error during login' }); 
+  } finally { 
+    if (conn) conn.release(); 
+  }
 });
 
 // Minimal CRUD for other modules
@@ -175,4 +211,4 @@ modules.forEach(m => {
 const staticPath = path.join(__dirname, 'dist');
 app.use(express.static(staticPath));
 app.get('*', (req, res) => res.sendFile(path.join(staticPath, 'index.html')));
-app.listen(port, '0.0.0.0', () => console.log(`Secure Server on ${port}`));
+app.listen(port, '0.0.0.0', () => console.log(`SmartStock Secure API listening on port ${port}`));
