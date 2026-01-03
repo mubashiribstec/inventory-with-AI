@@ -18,6 +18,8 @@ import GenericListView from './components/GenericListView.tsx';
 import SupplierList from './components/SupplierList.tsx';
 import Modal from './components/Modal.tsx';
 import ManagementForm from './components/ManagementForm.tsx';
+import EmployeeDetails from './components/EmployeeDetails.tsx';
+import BudgetBreakdown from './components/BudgetBreakdown.tsx';
 
 import { ItemStatus, User, InventoryItem, Movement, Supplier, License, Role, Department, LocationRecord, MaintenanceLog, Employee } from './types.ts';
 import { apiService } from './api.ts';
@@ -42,6 +44,7 @@ const App: React.FC = () => {
   
   // Generic Management State
   const [mgmtModal, setMgmtModal] = useState<{ open: boolean; type: 'Employee' | 'Department' | 'Category'; data?: any }>({ open: false, type: 'Employee' });
+  const [viewModal, setViewModal] = useState<{ open: boolean; type: 'Employee' | 'Department'; data?: any }>({ open: false, type: 'Employee' });
 
   // Enterprise Data State
   const [items, setItems] = useState<InventoryItem[]>([]);
@@ -194,6 +197,7 @@ const App: React.FC = () => {
           onAdd={() => setMgmtModal({ open: true, type: 'Employee' })}
           onEdit={(item) => setMgmtModal({ open: true, type: 'Employee', data: item })}
           onDelete={(item) => handleDeleteGeneric('Employee', item.id)}
+          onView={(item) => setViewModal({ open: true, type: 'Employee', data: item })}
         />
       );
       case 'departments': return (
@@ -205,6 +209,7 @@ const App: React.FC = () => {
           onAdd={() => setMgmtModal({ open: true, type: 'Department' })}
           onEdit={(item) => setMgmtModal({ open: true, type: 'Department', data: item })}
           onDelete={(item) => handleDeleteGeneric('Department', item.id)}
+          onView={(item) => setViewModal({ open: true, type: 'Department', data: item })}
         />
       );
       case 'maintenance': return <MaintenanceList logs={maintenanceLogs} items={items} onUpdate={fetchCoreData} onAdd={() => {}} />;
@@ -262,6 +267,23 @@ const App: React.FC = () => {
       {mgmtModal.open && (
         <Modal title={`${mgmtModal.data ? 'Update' : 'Register'} ${mgmtModal.type}`} onClose={() => setMgmtModal({ ...mgmtModal, open: false })}>
           <ManagementForm type={mgmtModal.type} initialData={mgmtModal.data} onSubmit={handleSaveGeneric} />
+        </Modal>
+      )}
+
+      {viewModal.open && viewModal.type === 'Employee' && (
+        <Modal title="Staff Profile Details" onClose={() => setViewModal({ ...viewModal, open: false })}>
+          <EmployeeDetails 
+            employee={viewModal.data} 
+            items={items} 
+            allUsers={allUsers}
+            linkedUser={allUsers.find(u => u.full_name === viewModal.data.name || u.id === viewModal.data.id.replace('IBS-EMP-', ''))}
+          />
+        </Modal>
+      )}
+
+      {viewModal.open && viewModal.type === 'Department' && (
+        <Modal title="Organizational Unit Breakdown" onClose={() => setViewModal({ ...viewModal, open: false })}>
+          <BudgetBreakdown department={viewModal.data} items={items} />
         </Modal>
       )}
     </div>
